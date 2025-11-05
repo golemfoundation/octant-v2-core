@@ -4,21 +4,18 @@ pragma solidity ^0.8.0;
 import "forge-std/Script.sol";
 
 // Strategy implementations
-import { YieldSkimmingTokenizedStrategy } from "src/strategies/yieldSkimming/YieldSkimmingTokenizedStrategy.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 
 // Factory contracts
 import { MorphoCompounderStrategyFactory } from "src/factories/MorphoCompounderStrategyFactory.sol";
 import { SkyCompounderStrategyFactory } from "src/factories/SkyCompounderStrategyFactory.sol";
-import { LidoStrategyFactory } from "src/factories/LidoStrategyFactory.sol";
-import { RocketPoolStrategyFactory } from "src/factories/yieldSkimming/RocketPoolStrategyFactory.sol";
 import { PaymentSplitterFactory } from "src/factories/PaymentSplitterFactory.sol";
 import { YearnV3StrategyFactory } from "src/factories/yieldDonating/YearnV3StrategyFactory.sol";
 
 /**
  * @title VerifyDeployedContracts
  * @author Golem Foundation
- * @notice Script to verify all deployed contracts on Ethereum mainnet
+ * @notice Script to verify all 5 deployed contracts on Ethereum mainnet
  * @dev Prompts user for contract addresses and verifies each one using forge verify-contract
  *
  * Usage:
@@ -28,26 +25,18 @@ import { YearnV3StrategyFactory } from "src/factories/yieldDonating/YearnV3Strat
  */
 contract VerifyDeployedContracts is Script {
     // Contract addresses (to be prompted from user)
-    address public yieldSkimmingStrategy;
     address public yieldDonatingStrategy;
     address public morphoFactory;
     address public skyFactory;
-    address public lidoFactory;
-    address public rocketPoolFactory;
     address public paymentSplitterFactory;
     address public yearnV3Factory;
 
     // Contract names for verification
-    string constant YIELD_SKIMMING_NAME =
-        "src/strategies/yieldSkimming/YieldSkimmingTokenizedStrategy.sol:YieldSkimmingTokenizedStrategy";
     string constant YIELD_DONATING_NAME =
         "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol:YieldDonatingTokenizedStrategy";
     string constant MORPHO_FACTORY_NAME =
         "src/factories/MorphoCompounderStrategyFactory.sol:MorphoCompounderStrategyFactory";
     string constant SKY_FACTORY_NAME = "src/factories/SkyCompounderStrategyFactory.sol:SkyCompounderStrategyFactory";
-    string constant LIDO_FACTORY_NAME = "src/factories/LidoStrategyFactory.sol:LidoStrategyFactory";
-    string constant ROCKET_POOL_FACTORY_NAME =
-        "src/factories/yieldSkimming/RocketPoolStrategyFactory.sol:RocketPoolStrategyFactory";
     string constant PAYMENT_SPLITTER_FACTORY_NAME = "src/factories/PaymentSplitterFactory.sol:PaymentSplitterFactory";
     string constant YEARN_V3_FACTORY_NAME =
         "src/factories/yieldDonating/YearnV3StrategyFactory.sol:YearnV3StrategyFactory";
@@ -66,14 +55,6 @@ contract VerifyDeployedContracts is Script {
     function _promptForAddresses() internal {
         console.log("=== CONTRACT VERIFICATION SETUP ===");
         console.log("Please provide the deployed contract addresses:\n");
-
-        // Prompt for YieldSkimmingTokenizedStrategy
-        try vm.prompt("Enter YieldSkimmingTokenizedStrategy address") returns (string memory addr) {
-            yieldSkimmingStrategy = vm.parseAddress(addr);
-            console.log("[OK] YieldSkimmingTokenizedStrategy:", yieldSkimmingStrategy);
-        } catch {
-            revert("Invalid YieldSkimmingTokenizedStrategy address");
-        }
 
         // Prompt for YieldDonatingTokenizedStrategy
         try vm.prompt("Enter YieldDonatingTokenizedStrategy address") returns (string memory addr) {
@@ -99,22 +80,6 @@ contract VerifyDeployedContracts is Script {
             revert("Invalid SkyCompounderStrategyFactory address");
         }
 
-        // Prompt for LidoStrategyFactory
-        try vm.prompt("Enter LidoStrategyFactory address") returns (string memory addr) {
-            lidoFactory = vm.parseAddress(addr);
-            console.log("[OK] LidoStrategyFactory:", lidoFactory);
-        } catch {
-            revert("Invalid LidoStrategyFactory address");
-        }
-
-        // Prompt for RocketPoolStrategyFactory
-        try vm.prompt("Enter RocketPoolStrategyFactory address") returns (string memory addr) {
-            rocketPoolFactory = vm.parseAddress(addr);
-            console.log("[OK] RocketPoolStrategyFactory:", rocketPoolFactory);
-        } catch {
-            revert("Invalid RocketPoolStrategyFactory address");
-        }
-
         // Prompt for PaymentSplitterFactory
         try vm.prompt("Enter PaymentSplitterFactory address") returns (string memory addr) {
             paymentSplitterFactory = vm.parseAddress(addr);
@@ -137,9 +102,6 @@ contract VerifyDeployedContracts is Script {
     function _verifyContracts() internal {
         console.log("=== STARTING CONTRACT VERIFICATION ===\n");
 
-        // Verify YieldSkimmingTokenizedStrategy
-        _verifyContract(yieldSkimmingStrategy, YIELD_SKIMMING_NAME, "YieldSkimmingTokenizedStrategy");
-
         // Verify YieldDonatingTokenizedStrategy
         _verifyContract(yieldDonatingStrategy, YIELD_DONATING_NAME, "YieldDonatingTokenizedStrategy");
 
@@ -148,12 +110,6 @@ contract VerifyDeployedContracts is Script {
 
         // Verify SkyCompounderStrategyFactory
         _verifyContract(skyFactory, SKY_FACTORY_NAME, "SkyCompounderStrategyFactory");
-
-        // Verify LidoStrategyFactory
-        _verifyContract(lidoFactory, LIDO_FACTORY_NAME, "LidoStrategyFactory");
-
-        // Verify RocketPoolStrategyFactory
-        _verifyContract(rocketPoolFactory, ROCKET_POOL_FACTORY_NAME, "RocketPoolStrategyFactory");
 
         // Verify PaymentSplitterFactory
         _verifyContract(paymentSplitterFactory, PAYMENT_SPLITTER_FACTORY_NAME, "PaymentSplitterFactory");
@@ -189,12 +145,9 @@ contract VerifyDeployedContracts is Script {
     function _logSummary() internal view {
         console.log("\n=== VERIFICATION SUMMARY ===");
         console.log("Attempted to verify the following contracts:");
-        console.log("- YieldSkimmingTokenizedStrategy:", yieldSkimmingStrategy);
         console.log("- YieldDonatingTokenizedStrategy:", yieldDonatingStrategy);
         console.log("- MorphoCompounderStrategyFactory:", morphoFactory);
         console.log("- SkyCompounderStrategyFactory:", skyFactory);
-        console.log("- LidoStrategyFactory:", lidoFactory);
-        console.log("- RocketPoolStrategyFactory:", rocketPoolFactory);
         console.log("- PaymentSplitterFactory:", paymentSplitterFactory);
         console.log("- YearnV3StrategyFactory:", yearnV3Factory);
         console.log("\nNote: Verification is asynchronous. Check Etherscan for final status.");

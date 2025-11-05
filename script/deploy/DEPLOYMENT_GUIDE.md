@@ -7,16 +7,13 @@ This guide explains how to deploy all the tokenized strategies and factory contr
 The deployment script `DeployAllStrategiesAndFactories.s.sol` deploys the following contracts:
 
 ### Tokenized Strategy Implementations
-1. **YieldSkimmingTokenizedStrategy** - Base implementation for yield-bearing assets with appreciating exchange rates
-2. **YieldDonatingTokenizedStrategy** - Base implementation for productive assets with discrete harvesting
+1. **YieldDonatingTokenizedStrategy** - Base implementation for productive assets with discrete harvesting
 
-### Factory Contracts  
+### Factory Contracts
 1. **MorphoCompounderStrategyFactory** - Factory for deploying Morpho yield donating strategies
 2. **SkyCompounderStrategyFactory** - Factory for deploying Sky Compounder yield donating strategies
-3. **LidoStrategyFactory** - Factory for deploying Lido yield skimming strategies
-4. **RocketPoolStrategyFactory** - Factory for deploying RocketPool yield skimming strategies
-5. **PaymentSplitterFactory** - Factory for deploying PaymentSplitter contracts with minimal proxies
-6. **YearnV3StrategyFactory** - Factory for deploying YearnV3 yield donating strategies
+3. **PaymentSplitterFactory** - Factory for deploying PaymentSplitter contracts with minimal proxies
+4. **YearnV3StrategyFactory** - Factory for deploying YearnV3 yield donating strategies
 
 ## Prerequisites
 
@@ -99,14 +96,12 @@ After running the script:
 All contracts are deployed deterministically using CREATE2, which means they will have the same address across different networks if deployed with the same Safe address.
 
 ### Deployment Salts
-- YieldSkimmingTokenizedStrategy: `keccak256("OCT_YIELD_SKIMMING_STRATEGY_V2")`
-- YieldDonatingTokenizedStrategy: `keccak256("OCTANT_YIELD_DONATING_STRATEGY_V2")`
-- MorphoCompounderStrategyFactory: `keccak256("MORPHO_COMPOUNDER_FACTORY_V2")`
-- SkyCompounderStrategyFactory: `keccak256("SKY_COMPOUNDER_FACTORY_V2")`
-- LidoStrategyFactory: `keccak256("LIDO_STRATEGY_FACTORY_V2")`
-- RocketPoolStrategyFactory: `keccak256("ROCKET_POOL_STRATEGY_FACTORY_V2")`
-- PaymentSplitterFactory: `keccak256("PAYMENT_SPLITTER_FACTORY_V2")`
-- YearnV3StrategyFactory: `keccak256("YEARN_V3_STRATEGY_FACTORY_V2")`
+All salts use a date-based format (DDMMYYYY) for versioning:
+- YieldDonatingTokenizedStrategy: `keccak256("OCTANT_YIELD_DONATING_STRATEGY_05112025")`
+- MorphoCompounderStrategyFactory: `keccak256("MORPHO_COMPOUNDER_FACTORY_05112025")`
+- SkyCompounderStrategyFactory: `keccak256("SKY_COMPOUNDER_FACTORY_05112025")`
+- PaymentSplitterFactory: `keccak256("PAYMENT_SPLITTER_FACTORY_05112025")`
+- YearnV3StrategyFactory: `keccak256("YEARN_V3_STRATEGY_FACTORY_05112025")`
 
 ## What the Script Does
 
@@ -115,7 +110,7 @@ All contracts are deployed deterministically using CREATE2, which means they wil
 3. **Safe Execution Flow**:
    - Safe calls `execTransaction` (once)
    - `execTransaction` calls `MultiSendCallOnly`
-   - `MultiSendCallOnly` makes 8 calls to CREATE2 factory at `0x4e59b44847b379578588920cA78FbF26c0B4956C`
+   - `MultiSendCallOnly` makes 5 calls to CREATE2 factory at `0x4e59b44847b379578588920cA78FbF26c0B4956C`
    - Each call uses calldata format: `salt (32 bytes) + bytecode`
    - CREATE2 factory deploys each contract deterministically
 4. **Sends to Safe Backend**: Submits the transaction to Safe's backend for owner signatures

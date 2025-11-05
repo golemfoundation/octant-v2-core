@@ -4,17 +4,14 @@ This guide explains how to verify the deployed Octant V2 Core contracts on Ether
 
 ## Overview
 
-The verification script (`VerifyDeployedContracts.s.sol`) automates the process of verifying all 8 contracts deployed by the `DeployAllStrategiesAndFactories.s.sol` script:
+The verification script (`VerifyDeployedContracts.s.sol`) automates the process of verifying all 5 contracts deployed by the `DeployAllStrategiesAndFactories.s.sol` script:
 
 ### Contracts to Verify
-1. **YieldSkimmingTokenizedStrategy** - Base implementation for yield-bearing assets
-2. **YieldDonatingTokenizedStrategy** - Base implementation for productive assets  
-3. **MorphoCompounderStrategyFactory** - Factory for Morpho yield donating strategies
-4. **SkyCompounderStrategyFactory** - Factory for Sky Compounder yield donating strategies
-5. **LidoStrategyFactory** - Factory for Lido yield skimming strategies
-6. **RocketPoolStrategyFactory** - Factory for RocketPool yield skimming strategies
-7. **PaymentSplitterFactory** - Factory for PaymentSplitter contracts
-8. **YearnV3StrategyFactory** - Factory for YearnV3 yield donating strategies
+1. **YieldDonatingTokenizedStrategy** - Base implementation for productive assets
+2. **MorphoCompounderStrategyFactory** - Factory for Morpho yield donating strategies
+3. **SkyCompounderStrategyFactory** - Factory for Sky Compounder yield donating strategies
+4. **PaymentSplitterFactory** - Factory for PaymentSplitter contracts
+5. **YearnV3StrategyFactory** - Factory for YearnV3 yield donating strategies
 
 ## Prerequisites
 
@@ -66,13 +63,13 @@ When you run the script, it will prompt you for each contract address:
 === CONTRACT VERIFICATION SETUP ===
 Please provide the deployed contract addresses:
 
-Enter YieldSkimmingTokenizedStrategy address: 0x1Cef490f733A30736a1c5Cecf1C177fb27391D32
-[OK] YieldSkimmingTokenizedStrategy: 0x1Cef490f733A30736a1c5Cecf1C177fb27391D32
-
 Enter YieldDonatingTokenizedStrategy address: 0x98E0708F33Cf8f6B8d39f4b9A590f2a220FfFd9a
 [OK] YieldDonatingTokenizedStrategy: 0x98E0708F33Cf8f6B8d39f4b9A590f2a220FfFd9a
 
-... (continues for all 8 contracts)
+Enter MorphoCompounderStrategyFactory address: 0x1Cef490f733A30736a1c5Cecf1C177fb27391D32
+[OK] MorphoCompounderStrategyFactory: 0x1Cef490f733A30736a1c5Cecf1C177fb27391D32
+
+... (continues for all 5 contracts)
 ```
 
 ### 3. Expected Output
@@ -80,20 +77,20 @@ Enter YieldDonatingTokenizedStrategy address: 0x98E0708F33Cf8f6B8d39f4b9A590f2a2
 ```
 === STARTING CONTRACT VERIFICATION ===
 
-Verifying YieldSkimmingTokenizedStrategy at 0x1Cef490f733A30736a1c5Cecf1C177fb27391D32
-[SUCCESS] YieldSkimmingTokenizedStrategy verification initiated
-   Result: Start verifying contract `0x1Cef490f733A30736a1c5Cecf1C177fb27391D32` deployed on mainnet
-
 Verifying YieldDonatingTokenizedStrategy at 0x98E0708F33Cf8f6B8d39f4b9A590f2a220FfFd9a
 [SUCCESS] YieldDonatingTokenizedStrategy verification initiated
    Result: Start verifying contract `0x98E0708F33Cf8f6B8d39f4b9A590f2a220FfFd9a` deployed on mainnet
+
+Verifying MorphoCompounderStrategyFactory at 0x1Cef490f733A30736a1c5Cecf1C177fb27391D32
+[SUCCESS] MorphoCompounderStrategyFactory verification initiated
+   Result: Start verifying contract `0x1Cef490f733A30736a1c5Cecf1C177fb27391D32` deployed on mainnet
 
 ... (continues for all contracts)
 ```
 
 ## What the Script Does
 
-1. **Prompts for Addresses**: Interactively collects all 8 contract addresses
+1. **Prompts for Addresses**: Interactively collects all 5 contract addresses
 2. **Validates Addresses**: Ensures each address is a valid Ethereum address
 3. **Submits Verification**: Uses `forge verify-contract` for each contract
 4. **Provides Feedback**: Shows success/failure status for each verification
