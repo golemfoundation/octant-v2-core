@@ -6,6 +6,7 @@
 pragma solidity ^0.8.0;
 
 // OpenZeppelin Imports
+import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 import { EIP712 } from "@openzeppelin/contracts/utils/cryptography/EIP712.sol";
 import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
@@ -33,6 +34,7 @@ import { NotInAllowset } from "src/errors.sol";
 /// @notice Provides shared functionality including:
 ///         - Variable reward duration (7-3000 days, configurable by admin)
 ///         - Earning power management with external bumping incentivized by tips (up to maxBumpTip)
+///         - Earning power calculator updates (blocked during active reward periods for governance protection)
 ///         - Adjustable minimum stake amount (existing deposits grandfathered with restrictions)
 ///         - Access control for stakers and allocation mechanisms
 ///         - Reward compounding (when REWARD_TOKEN == STAKE_TOKEN)
@@ -85,7 +87,20 @@ import { NotInAllowset } from "src/errors.sol";
 /// @dev Integer division causes ~1 wei precision loss, negligible due to SCALE_FACTOR (1e36).
 /// @dev This base is abstract, with variants implementing token-specific behaviors (e.g., delegation surrogates).
 /// @dev Earning power updates are required after balance changes; some are automatic, others via bumpEarningPower.
-abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, StakerPermitAndStake, StakerOnBehalf {
+///
+/// @dev ACCESS CONTROL:
+///      Uses OpenZeppelin AccessControl with role-based permissions:
+///      - DEFAULT_ADMIN_ROLE: Admin operations (protocol parameters, pause, access control, role management)
+///      - REWARD_MANAGER_ROLE: Can manage reward notifiers (operational role)
+abstract contract RegenStakerBase is
+    Staker,
+    Pausable,
+    ReentrancyGuard,
+    EIP712,
+    StakerPermitAndStake,
+    StakerOnBehalf,
+    AccessControl
+{
     using SafeCast for uint256;
 
     // === Enums ===
@@ -103,6 +118,11 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     }
 
     // === Constants ===
+    /// @notice Role identifier for reward notifier management (operational role)
+    /// @dev Can be granted by DEFAULT_ADMIN_ROLE (0x00)
+    /// @dev This role allows managing reward notifiers without full admin privileges
+    bytes32 public constant REWARD_MANAGER_ROLE = keccak256("REWARD_MANAGER_ROLE");
+
     /// @notice Minimum allowed reward duration in seconds (7 days).
     uint256 public constant MIN_REWARD_DURATION = 7 days;
 
@@ -132,6 +152,7 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     error CompoundingNotSupported();
     error CannotRaiseMinimumStakeAmountDuringActiveReward();
     error CannotRaiseMaxBumpTipDuringActiveReward();
+    error CannotChangeEarningPowerCalculatorDuringActiveReward();
     error ZeroOperation();
     error NoOperation();
     error DisablingAllocationMechanismAllowsetNotAllowed();
@@ -311,6 +332,13 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
             _stakerAccessMode,
             _allocationMechanismAllowset
         );
+
+        // Initialize role-based access control
+        // Grant DEFAULT_ADMIN_ROLE to the admin address (protocol governance and role management)
+        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+
+        // Set up role hierarchy: DEFAULT_ADMIN_ROLE manages REWARD_MANAGER_ROLE
+        _setRoleAdmin(REWARD_MANAGER_ROLE, DEFAULT_ADMIN_ROLE);
     }
 
     // === Internal Functions ===
@@ -531,6 +559,18 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         _setMaxBumpTip(_newMaxBumpTip);
     }
 
+    /// @notice Sets the earning power calculator with governance protection
+    /// @dev TIMING RESTRICTION: Cannot change during active reward period to protect reward distribution integrity.
+    /// @dev SECURITY: Changing calculator mid-cycle could disrupt reward fairness and earning power calculations.
+    /// @dev GOVERNANCE PROTECTION: Requires waiting until after rewardEndTime to change calculator.
+    /// @dev Can only be called by admin
+    /// @param _newEarningPowerCalculator New earning power calculator contract address
+    function setEarningPowerCalculator(address _newEarningPowerCalculator) external virtual override {
+        _revertIfNotAdmin();
+        require(block.timestamp > rewardEndTime, CannotChangeEarningPowerCalculatorDuringActiveReward());
+        _setEarningPowerCalculator(_newEarningPowerCalculator);
+    }
+
     /// @notice Pauses the contract, disabling user operations except withdrawals and view functions
     /// @dev EMERGENCY USE: Intended for security incidents or critical maintenance.
     /// @dev SCOPE: Affects stake, claim, contribute, and compound operations.
@@ -547,6 +587,32 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     function unpause() external whenPaused {
         _revertIfNotAdmin();
         _unpause();
+    }
+
+    /// @notice Transfer DEFAULT_ADMIN_ROLE from caller to new admin
+    /// @dev Implements backward-compatible setAdmin() using AccessControl
+    /// @dev Revokes DEFAULT_ADMIN_ROLE from msg.sender and grants it to newAdmin
+    /// @dev Other admins (if any) remain unchanged
+    /// @param newAdmin Address to become the new admin (cannot be zero address)
+    function setAdmin(address newAdmin) external virtual override {
+        if (newAdmin == address(0)) revert Staker__Unauthorized("admin cannot be zero address", newAdmin);
+        _revertIfNotAdmin();
+        _grantRole(DEFAULT_ADMIN_ROLE, newAdmin);
+        _revokeRole(DEFAULT_ADMIN_ROLE, msg.sender);
+    }
+
+    /// @notice Override setRewardNotifier() to allow both DEFAULT_ADMIN_ROLE and REWARD_MANAGER_ROLE
+    /// @dev This is the key function that separates operational (REWARD_MANAGER) from governance (DEFAULT_ADMIN)
+    /// @dev DEFAULT_ADMIN_ROLE can manage notifiers as part of broader protocol control
+    /// @dev REWARD_MANAGER_ROLE can manage notifiers for faster operational response
+    /// @param _rewardNotifier Address of the reward notifier
+    /// @param _isEnabled True to enable the notifier, false to disable
+    function setRewardNotifier(address _rewardNotifier, bool _isEnabled) external virtual override {
+        if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender) && !hasRole(REWARD_MANAGER_ROLE, msg.sender)) {
+            revert Staker__Unauthorized("not admin or reward manager", msg.sender);
+        }
+        isRewardNotifier[_rewardNotifier] = _isEnabled;
+        emit RewardNotifierSet(_rewardNotifier, _isEnabled);
     }
 
     // === Public Functions ===
@@ -796,6 +862,15 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
             if (sharedState.stakerBlockset.contains(user)) {
                 revert StakerBlocked(user);
             }
+        }
+    }
+
+    /// @notice Override base Staker admin check to use role-based access control
+    /// @dev Uses OpenZeppelin AccessControl instead of simple address check
+    /// @dev All admin functions automatically use this check through inheritance
+    function _revertIfNotAdmin() internal view virtual override {
+        if (!hasRole(DEFAULT_ADMIN_ROLE, msg.sender)) {
+            revert Staker__Unauthorized("not admin", msg.sender);
         }
     }
 
