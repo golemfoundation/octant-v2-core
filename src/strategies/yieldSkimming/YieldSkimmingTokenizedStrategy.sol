@@ -124,18 +124,6 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
     }
 
     /**
-     * @notice Redeem shares from the strategy with default maxLoss
-     * @dev Wrapper that calls the full redeem function with MAX_BPS maxLoss
-     * @param shares The amount of shares to redeem
-     * @param receiver The address to receive the assets
-     * @param owner The address whose shares are being redeemed
-     * @return assets The amount of assets returned
-     */
-    function redeem(uint256 shares, address receiver, address owner) external override returns (uint256 assets) {
-        return redeem(shares, receiver, owner, MAX_BPS);
-    }
-
-    /**
      * @notice Redeem shares from the strategy with value debt tracking
      * @dev Shares represent ETH value (1 share = 1 ETH value)
      * @param shares The amount of shares to redeem
@@ -237,18 +225,6 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
         _requireDragonSolvency(owner);
 
         return shares;
-    }
-
-    /**
-     * @notice Withdraw assets from the strategy with default maxLoss
-     * @dev Wrapper that calls the full withdraw function with 0 maxLoss
-     * @param assets The amount of assets to withdraw
-     * @param receiver The address to receive the assets
-     * @param owner The address whose shares are being redeemed
-     * @return shares The amount of shares burned
-     */
-    function withdraw(uint256 assets, address receiver, address owner) external override returns (uint256 shares) {
-        return withdraw(assets, receiver, owner, 0);
     }
 
     /**
@@ -491,31 +467,6 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
      */
     function isVaultInsolvent() external view returns (bool) {
         return _isVaultInsolvent();
-    }
-
-    /**
-     * @dev Internal deposit function that handles asset transfers and share minting
-     * @param S The strategy data storage
-     * @param receiver The address that will receive the minted shares
-     * @param assets The amount of assets being deposited
-     * @param shares The amount of shares to mint
-     */
-    function _deposit(StrategyData storage S, address receiver, uint256 assets, uint256 shares) internal override {
-        // Cache storage variables used more than once.
-        ERC20 _asset = S.asset;
-
-        _asset.safeTransferFrom(msg.sender, address(this), assets);
-
-        // We can deploy the full loose balance currently held.
-        IBaseStrategy(address(this)).deployFunds(_asset.balanceOf(address(this)));
-
-        // Adjust total Assets.
-        S.totalAssets += assets;
-
-        // mint shares
-        _mint(S, receiver, shares);
-
-        emit Deposit(msg.sender, receiver, assets, shares);
     }
 
     /**
