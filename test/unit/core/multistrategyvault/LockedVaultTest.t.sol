@@ -83,14 +83,14 @@ contract LockedVaultTest is Test {
         // Should be able to propose and finalize rage quit cooldown period change
         vm.startPrank(gov);
         vault.proposeRageQuitCooldownPeriodChange(cooldownPeriod);
-        assertEq(vault.getPendingRageQuitCooldownPeriod(), cooldownPeriod, "Pending period should be set");
+        assertEq(vault.pendingRageQuitCooldownPeriod(), cooldownPeriod, "Pending period should be set");
 
         // Fast forward past delay period
         vm.warp(block.timestamp + vault.RAGE_QUIT_COOLDOWN_CHANGE_DELAY() + 1);
 
         vault.finalizeRageQuitCooldownPeriodChange();
         assertEq(vault.rageQuitCooldownPeriod(), cooldownPeriod, "Rage quit cooldown period should be updated");
-        assertEq(vault.getPendingRageQuitCooldownPeriod(), 0, "Pending period should be cleared");
+        assertEq(vault.pendingRageQuitCooldownPeriod(), 0, "Pending period should be cleared");
         vm.stopPrank();
     }
 
@@ -121,7 +121,7 @@ contract LockedVaultTest is Test {
         vault.initiateRageQuit(sharesToLock);
 
         // Verify custody info
-        (uint256 lockedShares, uint256 unlockTime) = vault.getCustodyInfo(fish);
+        (uint256 lockedShares, uint256 unlockTime) = vault.custodyInfo(fish);
         assertEq(
             unlockTime,
             block.timestamp + vault.rageQuitCooldownPeriod(),
@@ -172,7 +172,7 @@ contract LockedVaultTest is Test {
         vault.initiateRageQuit(vault.balanceOf(fish));
 
         // Verify custody info
-        (uint256 lockedShares, uint256 unlockTime) = vault.getCustodyInfo(fish);
+        (uint256 lockedShares, uint256 unlockTime) = vault.custodyInfo(fish);
         assertEq(unlockTime, block.timestamp + vault.rageQuitCooldownPeriod(), "Unlock time should be updated");
         assertEq(lockedShares, vault.balanceOf(fish), "Locked shares should match balance");
         vm.stopPrank();
@@ -325,7 +325,7 @@ contract LockedVaultTest is Test {
         vm.startPrank(fish);
         vault.initiateRageQuit(partialLock);
 
-        (, uint256 originalUnlockTime) = vault.getCustodyInfo(fish);
+        (, uint256 originalUnlockTime) = vault.custodyInfo(fish);
 
         // Change cooldown period (this doesn't affect existing rage quits)
         vm.stopPrank();
@@ -345,7 +345,7 @@ contract LockedVaultTest is Test {
         userDeposit(fish, secondDeposit);
 
         // Original unlock time should not change despite re-deposit
-        (, uint256 currentUnlockTime) = vault.getCustodyInfo(fish);
+        (, uint256 currentUnlockTime) = vault.custodyInfo(fish);
         assertEq(currentUnlockTime, originalUnlockTime, "Unlock time should not change on re-deposit");
     }
 

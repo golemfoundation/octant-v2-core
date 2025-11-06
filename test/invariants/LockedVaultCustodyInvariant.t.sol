@@ -73,7 +73,8 @@ contract LockedVaultCustodyInvariant is Test {
 
     // Helper function to get custody info
     function getCustodyInfo(address user) internal view returns (uint256 lockedShares, uint256 unlockTime) {
-        return vault.getCustodyInfo(user);
+        (uint256 _lockedShares, uint256 _unlockTime) = vault.custodyInfo(user);
+        return (_lockedShares, _unlockTime);
     }
 
     /*//////////////////////////////////////////////////////////////

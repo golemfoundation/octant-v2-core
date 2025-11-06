@@ -47,4 +47,18 @@ interface IMultistrategyLockedVault is IMultistrategyVault {
     function setRegenGovernance(address _regenGovernance) external;
     function cancelRageQuit() external;
     function getCustodyInfo(address user) external view returns (uint256 lockedShares, uint256 unlockTime);
+
+    /**
+     * @notice Get the amount of shares that can be transferred by a user
+     * @param user The address to check transferable shares for
+     * @return The amount of shares available for transfer (not locked in custody)
+     */
+    function getTransferableShares(address user) external view returns (uint256);
+
+    /**
+     * @notice Get the amount of shares available for rage quit initiation
+     * @param user The address to check rage quitable shares for
+     * @return The amount of shares available for initiating rage quit
+     */
+    function getRageQuitableShares(address user) external view returns (uint256);
 }

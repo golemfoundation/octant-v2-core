@@ -4,6 +4,7 @@ pragma solidity ^0.8.25;
 import { MultistrategyVault } from "src/core/MultistrategyVault.sol";
 import { IMultistrategyVault } from "src/core/interfaces/IMultistrategyVault.sol";
 import { IMultistrategyLockedVault } from "src/core/interfaces/IMultistrategyLockedVault.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
  * @title MultistrategyLockedVault
@@ -19,6 +20,7 @@ import { IMultistrategyLockedVault } from "src/core/interfaces/IMultistrategyLoc
  *    - Those shares are placed in custody and cannot be transferred
  *    - Locked shares are tracked separately from the user's transferable balance
  *    - Transfer restrictions prevent bypassing the cooldown period
+ *    - Only one active rage quit per user (no multiple concurrent rage quits)
  *
  * 2. **Custody Lifecycle:**
  *    - **Initiation**: User specifies exact number of shares to lock for rage quit
@@ -31,12 +33,19 @@ import { IMultistrategyLockedVault } from "src/core/interfaces/IMultistrategyLoc
  *    - Users cannot transfer locked shares to other addresses
  *    - Available shares = total balance - locked shares
  *    - Prevents rage quit cooldown bypass through share transfers
+ *    - Use `getTransferableShares()` to check available balance for transfers
  *
  * 4. **Withdrawal Rules:**
  *    - Users can only withdraw shares if they have active custody
  *    - Withdrawal amount cannot exceed remaining custodied shares
  *    - Multiple partial withdrawals are allowed from the same custody
  *    - New rage quit required after custody is fully withdrawn
+ *    - `maxWithdraw()` and `maxRedeem()` return 0 if no custody or still in cooldown
+ *
+ * 5. **Utility Functions:**
+ *    - `getTransferableShares(user)`: Returns shares available for transfer
+ *    - `getRageQuitableShares(user)`: Returns shares available for rage quit initiation
+ *    - `custodyInfo(user)`: Returns custody details (locked shares, unlock time)
  *
  * ## Two-Step Cooldown Period Changes:
  *
@@ -61,9 +70,10 @@ import { IMultistrategyLockedVault } from "src/core/interfaces/IMultistrategyLoc
  * **Scenario A - Basic Custody Flow:**
  * 1. User has 1000 shares, initiates rage quit for 500 shares
  * 2. 500 shares locked in custody, 500 shares remain transferable
- * 3. After cooldown, user can withdraw up to 500 shares
- * 4. User withdraws 300 shares, 200 shares remain in custody
- * 5. User can later withdraw remaining 200 shares without new rage quit
+ * 3. `getTransferableShares(user)` returns 500, `getRageQuitableShares(user)` returns 0
+ * 4. After cooldown, user can withdraw up to 500 shares
+ * 5. User withdraws 300 shares, 200 shares remain in custody
+ * 6. User can later withdraw remaining 200 shares without new rage quit
  *
  * **Scenario B - Two-Step Cooldown Change:**
  * 1. Current cooldown: 7 days, governance proposes 14 days
@@ -71,6 +81,14 @@ import { IMultistrategyLockedVault } from "src/core/interfaces/IMultistrategyLoc
  * 3. User A rage quits during grace period → uses 7-day cooldown
  * 4. Change finalized after grace period
  * 5. User B rage quits after finalization → uses 14-day cooldown
+ *
+ * **Scenario C - Utility Function Usage:**
+ * 1. User has 1000 shares, no active rage quit
+ * 2. `getTransferableShares(user)` returns 1000
+ * 3. `getRageQuitableShares(user)` returns 1000
+ * 4. User initiates rage quit for 400 shares
+ * 5. `getTransferableShares(user)` returns 600
+ * 6. `getRageQuitableShares(user)` returns 0 (already has active rage quit)
  */
 contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVault {
     // Mapping of user address to their custody info
@@ -386,5 +404,96 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
         delete custodyInfo[msg.sender];
 
         emit RageQuitCancelled(msg.sender, freedShares);
+    }
+
+    /**
+     * @notice Get the maximum amount of assets that can be withdrawn by an owner
+     * @param owner_ The address that owns the shares
+     * @param maxLoss_ Custom max_loss if any
+     * @param strategiesArray_ Custom strategies queue if any
+     * @return The maximum amount of assets that can be withdrawn
+     * @dev This override accounts for custody constraints - returns 0 if:
+     *      - Custody is still in cooldown period
+     *      - Otherwise returns min of parent calculation and custodied shares in asset terms
+     */
+    function maxWithdraw(
+        address owner_,
+        uint256 maxLoss_,
+        address[] calldata strategiesArray_
+    ) external view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
+        CustodyInfo memory custody = custodyInfo[owner_];
+        if (block.timestamp < custody.unlockTime) {
+            return 0;
+        }
+
+        // Get the max from parent implementation
+        uint256 parentMax = _maxWithdraw(owner_, maxLoss_, strategiesArray_);
+
+        // Convert custodied shares to assets
+        uint256 custodyAssets = _convertToAssets(custody.lockedShares, Rounding.ROUND_DOWN);
+
+        // Return minimum of parent max and custody limit
+        return Math.min(parentMax, custodyAssets);
+    }
+
+    /**
+     * @notice Get the maximum amount of shares that can be redeemed by an owner
+     * @param owner_ The address that owns the shares
+     * @param maxLoss_ Custom max_loss if any
+     * @param strategiesArray_ Custom strategies queue if any
+     * @return The maximum amount of shares that can be redeemed
+     * @dev This override accounts for custody constraints - returns 0 if:
+     *      - Custody is still in cooldown period
+     *      - Otherwise returns min of balance and custodied shares
+     */
+    function maxRedeem(
+        address owner_,
+        uint256 maxLoss_,
+        address[] calldata strategiesArray_
+    ) external view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
+        CustodyInfo memory custody = custodyInfo[owner_];
+
+        if (block.timestamp < custody.unlockTime) {
+            return 0;
+        }
+
+        // Get max shares from parent calculation
+        uint256 parentMax = Math.min(
+            _convertToShares(_maxWithdraw(owner_, maxLoss_, strategiesArray_), Rounding.ROUND_DOWN),
+            balanceOf(owner_)
+        );
+
+        // Get custody info to determine locked shares
+        uint256 lockedShares = custody.lockedShares;
+
+        // Return minimum of parent max and custody limit
+        return Math.min(parentMax, lockedShares);
+    }
+
+    /**
+     * @notice Get the amount of shares that can be transferred by a user
+     * @param user The address to check transferable shares for
+     * @return The amount of shares available for transfer (not locked in custody)
+     * @dev Returns total balance minus shares currently locked in custody
+     */
+    function getTransferableShares(address user) external view returns (uint256) {
+        uint256 totalShares = balanceOf(user);
+        uint256 lockedShares = custodyInfo[user].lockedShares;
+        return totalShares - lockedShares;
+    }
+
+    /**
+     * @notice Get the amount of shares available for rage quit initiation
+     * @param user The address to check rage quitable shares for
+     * @return The amount of shares available for initiating rage quit
+     * @dev Returns 0 if user already has active custody, otherwise returns full balance
+     */
+    function getRageQuitableShares(address user) external view returns (uint256) {
+        // If user already has active custody, they cannot initiate new rage quit
+        if (custodyInfo[user].lockedShares > 0) {
+            return 0;
+        }
+        // Otherwise, they can rage quit all their shares
+        return balanceOf(user);
     }
 }
