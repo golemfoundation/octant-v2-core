@@ -618,7 +618,13 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
         require(S.pendingDragonRouter != address(0), "no pending change");
         require(block.timestamp >= S.dragonRouterChangeTimestamp + DRAGON_ROUTER_COOLDOWN, "cooldown not elapsed");
 
+        address oldDragonRouter = S.dragonRouter;
         address newDragonRouter = S.pendingDragonRouter;
+        uint256 oldDragonBalance = _balanceOf(S, oldDragonRouter);
+
+        if (oldDragonBalance > 0) {
+            _requireDragonSolvency(oldDragonRouter);
+        }
 
         // Now call the parent implementation to actually change the router
         S.dragonRouter = newDragonRouter;
