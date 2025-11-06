@@ -255,7 +255,7 @@ contract YieldSkimmingDragonRestrictionsTest is Test {
 
         // Dragon cannot withdraw their full balance due to restrictions
         vm.prank(dragonRouter);
-        vm.expectRevert("Dragon cannot operate during insolvency");
+        vm.expectRevert("Transfer would cause vault insolvency");
         strategy.redeem(dragonBalance, dragonRouter, dragonRouter);
 
         // But dragon can still withdraw the allowed amount

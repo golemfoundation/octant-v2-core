@@ -1004,21 +1004,29 @@ contract LidoStrategyTest is Test {
         // Airdrop tokens to user for this test
         airdrop(ERC20(WSTETH), user, depositAmount);
 
+        // Get the current exchange rate before deposit
+        state.initialExchangeRate = IYieldSkimmingStrategy(address(strategy)).getCurrentExchangeRate();
+
         // User deposits
         vm.startPrank(user);
         ERC20(WSTETH).approve(address(strategy), depositAmount);
         vault.deposit(depositAmount, user);
         vm.stopPrank();
 
+        // Do an initial report to establish the baseline rate
+        vm.prank(keeper);
+        vault.report();
+
         // Generate profit to create donation shares
-        state.initialExchangeRate = IYieldSkimmingStrategy(address(strategy)).getCurrentExchangeRate();
         state.profitRate = (state.initialExchangeRate * (100 + profitPercentage)) / 100;
         vm.mockCall(WSTETH, abi.encodeWithSignature("stEthPerToken()"), abi.encode(state.profitRate));
 
         vm.startPrank(keeper);
         vault.report(); // Creates donation shares
         vm.stopPrank();
-        vm.clearMockedCalls();
+
+        // make sure donation address received shares
+        assertGt(vault.balanceOf(donationAddress), 0, "Donation address should have received shares");
 
         // make sure withdrawable underlying value is the same as the deposit amount * initial exchange rate
         assertApproxEqRel(
@@ -1027,6 +1035,8 @@ contract LidoStrategyTest is Test {
             0.01e16, // 0.01% tolerance for loss protection limitations and precision in edge cases
             "Withdrawable underlying value should be the same as the deposit amount * initial exchange rate"
         );
+
+        vm.clearMockedCalls();
 
         state.donationSharesAfterProfit = vault.balanceOf(donationAddress);
         assertGt(state.donationSharesAfterProfit, 0, "Should have donation shares after profit");
@@ -1038,10 +1048,11 @@ contract LidoStrategyTest is Test {
         vm.startPrank(keeper);
         (uint256 profit1, uint256 loss1) = vault.report();
         vm.stopPrank();
-        vm.clearMockedCalls();
 
         assertEq(profit1, 0, "Should have no profit in first loss");
         assertGt(loss1, 0, "Should have loss in first report");
+
+        vm.clearMockedCalls();
 
         state.donationSharesAfterFirstLoss = vault.balanceOf(donationAddress);
         assertLt(
@@ -1057,7 +1068,6 @@ contract LidoStrategyTest is Test {
         vm.startPrank(keeper);
         (uint256 profit2, uint256 loss2) = vault.report();
         vm.stopPrank();
-        vm.clearMockedCalls();
 
         assertEq(profit2, 0, "Should have no profit in second loss");
         assertGt(loss2, 0, "Should have loss in second report");
