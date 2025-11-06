@@ -65,6 +65,12 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
  *    - Users who rage quit after finalization use new cooldown period
  *    - No retroactive application of cooldown changes
  *
+ * ## Governance:
+ *
+ * - **Regen Governance**: Has control over rage quit cooldown period changes
+ * - **Direct Transfer**: Governance can be transferred immediately (no 2-step process)
+ * - **Access Control**: Only regen governance can propose/cancel cooldown changes
+ *
  * ## Example Scenarios:
  *
  * **Scenario A - Basic Custody Flow:**
@@ -286,16 +292,19 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
     }
 
     /**
-     * @notice Transfer regen governance to a new address
+     * @notice Set the regen governance address that can manage rage quit parameters
      * @param _regenGovernance New address to become regen governance
      * @dev Regen governance has exclusive control over:
      *      - Proposing rage quit cooldown period changes
      *      - Cancelling pending cooldown period changes
-     *      - Transferring governance to another address
      * @custom:governance Only current regen governance can call this function
      */
-    function setRegenGovernance(address _regenGovernance) external onlyRegenGovernance {
+    function setRegenGovernance(address _regenGovernance) external override onlyRegenGovernance {
+        if (_regenGovernance == address(0)) revert InvalidGovernanceAddress();
+
+        address oldGovernance = regenGovernance;
         regenGovernance = _regenGovernance;
+        emit RegenGovernanceChanged(oldGovernance, _regenGovernance);
     }
 
     /**
@@ -373,21 +382,6 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
         super._transfer(sender_, receiver_, amount_);
     }
 
-    /**
-     * @notice Get custody information for a specific user
-     * @param user Address to query custody information for
-     * @return lockedShares Number of shares currently locked in custody
-     * @return unlockTime Unix timestamp when custodied shares can be withdrawn (0 if no custody)
-     * @dev Returns current custody state:
-     *      - lockedShares = 0 means no active custody
-     *      - unlockTime = 0 means no active custody
-     *      - unlockTime > block.timestamp means custody is still in cooldown
-     *      - unlockTime <= block.timestamp means custody is unlocked for withdrawal
-     */
-    function getCustodyInfo(address user) external view returns (uint256 lockedShares, uint256 unlockTime) {
-        CustodyInfo memory custody = custodyInfo[user];
-        return (custody.lockedShares, custody.unlockTime);
-    }
 
     /**
      * @notice Cancel rage quit and unlock custodied shares

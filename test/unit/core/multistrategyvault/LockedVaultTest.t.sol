@@ -490,4 +490,25 @@ contract LockedVaultTest is Test {
         assertEq(withdrawnAmount, remainingAmount, "Should redeem remaining amount");
         vm.stopPrank();
     }
+
+    function test_RegenGovernanceTransfer() public {
+        address newGovernance = address(0x999);
+        
+        // Only current regen governance can transfer
+        vm.expectRevert(IMultistrategyLockedVault.NotRegenGovernance.selector);
+        vault.setRegenGovernance(newGovernance);
+        
+        vm.prank(gov);
+        vault.setRegenGovernance(newGovernance);
+        
+        assertEq(vault.regenGovernance(), newGovernance, "governance should update immediately");
+    }
+
+    function test_RegenGovernanceRejectsInvalidAddresses() public {
+        vm.startPrank(gov);
+        vm.expectRevert(IMultistrategyLockedVault.InvalidGovernanceAddress.selector);
+        vault.setRegenGovernance(address(0));
+        vault.setRegenGovernance(gov);
+        vm.stopPrank();
+    }
 }
