@@ -375,6 +375,7 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
         return _isVaultInsolvent();
     }
 
+
     /**
      * @dev Converts assets to shares using value debt approach with solvency awareness
      * @param S Strategy storage

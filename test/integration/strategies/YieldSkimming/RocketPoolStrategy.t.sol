@@ -1693,8 +1693,8 @@ contract RocketPoolStrategyTest is Test {
         state.totalAssets = vault.totalAssets();
         state.totalSupply = vault.totalSupply();
         state.exchangeRate = IYieldSkimmingStrategy(address(strategy)).getCurrentExchangeRate();
-        state.userDebt = YieldSkimmingTokenizedStrategy(address(vault)).getTotalUserDebtInAssetValue();
-        state.dragonDebt = YieldSkimmingTokenizedStrategy(address(vault)).getDragonRouterDebtInAssetValue();
+        state.userDebt = vault.totalSupply() - vault.balanceOf(donationAddress);
+        state.dragonDebt = vault.balanceOf(donationAddress);
         state.dragonShares = vault.balanceOf(donationAddress);
         state.isInsolvent = YieldSkimmingTokenizedStrategy(address(vault)).isVaultInsolvent();
         state.timestamp = block.timestamp;
@@ -2048,8 +2048,8 @@ contract RocketPoolStrategyTest is Test {
         // Store initial state for comparison
         uint256 initialTotalAssets = vault.totalAssets();
         uint256 initialTotalSupply = vault.totalSupply();
-        uint256 initialUserDebt = YieldSkimmingTokenizedStrategy(address(vault)).getTotalUserDebtInAssetValue();
-        uint256 initialDragonDebt = YieldSkimmingTokenizedStrategy(address(vault)).getDragonRouterDebtInAssetValue();
+        uint256 initialUserDebt = vault.totalSupply() - vault.balanceOf(donationAddress);
+        uint256 initialDragonDebt = vault.balanceOf(donationAddress);
         
         console.log("\n=== Initial State ===");
         console.log("Total assets:", initialTotalAssets);
@@ -2071,7 +2071,7 @@ contract RocketPoolStrategyTest is Test {
         state.aliceSharesAfterRedeem1 = vault.balanceOf(alice);
         state.totalAssetsAfterRedeem1 = vault.totalAssets();
         state.totalSupplyAfterRedeem1 = vault.totalSupply();
-        state.userDebtAfterRedeem1 = YieldSkimmingTokenizedStrategy(address(vault)).getTotalUserDebtInAssetValue();
+        state.userDebtAfterRedeem1 = vault.totalSupply() - vault.balanceOf(donationAddress);
         
         // Verify against preview
         assertEq(state.assetsReceived1, expectedAssetsFromRedeem, "Simple redeem should match previewRedeem");
@@ -2094,7 +2094,7 @@ contract RocketPoolStrategyTest is Test {
         state.aliceSharesAfterRedeem2 = vault.balanceOf(alice);
         state.totalAssetsAfterRedeem2 = vault.totalAssets();
         state.totalSupplyAfterRedeem2 = vault.totalSupply();
-        state.userDebtAfterRedeem2 = YieldSkimmingTokenizedStrategy(address(vault)).getTotalUserDebtInAssetValue();
+        state.userDebtAfterRedeem2 = vault.totalSupply() - vault.balanceOf(donationAddress);
         
         // Verify both redeem variants produce identical results
         assertEq(state.assetsReceived1, state.assetsReceived2, "Both redeem variants should return same assets");
@@ -2132,7 +2132,7 @@ contract RocketPoolStrategyTest is Test {
         state.aliceSharesAfterWithdraw4 = vault.balanceOf(alice);
         state.totalAssetsAfterWithdraw4 = vault.totalAssets();
         state.totalSupplyAfterWithdraw4 = vault.totalSupply();
-        state.userDebtAfterWithdraw4 = YieldSkimmingTokenizedStrategy(address(vault)).getTotalUserDebtInAssetValue();
+        state.userDebtAfterWithdraw4 = vault.totalSupply() - vault.balanceOf(donationAddress);
         
         // Verify against preview
         assertEq(state.sharesBurned4, expectedSharesFromWithdraw, "Withdraw should burn expected shares from previewWithdraw");
