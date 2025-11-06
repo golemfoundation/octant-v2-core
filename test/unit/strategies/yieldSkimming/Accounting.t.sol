@@ -1296,10 +1296,14 @@ contract AccountingTest is Setup {
         bool isInsolvent = IYieldSkimmingStrategy(address(strategy)).isVaultInsolvent();
 
         if (isInsolvent) {
+            vm.startPrank(management);
+            strategy.setEnableBurning(true);
+            vm.stopPrank();
+
             // Dragon transfers should be blocked during insolvency
             vm.startPrank(strategy.dragonRouter());
-            vm.expectRevert("Dragon cannot operate during insolvency");
-            strategy.transfer(user1, 1);
+            vm.expectRevert("Transfer would cause vault insolvency");
+            strategy.transfer(user1, dragonShares);
             vm.stopPrank();
         }
     }
