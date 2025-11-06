@@ -241,7 +241,7 @@ The system includes several utility contracts that extend strategy functionality
 - **Purpose:** Standardized interface for yield skimming strategies with value debt tracking and insolvency monitoring
 - **Features:**
   - Exchange rate querying (`getCurrentExchangeRate`, `getLastRateRay`, `getCurrentRateRay`, `decimalsOfExchangeRate`)
-  - Value debt inspection (`getTotalUserDebtInAssetValue`, `getDragonRouterDebtInAssetValue`, `getTotalValueDebtInAssetValue`)
+  - Value debt inspection (`getTotalValueDebtInAssetValue`)
   - Insolvency monitoring (`isVaultInsolvent`)
 - **Implementation:** YieldSkimmingTokenizedStrategy implements this interface to provide transparency into debt obligations and vault health
 - **Usage:** External integrations can query debt status and vault solvency for risk assessment and monitoring
