@@ -33,6 +33,7 @@ import { NotInAllowset } from "src/errors.sol";
 /// @notice Provides shared functionality including:
 ///         - Variable reward duration (7-3000 days, configurable by admin)
 ///         - Earning power management with external bumping incentivized by tips (up to maxBumpTip)
+///         - Earning power calculator updates (blocked during active reward periods for governance protection)
 ///         - Adjustable minimum stake amount (existing deposits grandfathered with restrictions)
 ///         - Access control for stakers and allocation mechanisms
 ///         - Reward compounding (when REWARD_TOKEN == STAKE_TOKEN)
@@ -85,6 +86,10 @@ import { NotInAllowset } from "src/errors.sol";
 /// @dev Integer division causes ~1 wei precision loss, negligible due to SCALE_FACTOR (1e36).
 /// @dev This base is abstract, with variants implementing token-specific behaviors (e.g., delegation surrogates).
 /// @dev Earning power updates are required after balance changes; some are automatic, others via bumpEarningPower.
+///
+/// @dev ACCESS CONTROL:
+///      - admin: Admin operations (protocol parameters, pause, access control) from base Staker
+///      - rewardManager: Can manage reward notifiers (operational role, separation of duties)
 abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, StakerPermitAndStake, StakerOnBehalf {
     using SafeCast for uint256;
 
@@ -132,6 +137,7 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     error CompoundingNotSupported();
     error CannotRaiseMinimumStakeAmountDuringActiveReward();
     error CannotRaiseMaxBumpTipDuringActiveReward();
+    error CannotChangeEarningPowerCalculatorDuringActiveReward();
     error ZeroOperation();
     error NoOperation();
     error DisablingAllocationMechanismAllowsetNotAllowed();
@@ -151,6 +157,10 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @notice Tracks the total amount of rewards that have been consumed by users
     /// @dev This includes claims, compounding, contributions, and tips
     uint256 public totalClaimedRewards;
+
+    /// @notice Address that can manage reward notifiers (operational role)
+    /// @dev Separated from admin for operational efficiency and security separation of duties
+    address public rewardManager;
 
     /// @notice Summary of the most recently scheduled reward cycle.
     /// @dev Tracks both the new amount and any carried-over rewards for analytics and UX.
@@ -220,6 +230,10 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @notice Emitted when the minimum stake amount is updated
     /// @param newMinimumStakeAmount New minimum stake required in stake token base units
     event MinimumStakeAmountSet(uint256 newMinimumStakeAmount);
+
+    /// @notice Emitted when the reward manager address is updated
+    /// @param newRewardManager New reward manager address that can manage notifiers
+    event RewardManagerSet(address indexed newRewardManager);
 
     // === Getters ===
     /// @notice Gets the current reward duration
@@ -389,7 +403,7 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @param _amount Reward amount to notify in reward token base units
     /// @param _requiredBalance Required contract balance calculated by variant-specific validation
     function _notifyRewardAmountWithCustomDuration(uint256 _amount, uint256 _requiredBalance) internal {
-        if (!isRewardNotifier[msg.sender]) revert Staker__Unauthorized("not notifier", msg.sender);
+        require(isRewardNotifier[msg.sender], Staker__Unauthorized("not notifier", msg.sender));
 
         rewardPerTokenAccumulatedCheckpoint = rewardPerTokenAccumulated();
 
@@ -405,7 +419,7 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         rewardEndTime = block.timestamp + sharedState.rewardDuration;
         lastCheckpointTime = block.timestamp;
 
-        if (scaledRewardRate < SCALE_FACTOR) revert Staker__InvalidRewardRate();
+        require(scaledRewardRate >= SCALE_FACTOR, Staker__InvalidRewardRate());
 
         // Calculate reward schedule metadata before updating totalRewards
         uint256 carryOverAmount = totalRewards - totalClaimedRewards;
@@ -531,6 +545,18 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         _setMaxBumpTip(_newMaxBumpTip);
     }
 
+    /// @notice Sets the earning power calculator with governance protection
+    /// @dev TIMING RESTRICTION: Cannot change during active reward period to protect reward distribution integrity.
+    /// @dev SECURITY: Changing calculator mid-cycle could disrupt reward fairness and earning power calculations.
+    /// @dev GOVERNANCE PROTECTION: Requires waiting until after rewardEndTime to change calculator.
+    /// @dev Can only be called by admin
+    /// @param _newEarningPowerCalculator New earning power calculator contract address
+    function setEarningPowerCalculator(address _newEarningPowerCalculator) external virtual override {
+        _revertIfNotAdmin();
+        require(block.timestamp > rewardEndTime, CannotChangeEarningPowerCalculatorDuringActiveReward());
+        _setEarningPowerCalculator(_newEarningPowerCalculator);
+    }
+
     /// @notice Pauses the contract, disabling user operations except withdrawals and view functions
     /// @dev EMERGENCY USE: Intended for security incidents or critical maintenance.
     /// @dev SCOPE: Affects stake, claim, contribute, and compound operations.
@@ -547,6 +573,30 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     function unpause() external whenPaused {
         _revertIfNotAdmin();
         _unpause();
+    }
+
+    /// @notice Sets the reward manager address (operational role for managing notifiers)
+    /// @dev Only admin can call this function
+    /// @param _newRewardManager New reward manager address
+    function setRewardManager(address _newRewardManager) external {
+        _revertIfNotAdmin();
+        rewardManager = _newRewardManager;
+        emit RewardManagerSet(_newRewardManager);
+    }
+
+    /// @notice Override setRewardNotifier() to allow both admin and reward manager
+    /// @dev This is the key function that separates operational (reward manager) from governance (admin)
+    /// @dev Admin can manage notifiers as part of broader protocol control
+    /// @dev Reward manager can manage notifiers for faster operational response
+    /// @param _rewardNotifier Address of the reward notifier
+    /// @param _isEnabled True to enable the notifier, false to disable
+    function setRewardNotifier(address _rewardNotifier, bool _isEnabled) external virtual override {
+        require(
+            msg.sender == admin || msg.sender == rewardManager,
+            Staker__Unauthorized("not admin or reward manager", msg.sender)
+        );
+        isRewardNotifier[_rewardNotifier] = _isEnabled;
+        emit RewardNotifierSet(_rewardNotifier, _isEnabled);
     }
 
     // === Public Functions ===
@@ -593,15 +643,14 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         // Validate asset compatibility to fail fast and provide clear error
         {
             address expectedAsset = address(TokenizedAllocationMechanism(_allocationMechanismAddress).asset());
-            if (address(REWARD_TOKEN) != expectedAsset) {
-                revert AssetMismatch(address(REWARD_TOKEN), expectedAsset);
-            }
+            require(address(REWARD_TOKEN) == expectedAsset, AssetMismatch(address(REWARD_TOKEN), expectedAsset));
         }
 
         Deposit storage deposit = deposits[_depositId];
-        if (deposit.claimer != msg.sender && deposit.owner != msg.sender) {
-            revert Staker__Unauthorized("not claimer or owner", msg.sender);
-        }
+        require(
+            deposit.claimer == msg.sender || deposit.owner == msg.sender,
+            Staker__Unauthorized("not claimer or owner", msg.sender)
+        );
 
         // Defense-in-depth dual-check architecture (Cantina Finding #127 fix):
         // 1. TAM checks msg.sender (claimer/contributor) via beforeSignupHook - receives voting power
@@ -617,9 +666,7 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         // Explicit fund source check: Verify deposit owner is also eligible for this mechanism
         // Assumes mechanism implements canSignup() (OctantQFMechanism interface)
         bool ownerCanSignup = OctantQFMechanism(payable(_allocationMechanismAddress)).canSignup(deposit.owner);
-        if (!ownerCanSignup) {
-            revert DepositOwnerNotEligibleForMechanism(_allocationMechanismAddress, deposit.owner);
-        }
+        require(ownerCanSignup, DepositOwnerNotEligibleForMechanism(_allocationMechanismAddress, deposit.owner));
 
         _checkpointGlobalReward();
         _checkpointReward(deposit);
@@ -711,16 +758,15 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     function compoundRewards(
         DepositIdentifier _depositId
     ) external virtual whenNotPaused nonReentrant returns (uint256 compoundedAmount) {
-        if (address(REWARD_TOKEN) != address(STAKE_TOKEN)) {
-            revert CompoundingNotSupported();
-        }
+        require(address(REWARD_TOKEN) == address(STAKE_TOKEN), CompoundingNotSupported());
 
         Deposit storage deposit = deposits[_depositId];
         address depositOwner = deposit.owner;
 
-        if (deposit.claimer != msg.sender && depositOwner != msg.sender) {
-            revert Staker__Unauthorized("not claimer or owner", msg.sender);
-        }
+        require(
+            deposit.claimer == msg.sender || depositOwner == msg.sender,
+            Staker__Unauthorized("not claimer or owner", msg.sender)
+        );
 
         _checkStakerAccess(depositOwner);
 
@@ -763,9 +809,7 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         // The surrogate must already exist since the deposit exists (created during initial stake)
         // This ensures child contracts can customize behavior through _stakeTokenSafeTransferFrom
         DelegationSurrogate _surrogate = surrogates(deposit.delegatee);
-        if (address(_surrogate) == address(0)) {
-            revert SurrogateNotFound(deposit.delegatee);
-        }
+        require(address(_surrogate) != address(0), SurrogateNotFound(deposit.delegatee));
         _stakeTokenSafeTransferFrom(address(this), address(_surrogate), compoundedAmount);
 
         emit RewardClaimed(_depositId, msg.sender, compoundedAmount, tempEarningPower);
@@ -782,20 +826,17 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @param _depositId Deposit to check eligibility for
     function _revertIfMinimumStakeAmountNotMet(DepositIdentifier _depositId) internal view {
         Deposit storage deposit = deposits[_depositId];
-        if (deposit.balance < sharedState.minimumStakeAmount && deposit.balance > 0) {
-            revert MinimumStakeAmountNotMet(sharedState.minimumStakeAmount, deposit.balance);
-        }
+        require(
+            deposit.balance >= sharedState.minimumStakeAmount || deposit.balance == 0,
+            MinimumStakeAmountNotMet(sharedState.minimumStakeAmount, deposit.balance)
+        );
     }
 
     function _checkStakerAccess(address user) internal view {
         if (sharedState.stakerAccessMode == AccessMode.ALLOWSET) {
-            if (!sharedState.stakerAllowset.contains(user)) {
-                revert StakerNotAllowed(user);
-            }
+            require(sharedState.stakerAllowset.contains(user), StakerNotAllowed(user));
         } else if (sharedState.stakerAccessMode == AccessMode.BLOCKSET) {
-            if (sharedState.stakerBlockset.contains(user)) {
-                revert StakerBlocked(user);
-            }
+            require(!sharedState.stakerBlockset.contains(user), StakerBlocked(user));
         }
     }
 
@@ -930,9 +971,7 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         uint256 carryOverAmount = totalRewards - totalClaimedRewards;
         required = carryOverAmount + _amount;
 
-        if (currentBalance < required) {
-            revert InsufficientRewardBalance(currentBalance, required);
-        }
+        require(currentBalance >= required, InsufficientRewardBalance(currentBalance, required));
 
         return required;
     }
@@ -964,7 +1003,7 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         address _tipReceiver,
         uint256 _requestedTip
     ) public virtual override whenNotPaused nonReentrant {
-        if (_requestedTip > maxBumpTip) revert Staker__InvalidTip();
+        require(_requestedTip <= maxBumpTip, Staker__InvalidTip());
 
         Deposit storage deposit = deposits[_depositId];
 
@@ -979,13 +1018,12 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
             deposit.delegatee,
             deposit.earningPower
         );
-        if (!_isQualifiedForBump || _newEarningPower == deposit.earningPower) {
-            revert Staker__Unqualified(_newEarningPower);
-        }
+        require(_isQualifiedForBump && _newEarningPower != deposit.earningPower, Staker__Unqualified(_newEarningPower));
 
-        if (_newEarningPower > deposit.earningPower && _unclaimedRewards < _requestedTip) {
-            revert Staker__InsufficientUnclaimedRewards();
-        }
+        require(
+            _newEarningPower <= deposit.earningPower || _unclaimedRewards >= _requestedTip,
+            Staker__InsufficientUnclaimedRewards()
+        );
 
         uint256 tipToPay = _requestedTip;
         if (_requestedTip > _unclaimedRewards) {
