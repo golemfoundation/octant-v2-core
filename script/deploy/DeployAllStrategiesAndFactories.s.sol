@@ -5,14 +5,11 @@ import "forge-std/Script.sol";
 import { BatchScript } from "../helpers/BatchScript.sol";
 
 // Strategy implementations
-import { YieldSkimmingTokenizedStrategy } from "src/strategies/yieldSkimming/YieldSkimmingTokenizedStrategy.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 
 // Factory contracts
 import { MorphoCompounderStrategyFactory } from "src/factories/MorphoCompounderStrategyFactory.sol";
 import { SkyCompounderStrategyFactory } from "src/factories/SkyCompounderStrategyFactory.sol";
-import { LidoStrategyFactory } from "src/factories/LidoStrategyFactory.sol";
-import { RocketPoolStrategyFactory } from "src/factories/yieldSkimming/RocketPoolStrategyFactory.sol";
 import { PaymentSplitterFactory } from "src/factories/PaymentSplitterFactory.sol";
 import { YearnV3StrategyFactory } from "src/factories/yieldDonating/YearnV3StrategyFactory.sol";
 
@@ -23,25 +20,19 @@ import { YearnV3StrategyFactory } from "src/factories/yieldDonating/YearnV3Strat
  * @dev Safe calls MultiSendCallOnly which makes multiple calls to CREATE2 factory for deployment
  */
 contract DeployAllStrategiesAndFactories is Script, BatchScript {
-    // Deployment salts for deterministic addresses
-    bytes32 public constant YIELD_SKIMMING_SALT = keccak256("OCT_YIELD_SKIMMING_STRATEGY_V2");
-    bytes32 public constant YIELD_DONATING_SALT = keccak256("OCTANT_YIELD_DONATING_STRATEGY_V2");
+    // Deployment salts for deterministic addresses (date-based: DDMMYYYY format)
+    bytes32 public constant YIELD_DONATING_SALT = keccak256("OCTANT_YIELD_DONATING_STRATEGY_05112025");
 
     // Factory deployment salts
-    bytes32 public constant MORPHO_FACTORY_SALT = keccak256("MORPHO_COMPOUNDER_FACTORY_V2");
-    bytes32 public constant SKY_FACTORY_SALT = keccak256("SKY_COMPOUNDER_FACTORY_V2");
-    bytes32 public constant LIDO_FACTORY_SALT = keccak256("LIDO_STRATEGY_FACTORY_V2");
-    bytes32 public constant ROCKET_POOL_FACTORY_SALT = keccak256("ROCKET_POOL_STRATEGY_FACTORY_V2");
-    bytes32 public constant PAYMENT_SPLITTER_FACTORY_SALT = keccak256("PAYMENT_SPLITTER_FACTORY_V2");
-    bytes32 public constant YEARN_V3_FACTORY_SALT = keccak256("YEARN_V3_STRATEGY_FACTORY_V2");
+    bytes32 public constant MORPHO_FACTORY_SALT = keccak256("MORPHO_COMPOUNDER_FACTORY_05112025");
+    bytes32 public constant SKY_FACTORY_SALT = keccak256("SKY_COMPOUNDER_FACTORY_05112025");
+    bytes32 public constant PAYMENT_SPLITTER_FACTORY_SALT = keccak256("PAYMENT_SPLITTER_FACTORY_05112025");
+    bytes32 public constant YEARN_V3_FACTORY_SALT = keccak256("YEARN_V3_STRATEGY_FACTORY_05112025");
 
     // Deployed addresses (to be logged)
-    address public yieldSkimmingStrategy;
     address public yieldDonatingStrategy;
     address public morphoFactory;
     address public skyFactory;
-    address public lidoFactory;
-    address public rocketPoolFactory;
     address public paymentSplitterFactory;
     address public yearnV3Factory;
 
@@ -78,14 +69,6 @@ contract DeployAllStrategiesAndFactories is Script, BatchScript {
     }
 
     function _calculateExpectedAddresses() internal {
-        // YieldSkimmingTokenizedStrategy
-        bytes memory ysCreationCode = type(YieldSkimmingTokenizedStrategy).creationCode;
-        yieldSkimmingStrategy = _computeCreate2Address(
-            CREATE2_FACTORY, // deployer is the CREATE2 factory
-            YIELD_SKIMMING_SALT,
-            keccak256(ysCreationCode)
-        );
-
         // YieldDonatingTokenizedStrategy
         bytes memory ydCreationCode = type(YieldDonatingTokenizedStrategy).creationCode;
         yieldDonatingStrategy = _computeCreate2Address(CREATE2_FACTORY, YIELD_DONATING_SALT, keccak256(ydCreationCode));
@@ -97,18 +80,6 @@ contract DeployAllStrategiesAndFactories is Script, BatchScript {
         // SkyCompounderStrategyFactory
         bytes memory skyCreationCode = type(SkyCompounderStrategyFactory).creationCode;
         skyFactory = _computeCreate2Address(CREATE2_FACTORY, SKY_FACTORY_SALT, keccak256(skyCreationCode));
-
-        // LidoStrategyFactory
-        bytes memory lidoCreationCode = type(LidoStrategyFactory).creationCode;
-        lidoFactory = _computeCreate2Address(CREATE2_FACTORY, LIDO_FACTORY_SALT, keccak256(lidoCreationCode));
-
-        // RocketPoolStrategyFactory
-        bytes memory rocketPoolCreationCode = type(RocketPoolStrategyFactory).creationCode;
-        rocketPoolFactory = _computeCreate2Address(
-            CREATE2_FACTORY,
-            ROCKET_POOL_FACTORY_SALT,
-            keccak256(rocketPoolCreationCode)
-        );
 
         // PaymentSplitterFactory
         bytes memory paymentSplitterCreationCode = type(PaymentSplitterFactory).creationCode;
@@ -125,15 +96,6 @@ contract DeployAllStrategiesAndFactories is Script, BatchScript {
 
     function _addStrategyDeployments() internal {
         console.log("Adding strategy deployments to batch...");
-
-        // Deploy YieldSkimmingTokenizedStrategy
-        // CREATE2 factory expects: salt (32 bytes) + bytecode
-        bytes memory ysDeployData = abi.encodePacked(
-            YIELD_SKIMMING_SALT,
-            type(YieldSkimmingTokenizedStrategy).creationCode
-        );
-        addToBatch(CREATE2_FACTORY, 0, ysDeployData);
-        console.log("- YieldSkimmingTokenizedStrategy at:", yieldSkimmingStrategy);
 
         // Deploy YieldDonatingTokenizedStrategy
         bytes memory ydDeployData = abi.encodePacked(
@@ -164,19 +126,6 @@ contract DeployAllStrategiesAndFactories is Script, BatchScript {
         addToBatch(CREATE2_FACTORY, 0, skyDeployData);
         console.log("- SkyCompounderStrategyFactory at:", skyFactory);
 
-        // Deploy LidoStrategyFactory
-        bytes memory lidoDeployData = abi.encodePacked(LIDO_FACTORY_SALT, type(LidoStrategyFactory).creationCode);
-        addToBatch(CREATE2_FACTORY, 0, lidoDeployData);
-        console.log("- LidoStrategyFactory at:", lidoFactory);
-
-        // Deploy RocketPoolStrategyFactory
-        bytes memory rocketPoolDeployData = abi.encodePacked(
-            ROCKET_POOL_FACTORY_SALT,
-            type(RocketPoolStrategyFactory).creationCode
-        );
-        addToBatch(CREATE2_FACTORY, 0, rocketPoolDeployData);
-        console.log("- RocketPoolStrategyFactory at:", rocketPoolFactory);
-
         // Deploy PaymentSplitterFactory
         bytes memory paymentSplitterDeployData = abi.encodePacked(
             PAYMENT_SPLITTER_FACTORY_SALT,
@@ -198,19 +147,16 @@ contract DeployAllStrategiesAndFactories is Script, BatchScript {
         console.log("\n=== DEPLOYMENT SUMMARY ===");
         console.log("Safe Address:", safe);
         console.log("\nTokenized Strategies:");
-        console.log("- YieldSkimmingTokenizedStrategy:", yieldSkimmingStrategy);
         console.log("- YieldDonatingTokenizedStrategy:", yieldDonatingStrategy);
         console.log("\nFactory Contracts:");
         console.log("- MorphoCompounderStrategyFactory:", morphoFactory);
         console.log("- SkyCompounderStrategyFactory:", skyFactory);
-        console.log("- LidoStrategyFactory:", lidoFactory);
-        console.log("- RocketPoolStrategyFactory:", rocketPoolFactory);
         console.log("- PaymentSplitterFactory:", paymentSplitterFactory);
         console.log("- YearnV3StrategyFactory:", yearnV3Factory);
         console.log("\nBatch transaction created:");
         console.log("- Safe will call execTransaction once");
         console.log("- execTransaction calls MultiSendCallOnly");
-        console.log("- MultiSendCallOnly makes 8 calls to CREATE2 factory");
+        console.log("- MultiSendCallOnly makes 5 calls to CREATE2 factory");
         console.log("- CREATE2 factory deploys each contract deterministically");
         console.log("\nTransaction sent to Safe for signing.");
         console.log("========================\n");
