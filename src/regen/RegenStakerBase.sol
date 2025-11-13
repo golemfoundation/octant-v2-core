@@ -403,7 +403,7 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @param _amount Reward amount to notify in reward token base units
     /// @param _requiredBalance Required contract balance calculated by variant-specific validation
     function _notifyRewardAmountWithCustomDuration(uint256 _amount, uint256 _requiredBalance) internal {
-        require(isRewardNotifier[msg.sender], Staker__Unauthorized("not notifier", msg.sender));
+        if (!isRewardNotifier[msg.sender]) revert Staker__Unauthorized("not notifier", msg.sender);
 
         rewardPerTokenAccumulatedCheckpoint = rewardPerTokenAccumulated();
 
@@ -419,7 +419,7 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         rewardEndTime = block.timestamp + sharedState.rewardDuration;
         lastCheckpointTime = block.timestamp;
 
-        require(scaledRewardRate >= SCALE_FACTOR, Staker__InvalidRewardRate());
+        if (scaledRewardRate < SCALE_FACTOR) revert Staker__InvalidRewardRate();
 
         // Calculate reward schedule metadata before updating totalRewards
         uint256 carryOverAmount = totalRewards - totalClaimedRewards;
@@ -643,14 +643,15 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         // Validate asset compatibility to fail fast and provide clear error
         {
             address expectedAsset = address(TokenizedAllocationMechanism(_allocationMechanismAddress).asset());
-            require(address(REWARD_TOKEN) == expectedAsset, AssetMismatch(address(REWARD_TOKEN), expectedAsset));
+            if (address(REWARD_TOKEN) != expectedAsset) {
+                revert AssetMismatch(address(REWARD_TOKEN), expectedAsset);
+            }
         }
 
         Deposit storage deposit = deposits[_depositId];
-        require(
-            deposit.claimer == msg.sender || deposit.owner == msg.sender,
-            Staker__Unauthorized("not claimer or owner", msg.sender)
-        );
+        if (deposit.claimer != msg.sender && deposit.owner != msg.sender) {
+            revert Staker__Unauthorized("not claimer or owner", msg.sender);
+        }
 
         // Defense-in-depth dual-check architecture (Cantina Finding #127 fix):
         // 1. TAM checks msg.sender (claimer/contributor) via beforeSignupHook - receives voting power
@@ -666,7 +667,9 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         // Explicit fund source check: Verify deposit owner is also eligible for this mechanism
         // Assumes mechanism implements canSignup() (OctantQFMechanism interface)
         bool ownerCanSignup = OctantQFMechanism(payable(_allocationMechanismAddress)).canSignup(deposit.owner);
-        require(ownerCanSignup, DepositOwnerNotEligibleForMechanism(_allocationMechanismAddress, deposit.owner));
+        if (!ownerCanSignup) {
+            revert DepositOwnerNotEligibleForMechanism(_allocationMechanismAddress, deposit.owner);
+        }
 
         _checkpointGlobalReward();
         _checkpointReward(deposit);
@@ -758,15 +761,16 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     function compoundRewards(
         DepositIdentifier _depositId
     ) external virtual whenNotPaused nonReentrant returns (uint256 compoundedAmount) {
-        require(address(REWARD_TOKEN) == address(STAKE_TOKEN), CompoundingNotSupported());
+        if (address(REWARD_TOKEN) != address(STAKE_TOKEN)) {
+            revert CompoundingNotSupported();
+        }
 
         Deposit storage deposit = deposits[_depositId];
         address depositOwner = deposit.owner;
 
-        require(
-            deposit.claimer == msg.sender || depositOwner == msg.sender,
-            Staker__Unauthorized("not claimer or owner", msg.sender)
-        );
+        if (deposit.claimer != msg.sender && depositOwner != msg.sender) {
+            revert Staker__Unauthorized("not claimer or owner", msg.sender);
+        }
 
         _checkStakerAccess(depositOwner);
 
@@ -809,7 +813,9 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         // The surrogate must already exist since the deposit exists (created during initial stake)
         // This ensures child contracts can customize behavior through _stakeTokenSafeTransferFrom
         DelegationSurrogate _surrogate = surrogates(deposit.delegatee);
-        require(address(_surrogate) != address(0), SurrogateNotFound(deposit.delegatee));
+        if (address(_surrogate) == address(0)) {
+            revert SurrogateNotFound(deposit.delegatee);
+        }
         _stakeTokenSafeTransferFrom(address(this), address(_surrogate), compoundedAmount);
 
         emit RewardClaimed(_depositId, msg.sender, compoundedAmount, tempEarningPower);
@@ -826,17 +832,20 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @param _depositId Deposit to check eligibility for
     function _revertIfMinimumStakeAmountNotMet(DepositIdentifier _depositId) internal view {
         Deposit storage deposit = deposits[_depositId];
-        require(
-            deposit.balance >= sharedState.minimumStakeAmount || deposit.balance == 0,
-            MinimumStakeAmountNotMet(sharedState.minimumStakeAmount, deposit.balance)
-        );
+        if (deposit.balance < sharedState.minimumStakeAmount && deposit.balance > 0) {
+            revert MinimumStakeAmountNotMet(sharedState.minimumStakeAmount, deposit.balance);
+        }
     }
 
     function _checkStakerAccess(address user) internal view {
         if (sharedState.stakerAccessMode == AccessMode.ALLOWSET) {
-            require(sharedState.stakerAllowset.contains(user), StakerNotAllowed(user));
+            if (!sharedState.stakerAllowset.contains(user)) {
+                revert StakerNotAllowed(user);
+            }
         } else if (sharedState.stakerAccessMode == AccessMode.BLOCKSET) {
-            require(!sharedState.stakerBlockset.contains(user), StakerBlocked(user));
+            if (sharedState.stakerBlockset.contains(user)) {
+                revert StakerBlocked(user);
+            }
         }
     }
 
@@ -971,7 +980,9 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         uint256 carryOverAmount = totalRewards - totalClaimedRewards;
         required = carryOverAmount + _amount;
 
-        require(currentBalance >= required, InsufficientRewardBalance(currentBalance, required));
+        if (currentBalance < required) {
+            revert InsufficientRewardBalance(currentBalance, required);
+        }
 
         return required;
     }
@@ -1003,7 +1014,7 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         address _tipReceiver,
         uint256 _requestedTip
     ) public virtual override whenNotPaused nonReentrant {
-        require(_requestedTip <= maxBumpTip, Staker__InvalidTip());
+        if (_requestedTip > maxBumpTip) revert Staker__InvalidTip();
 
         Deposit storage deposit = deposits[_depositId];
 
@@ -1018,12 +1029,13 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
             deposit.delegatee,
             deposit.earningPower
         );
-        require(_isQualifiedForBump && _newEarningPower != deposit.earningPower, Staker__Unqualified(_newEarningPower));
+        if (!_isQualifiedForBump || _newEarningPower == deposit.earningPower) {
+            revert Staker__Unqualified(_newEarningPower);
+        }
 
-        require(
-            _newEarningPower <= deposit.earningPower || _unclaimedRewards >= _requestedTip,
-            Staker__InsufficientUnclaimedRewards()
-        );
+        if (_newEarningPower > deposit.earningPower && _unclaimedRewards < _requestedTip) {
+            revert Staker__InsufficientUnclaimedRewards();
+        }
 
         uint256 tipToPay = _requestedTip;
         if (_requestedTip > _unclaimedRewards) {
