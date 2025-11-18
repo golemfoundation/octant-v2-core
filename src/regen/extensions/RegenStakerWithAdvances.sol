@@ -18,21 +18,21 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
     // === Structs ===
 
     /// @notice Information about a user's advance reward commitment
-    /// @dev Optimally packed into 2 storage slots (32 bytes used, 32 bytes available for future)
+    /// @dev Ultra-lean: Packed into 1 storage slot (20 bytes used, 12 bytes available)
     struct AdvanceInfo {
-        uint96 advanceAmount; // Total advance given (Slot 1: bytes 0-11)
-        uint96 repaidAmount; // Amount repaid from rewards (Slot 1: bytes 12-23)
-        uint64 commitmentEnd; // Timestamp when commitment ends (Slot 1: bytes 24-31)
-        uint32 commitmentDuration; // Total commitment duration in seconds (Slot 2: bytes 0-3)
-        // 28 bytes available in Slot 2 for future extensions
+        uint96 outstanding; // Outstanding debt (decreases as repaid) - 12 bytes
+        uint64 commitmentEnd; // Timestamp when commitment ends - 8 bytes
+        // Total: 20 bytes = 1 SLOT (12 bytes available for future)
     }
 
     // === Constants ===
 
     uint256 public constant SECONDS_PER_WEEK = 7 days;
     uint256 public constant BPS_DENOMINATOR = 10000;
-    uint256 public constant MIN_DISCOUNT_BPS = 100; // 1% minimum
-    uint256 public constant MAX_DISCOUNT_BPS = 2000; // 20% maximum
+    uint256 public constant COMMITMENT_DURATION = 26 weeks; // Fixed 6-month commitment
+    uint256 public constant DISCOUNT_BPS = 500; // Fixed 5% discount
+    uint256 public constant MAX_ADVANCE_PCT = 50; // Can advance max 50% of projected
+    uint256 public constant GLOBAL_CAP_PCT = 10; // Max 10% of uncommitted rewards
 
     // === State Variables ===
 
@@ -40,57 +40,31 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
     mapping(address => AdvanceInfo) public advances;
 
     /// @notice Total outstanding advances across all users
-    /// @dev Used for solvency checks
+    /// @dev Used for global solvency cap (max 10% of uncommitted rewards)
     uint256 public totalOutstandingAdvances;
-
-    /// @notice Discount rate applied to advance calculations in basis points
-    /// @dev e.g., 500 = 5% discount from projected rewards
-    uint16 public advanceDiscountBps;
-
-    /// @notice Minimum commitment duration in weeks
-    uint32 public minCommitmentWeeks;
-
-    /// @notice Maximum commitment duration in weeks
-    uint32 public maxCommitmentWeeks;
-
-    /// @notice Whether advance requests are currently paused
-    bool public advancesPaused;
 
     // === Custom Errors ===
 
-    error CommitmentTooShort(uint256 requested, uint256 minimum);
-    error CommitmentTooLong(uint256 requested, uint256 maximum);
-    error CommitmentActive(uint256 endTime);
+    error OutstandingAdvanceExists();
     error NoEarningPower(address user);
-    error ExceedsAdvanceCap(uint256 requested, uint256 available);
-    error AdvancesPaused();
-    error InvalidDiscountBps(uint256 bps);
-    error InvalidCommitmentRange(uint256 min, uint256 max);
+    error ExceedsPersonalCap(uint256 requested, uint256 maxAllowed);
+    error ExceedsGlobalCap(uint256 requested, uint256 available);
 
     // === Events ===
 
     /// @notice Emitted when a user requests an advance
-    event AdvanceRequested(address indexed user, uint256 advanceAmount, uint256 commitmentEnd, uint256 discountBps);
+    event AdvanceRequested(address indexed user, uint256 advanceAmount, uint256 commitmentEnd);
 
     /// @notice Emitted when a user breaks their commitment early
     event CommitmentBroken(address indexed user, uint256 penalty, uint256 timeRemaining);
 
     /// @notice Emitted when an advance is repaid from rewards
-    event AdvanceRepaid(address indexed user, uint256 amount, uint256 remaining);
-
-    /// @notice Emitted when advance parameters are updated
-    event AdvanceParametersUpdated(uint16 discountBps, uint32 minWeeks, uint32 maxWeeks);
-
-    /// @notice Emitted when advances are paused or unpaused
-    event AdvancesPausedUpdated(bool paused);
+    event AdvanceRepaid(address indexed user, uint256 repayment, uint256 remaining);
 
     // === Constructor ===
 
     /// @notice Constructor for RegenStakerWithAdvances
-    /// @dev Inherits all RegenStakerBase parameters
-    /// @param _advanceDiscountBps Initial discount rate for advances (in basis points)
-    /// @param _minCommitmentWeeks Minimum commitment duration in weeks
-    /// @param _maxCommitmentWeeks Maximum commitment duration in weeks
+    /// @dev All advance parameters are now constants (no configuration needed)
     constructor(
         IERC20 _rewardsToken,
         IERC20 _stakeToken,
@@ -103,10 +77,7 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
         IAddressSet _stakerBlockset,
         AccessMode _stakerAccessMode,
         IAddressSet _allocationMechanismAllowset,
-        string memory _eip712Name,
-        uint16 _advanceDiscountBps,
-        uint32 _minCommitmentWeeks,
-        uint32 _maxCommitmentWeeks
+        string memory _eip712Name
     )
         RegenStakerBase(
             _rewardsToken,
@@ -123,185 +94,112 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
             _eip712Name
         )
     {
-        _validateAdvanceParameters(_advanceDiscountBps, _minCommitmentWeeks, _maxCommitmentWeeks);
-
-        advanceDiscountBps = _advanceDiscountBps;
-        minCommitmentWeeks = _minCommitmentWeeks;
-        maxCommitmentWeeks = _maxCommitmentWeeks;
-        advancesPaused = false;
+        // No initialization needed - all parameters are constants
     }
 
     // === Public Functions ===
 
-    /// @notice Calculates the advance amount for a given commitment
-    /// @dev Pure calculation, no state changes - useful for UI previews
+    /// @notice Calculates the advance amount for a user
+    /// @dev Fixed 26-week commitment with 5% discount
     /// @param user Address of the user
-    /// @param commitmentWeeks Duration of commitment in weeks
     /// @return advanceAmount Amount user would receive as advance
-    /// @return projectedRewards Projected rewards over commitment period (before discount)
-    function calculateAdvance(
-        address user,
-        uint256 commitmentWeeks
-    ) external view returns (uint256 advanceAmount, uint256 projectedRewards) {
+    /// @return projectedRewards Projected rewards over 26-week period (before discount)
+    function calculateAdvance(address user) external view returns (uint256 advanceAmount, uint256 projectedRewards) {
         uint256 earningPower = depositorTotalEarningPower[user];
 
         if (earningPower == 0) {
             return (0, 0);
         }
 
-        projectedRewards = _calculateProjectedRewards(earningPower, commitmentWeeks);
-        advanceAmount = _applyDiscount(projectedRewards, advanceDiscountBps);
+        projectedRewards = _calculateProjectedRewards(earningPower, COMMITMENT_DURATION);
+        advanceAmount = (projectedRewards * (BPS_DENOMINATOR - DISCOUNT_BPS)) / BPS_DENOMINATOR;
 
         return (advanceAmount, projectedRewards);
     }
 
     /// @notice Calculates penalty for early withdrawal
-    /// @dev Returns 0 if commitment period has ended
+    /// @dev Returns full outstanding if commitment ended, graduated penalty if during commitment
     /// @param user Address of the user
     /// @return penalty Penalty amount in reward tokens
     function getPenaltyForEarlyExit(address user) external view returns (uint256 penalty) {
         AdvanceInfo storage advance = advances[user];
 
-        if (advance.commitmentEnd <= block.timestamp) {
+        if (advance.outstanding == 0) {
             return 0;
         }
 
-        return _calculatePenalty(address(0), advance);
+        if (advance.commitmentEnd <= block.timestamp) {
+            // CRITICAL: After commitment ends, still owe full outstanding as penalty
+            return advance.outstanding;
+        }
+
+        // During commitment: graduated penalty
+        uint256 timeRemaining = advance.commitmentEnd - block.timestamp;
+        return (advance.outstanding * timeRemaining) / COMMITMENT_DURATION;
     }
 
     /// @notice Requests an advance on future rewards
-    /// @dev Requires user to have earning power and no active commitment
-    /// @param commitmentWeeks Duration to commit for (in weeks)
+    /// @dev Fixed 26-week commitment, 5% discount, capped at 50% of projected rewards
     /// @return advanceAmount Amount of advance given to user
-    function requestAdvance(
-        uint256 commitmentWeeks
-    ) external whenNotPaused nonReentrant returns (uint256 advanceAmount) {
-        if (advancesPaused) revert AdvancesPaused();
-
-        // 1. Validate commitment duration
-        if (commitmentWeeks < minCommitmentWeeks) {
-            revert CommitmentTooShort(commitmentWeeks, minCommitmentWeeks);
-        }
-        if (commitmentWeeks > maxCommitmentWeeks) {
-            revert CommitmentTooLong(commitmentWeeks, maxCommitmentWeeks);
-        }
-
-        // 2. Check for existing commitment
+    function requestAdvance() external whenNotPaused nonReentrant returns (uint256 advanceAmount) {
         AdvanceInfo storage advance = advances[msg.sender];
-        if (advance.commitmentEnd > block.timestamp) {
-            revert CommitmentActive(advance.commitmentEnd);
+
+        // 1. Check no existing outstanding advance
+        if (advance.outstanding > 0) {
+            revert OutstandingAdvanceExists();
         }
 
-        // 3. Validate earning power
+        // 2. Validate earning power
         uint256 earningPower = depositorTotalEarningPower[msg.sender];
         if (earningPower == 0) {
             revert NoEarningPower(msg.sender);
         }
 
-        // 4. Calculate advance
-        uint256 projectedRewards = _calculateProjectedRewards(earningPower, commitmentWeeks);
-        advanceAmount = _applyDiscount(projectedRewards, advanceDiscountBps);
+        // 3. Calculate advance (fixed 26 weeks, 5% discount)
+        uint256 projectedRewards = _calculateProjectedRewards(earningPower, COMMITMENT_DURATION);
+        advanceAmount = (projectedRewards * (BPS_DENOMINATOR - DISCOUNT_BPS)) / BPS_DENOMINATOR;
 
-        // 5. Solvency check
-        uint256 maxOutstanding = _getMaxOutstandingAdvances();
-        if (totalOutstandingAdvances + advanceAmount > maxOutstanding) {
-            revert ExceedsAdvanceCap(totalOutstandingAdvances + advanceAmount, maxOutstanding);
+        // 4. Per-user cap: max 50% of projected rewards
+        uint256 maxPersonal = (projectedRewards * MAX_ADVANCE_PCT) / 100;
+        if (advanceAmount > maxPersonal) {
+            revert ExceedsPersonalCap(advanceAmount, maxPersonal);
         }
 
-        // 6. Record advance state
-        uint256 commitmentSeconds = commitmentWeeks * SECONDS_PER_WEEK;
-        advance.advanceAmount = advanceAmount.toUint96();
-        advance.repaidAmount = 0;
-        advance.commitmentEnd = uint64(block.timestamp + commitmentSeconds);
-        advance.commitmentDuration = uint32(commitmentSeconds);
+        // 5. Global solvency cap: max 10% of uncommitted rewards
+        uint256 uncommitted = totalRewards - totalClaimedRewards;
+        uint256 maxGlobal = (uncommitted * GLOBAL_CAP_PCT) / 100;
+        if (totalOutstandingAdvances + advanceAmount > maxGlobal) {
+            revert ExceedsGlobalCap(totalOutstandingAdvances + advanceAmount, maxGlobal);
+        }
 
-        // 7. Update global state
+        // 6. Record advance
+        advance.outstanding = advanceAmount.toUint96();
+        advance.commitmentEnd = uint64(block.timestamp + COMMITMENT_DURATION);
         totalOutstandingAdvances += advanceAmount;
 
-        // 8. Transfer advance to user
+        // 7. Transfer advance to user
         SafeERC20.safeTransfer(REWARD_TOKEN, msg.sender, advanceAmount);
 
-        emit AdvanceRequested(msg.sender, advanceAmount, advance.commitmentEnd, advanceDiscountBps);
+        emit AdvanceRequested(msg.sender, advanceAmount, advance.commitmentEnd);
 
         return advanceAmount;
     }
 
-    /// @notice Updates advance configuration parameters
-    /// @dev Only callable by admin
-    /// @param _discountBps New discount rate in basis points
-    /// @param _minWeeks New minimum commitment duration
-    /// @param _maxWeeks New maximum commitment duration
-    function setAdvanceParameters(uint16 _discountBps, uint32 _minWeeks, uint32 _maxWeeks) external {
-        _revertIfNotAdmin();
-
-        _validateAdvanceParameters(_discountBps, _minWeeks, _maxWeeks);
-
-        advanceDiscountBps = _discountBps;
-        minCommitmentWeeks = _minWeeks;
-        maxCommitmentWeeks = _maxWeeks;
-
-        emit AdvanceParametersUpdated(_discountBps, _minWeeks, _maxWeeks);
-    }
-
-    /// @notice Pauses or unpauses advance requests
-    /// @dev Only callable by admin
-    /// @param paused True to pause, false to unpause
-    function setAdvancesPaused(bool paused) external {
-        _revertIfNotAdmin();
-
-        advancesPaused = paused;
-
-        emit AdvancesPausedUpdated(paused);
-    }
-
     // === Internal Functions ===
-
-    /// @notice Validates advance configuration parameters
-    function _validateAdvanceParameters(uint16 _discountBps, uint32 _minWeeks, uint32 _maxWeeks) internal pure {
-        if (_discountBps < MIN_DISCOUNT_BPS || _discountBps > MAX_DISCOUNT_BPS) {
-            revert InvalidDiscountBps(_discountBps);
-        }
-        if (_minWeeks == 0 || _maxWeeks == 0 || _minWeeks > _maxWeeks) {
-            revert InvalidCommitmentRange(_minWeeks, _maxWeeks);
-        }
-    }
 
     /// @notice Calculates projected rewards for given earning power and duration
     /// @dev Internal helper for reward projection
-    function _calculateProjectedRewards(uint256 earningPower, uint256 commitmentWeeks) internal view returns (uint256) {
+    function _calculateProjectedRewards(uint256 earningPower, uint256 duration) internal view returns (uint256) {
         if (totalEarningPower == 0 || scaledRewardRate == 0) {
             return 0;
         }
-
-        uint256 commitmentSeconds = commitmentWeeks * SECONDS_PER_WEEK;
 
         // Calculate user's share of rewards over commitment period
         // Formula: (userEP / totalEP) × rewardRate × duration
         uint256 userShare = (earningPower * SCALE_FACTOR) / totalEarningPower;
         uint256 rewardPerSecond = scaledRewardRate / SCALE_FACTOR;
 
-        return (userShare * rewardPerSecond * commitmentSeconds) / SCALE_FACTOR;
-    }
-
-    /// @notice Applies discount to projected rewards
-    function _applyDiscount(uint256 amount, uint256 discountBps) internal pure returns (uint256) {
-        return (amount * (BPS_DENOMINATOR - discountBps)) / BPS_DENOMINATOR;
-    }
-
-    /// @notice Internal penalty calculation with graduated schedule
-    /// @dev Penalty = outstanding × (timeRemaining / totalCommitment)
-    function _calculatePenalty(address, AdvanceInfo storage advance) internal view returns (uint256) {
-        uint256 outstanding = advance.advanceAmount - advance.repaidAmount;
-
-        if (outstanding == 0) {
-            return 0;
-        }
-
-        uint256 timeRemaining = advance.commitmentEnd - block.timestamp;
-
-        // Use actual commitment duration for accurate penalty calculation
-        // Graduated penalty: 100% at start → 0% at end
-        return (outstanding * timeRemaining) / advance.commitmentDuration;
+        return (userShare * rewardPerSecond * duration) / SCALE_FACTOR;
     }
 
     /// @notice Calculates maximum allowed outstanding advances
@@ -339,31 +237,32 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
 
         // 2. Check for outstanding advances
         AdvanceInfo storage advance = advances[deposit.owner];
-        uint256 outstanding = advance.advanceAmount > advance.repaidAmount
-            ? advance.advanceAmount - advance.repaidAmount
-            : 0;
-
         uint256 repayment = 0;
 
-        if (outstanding > 0) {
+        if (advance.outstanding > 0) {
             // 3. Calculate repayment (min of gross amount or outstanding)
-            repayment = grossAmount > outstanding ? outstanding : grossAmount;
+            repayment = grossAmount > advance.outstanding ? advance.outstanding : grossAmount;
 
             // 4. Update advance state
-            advance.repaidAmount += repayment.toUint96();
+            advance.outstanding -= repayment.toUint96();
             totalOutstandingAdvances -= repayment;
 
-            emit AdvanceRepaid(deposit.owner, repayment, outstanding - repayment);
+            emit AdvanceRepaid(deposit.owner, repayment, advance.outstanding);
+
+            // 5. Clear commitment if fully repaid (allows early exit)
+            if (advance.outstanding == 0) {
+                delete advances[deposit.owner];
+            }
         }
 
-        // 5. Calculate net amount after repayment
+        // 6. Calculate net amount after repayment
         netAmount = grossAmount - repayment;
 
-        // 6. Consume rewards and update state
+        // 7. Consume rewards and update state
         _consumeRewards(deposit, grossAmount);
         totalClaimedRewards += grossAmount; // Track gross, not net
 
-        // 7. Transfer net amount to claimer
+        // 8. Transfer net amount to claimer
         if (netAmount > 0) {
             SafeERC20.safeTransfer(REWARD_TOKEN, _claimer, netAmount);
         }
@@ -385,27 +284,50 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
     ) internal virtual override nonReentrant {
         require(_amount > 0, ZeroOperation());
 
-        // 1. Check for active commitment
+        // 1. Check for outstanding advances
         AdvanceInfo storage advance = advances[deposit.owner];
 
-        if (advance.commitmentEnd > block.timestamp) {
-            // 2. Calculate penalty for early exit
-            uint256 penalty = _calculatePenalty(address(0), advance);
+        if (advance.outstanding > 0) {
+            uint256 penalty = 0;
 
-            if (penalty > 0) {
+            if (advance.commitmentEnd > block.timestamp) {
+                // 2. During commitment: Calculate graduated penalty
+                uint256 timeRemaining = advance.commitmentEnd - block.timestamp;
+                penalty = (advance.outstanding * timeRemaining) / COMMITMENT_DURATION;
+
                 // 3. Apply penalty to withdrawal
                 uint256 netWithdrawal = _amount > penalty ? _amount - penalty : 0;
 
                 // 4. Redistribute penalty to stakers
                 _redistributePenalty(penalty);
 
-                emit CommitmentBroken(deposit.owner, penalty, advance.commitmentEnd - block.timestamp);
+                emit CommitmentBroken(deposit.owner, penalty, timeRemaining);
 
                 // 5. Clear commitment and outstanding advance
-                uint256 outstanding = advance.advanceAmount - advance.repaidAmount;
-                if (outstanding > 0) {
-                    totalOutstandingAdvances -= outstanding;
+                totalOutstandingAdvances -= advance.outstanding;
+                delete advances[deposit.owner];
+
+                // 6. Execute withdrawal with net amount
+                if (netWithdrawal > 0) {
+                    super._withdraw(deposit, _depositId, netWithdrawal);
                 }
+
+                _revertIfMinimumStakeAmountNotMet(_depositId);
+                return;
+            } else {
+                // CRITICAL: After commitment ends, must still pay full outstanding as penalty
+                penalty = advance.outstanding;
+
+                // 3. Apply penalty to withdrawal
+                uint256 netWithdrawal = _amount > penalty ? _amount - penalty : 0;
+
+                // 4. Redistribute penalty to stakers
+                _redistributePenalty(penalty);
+
+                emit CommitmentBroken(deposit.owner, penalty, 0);
+
+                // 5. Clear outstanding advance
+                totalOutstandingAdvances -= advance.outstanding;
                 delete advances[deposit.owner];
 
                 // 6. Execute withdrawal with net amount
@@ -418,7 +340,7 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
             }
         }
 
-        // 7. Normal withdrawal (no active commitment or commitment ended)
+        // 7. Normal withdrawal (no outstanding debt)
         super._withdraw(deposit, _depositId, _amount);
         _revertIfMinimumStakeAmountNotMet(_depositId);
     }
