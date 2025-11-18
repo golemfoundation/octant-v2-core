@@ -129,6 +129,30 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
         advancesPaused = false;
     }
 
+    // === Public Functions ===
+
+    /// @notice Calculates the advance amount for a given commitment
+    /// @dev Pure calculation, no state changes - useful for UI previews
+    /// @param user Address of the user
+    /// @param commitmentWeeks Duration of commitment in weeks
+    /// @return advanceAmount Amount user would receive as advance
+    /// @return projectedRewards Projected rewards over commitment period (before discount)
+    function calculateAdvance(
+        address user,
+        uint256 commitmentWeeks
+    ) external view returns (uint256 advanceAmount, uint256 projectedRewards) {
+        uint256 earningPower = depositorTotalEarningPower[user];
+
+        if (earningPower == 0) {
+            return (0, 0);
+        }
+
+        projectedRewards = _calculateProjectedRewards(earningPower, commitmentWeeks);
+        advanceAmount = _applyDiscount(projectedRewards, advanceDiscountBps);
+
+        return (advanceAmount, projectedRewards);
+    }
+
     // === Internal Functions ===
 
     /// @notice Validates advance configuration parameters
@@ -139,5 +163,27 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
         if (_minWeeks == 0 || _maxWeeks == 0 || _minWeeks > _maxWeeks) {
             revert InvalidCommitmentRange(_minWeeks, _maxWeeks);
         }
+    }
+
+    /// @notice Calculates projected rewards for given earning power and duration
+    /// @dev Internal helper for reward projection
+    function _calculateProjectedRewards(uint256 earningPower, uint256 commitmentWeeks) internal view returns (uint256) {
+        if (totalEarningPower == 0 || scaledRewardRate == 0) {
+            return 0;
+        }
+
+        uint256 commitmentSeconds = commitmentWeeks * SECONDS_PER_WEEK;
+
+        // Calculate user's share of rewards over commitment period
+        // Formula: (userEP / totalEP) × rewardRate × duration
+        uint256 userShare = (earningPower * SCALE_FACTOR) / totalEarningPower;
+        uint256 rewardPerSecond = scaledRewardRate / SCALE_FACTOR;
+
+        return (userShare * rewardPerSecond * commitmentSeconds) / SCALE_FACTOR;
+    }
+
+    /// @notice Applies discount to projected rewards
+    function _applyDiscount(uint256 amount, uint256 discountBps) internal pure returns (uint256) {
+        return (amount * (BPS_DENOMINATOR - discountBps)) / BPS_DENOMINATOR;
     }
 }
