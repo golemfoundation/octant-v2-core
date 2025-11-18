@@ -23,6 +23,8 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
         uint96 advanceAmount; // Total advance given
         uint96 repaidAmount; // Amount repaid from rewards
         uint64 commitmentEnd; // Timestamp when commitment ends
+        uint32 commitmentDuration; // Total commitment duration in seconds
+        uint64 unused; // Padding for future use
         uint96 earningPowerSnapshot; // Earning power at advance time
     }
 
@@ -208,9 +210,11 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
         }
 
         // 6. Record advance state
+        uint256 commitmentSeconds = commitmentWeeks * SECONDS_PER_WEEK;
         advance.advanceAmount = advanceAmount.toUint96();
         advance.repaidAmount = 0;
-        advance.commitmentEnd = uint64(block.timestamp + commitmentWeeks * SECONDS_PER_WEEK);
+        advance.commitmentEnd = uint64(block.timestamp + commitmentSeconds);
+        advance.commitmentDuration = uint32(commitmentSeconds);
         advance.earningPowerSnapshot = earningPower.toUint96();
 
         // 7. Update global state
@@ -297,12 +301,9 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
 
         uint256 timeRemaining = advance.commitmentEnd - block.timestamp;
 
-        // Calculate total commitment duration from commitment end
-        // This is approximate but avoids storing commitmentStart
-        uint256 totalCommitment = maxCommitmentWeeks * SECONDS_PER_WEEK;
-
+        // Use actual commitment duration for accurate penalty calculation
         // Graduated penalty: 100% at start → 0% at end
-        return (outstanding * timeRemaining) / totalCommitment;
+        return (outstanding * timeRemaining) / advance.commitmentDuration;
     }
 
     /// @notice Calculates maximum allowed outstanding advances
@@ -323,7 +324,7 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
         DepositIdentifier _depositId,
         Deposit storage deposit,
         address _claimer
-    ) internal virtual override returns (uint256 netAmount) {
+    ) internal virtual override whenNotPaused nonReentrant returns (uint256 netAmount) {
         // 1. Checkpoint rewards (from grandparent Staker logic)
         _checkpointGlobalReward();
         _checkpointReward(deposit);
@@ -379,7 +380,7 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
         Deposit storage deposit,
         DepositIdentifier _depositId,
         uint256 _amount
-    ) internal virtual override {
+    ) internal virtual override nonReentrant {
         require(_amount > 0, ZeroOperation());
 
         // 1. Check for active commitment
@@ -435,5 +436,26 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
             // Update total rewards to reflect penalty as new rewards
             totalRewards += penalty;
         }
+    }
+
+    /// @notice Validates contract has sufficient balance for rewards including outstanding advances
+    /// @dev Overrides parent to account for advance liabilities
+    /// @param _amount New reward amount being added
+    /// @return required Total balance required to cover all obligations
+    function _validateAndGetRequiredBalance(uint256 _amount) internal view virtual override returns (uint256 required) {
+        uint256 currentBalance = REWARD_TOKEN.balanceOf(address(this));
+
+        // Calculate outstanding reward obligations
+        uint256 carryOverAmount = totalRewards - totalClaimedRewards;
+
+        // CRITICAL: Outstanding advances are liabilities that must be backed by reserves
+        // Even though advances were already paid out, we need reserves for the repayment flow
+        required = carryOverAmount + _amount + totalOutstandingAdvances;
+
+        if (currentBalance < required) {
+            revert InsufficientRewardBalance(currentBalance, required);
+        }
+
+        return required;
     }
 }
