@@ -243,10 +243,7 @@ contract DeployProtocol is Script {
         );
         vm.writeLine(
             contractAddressFilename,
-            string.concat(
-                "YEARN_V3_STRATEGY_FACTORY_ADDRESS=",
-                vm.toString(yearnV3StrategyFactoryAddress)
-            )
+            string.concat("YEARN_V3_STRATEGY_FACTORY_ADDRESS=", vm.toString(yearnV3StrategyFactoryAddress))
         );
         vm.writeLine(contractAddressFilename, string.concat("HATS_ADDRESS=", vm.toString(hatsAddress)));
         vm.writeLine(
