@@ -50,6 +50,8 @@ contract DeployProtocol is Script {
     address public morphoCompounderStrategyFactoryAddress;
     address public regenStakerFactoryAddress;
     address public allocationMechanismFactoryAddress;
+    address public yieldDonatingTokenizedStrategyAddress;
+    address public yearnV3StrategyFactoryAddress;
 
     error DeploymentFailed();
 
@@ -68,10 +70,19 @@ contract DeployProtocol is Script {
         deployAllocationMechanismFactory = new DeployAllocationMechanismFactory();
     }
 
+    function setUpDeployedContracts() public {
+        morphoCompounderStrategyFactoryAddress = 0x052d20B0e0b141988bD32772C735085e45F357c1;
+        paymentSplitterFactoryAddress = 0x5711765E0756B45224fc1FdA1B41ab344682bBcb;
+        skyCompounderStrategyFactoryAddress = 0xbe5352d0eCdB13D9f74c244B634FdD729480Bb6F;
+        yearnV3StrategyFactoryAddress = 0x6D8c4E4A158083E30B53ba7df3cFB885fC096fF6;
+        yieldDonatingTokenizedStrategyAddress = 0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c;
+    }
+
     function run() public {
         string memory startingBlock = vm.toString(block.number);
 
         setUp();
+        setUpDeployedContracts();
 
         // Deploy Module Proxy Factory
         deployModuleProxyFactory.deploy();
@@ -108,18 +119,24 @@ contract DeployProtocol is Script {
         hatsAddress = address(deployHatsProtocol.hats());
 
         // Deploy Payment Splitter Factory
-        deployPaymentSplitterFactory.deploy();
-        paymentSplitterFactoryAddress = address(deployPaymentSplitterFactory.paymentSplitterFactory());
+        if (paymentSplitterFactoryAddress == address(0)) {
+            deployPaymentSplitterFactory.deploy();
+            paymentSplitterFactoryAddress = address(deployPaymentSplitterFactory.paymentSplitterFactory());
+        }
 
         // Deploy Compounder Strategy Factories
-        deploySkyCompounderStrategyFactory.deploy();
-        skyCompounderStrategyFactoryAddress = address(
-            deploySkyCompounderStrategyFactory.skyCompounderStrategyFactory()
-        );
-        deployMorphoCompounderStrategyFactory.deploy();
-        morphoCompounderStrategyFactoryAddress = address(
-            deployMorphoCompounderStrategyFactory.morphoCompounderStrategyFactory()
-        );
+        if (skyCompounderStrategyFactoryAddress == address(0)) {
+            deploySkyCompounderStrategyFactory.deploy();
+            skyCompounderStrategyFactoryAddress = address(
+                deploySkyCompounderStrategyFactory.skyCompounderStrategyFactory()
+            );
+        }
+        if (morphoCompounderStrategyFactoryAddress == address(0)) {
+            deployMorphoCompounderStrategyFactory.deploy();
+            morphoCompounderStrategyFactoryAddress = address(
+                deployMorphoCompounderStrategyFactory.morphoCompounderStrategyFactory()
+            );
+        }
 
         // Deploy Regen Staker Factory
         deployRegenStakerFactory.deploy();
@@ -148,6 +165,8 @@ contract DeployProtocol is Script {
         console2.log("Morpho Compounder Strategy Vault Factory: ", morphoCompounderStrategyFactoryAddress);
         console2.log("Regen Staker Factory:                     ", regenStakerFactoryAddress);
         console2.log("Allocation Mechanism Factory:             ", allocationMechanismFactoryAddress);
+        console2.log("Yield Donating Tokenized Strategy:        ", yieldDonatingTokenizedStrategyAddress);
+        console2.log("Yearn V3 Strategy Factory:                ", yearnV3StrategyFactoryAddress);
         console2.log("------------------");
         console2.log("Top Hat ID:                ", vm.toString(deployHatsProtocol.topHatId()));
         console2.log("Autonomous Admin Hat ID:   ", vm.toString(deployHatsProtocol.autonomousAdminHatId()));
@@ -214,6 +233,20 @@ contract DeployProtocol is Script {
         vm.writeLine(
             contractAddressFilename,
             string.concat("ALLOCATION_MECHANISM_FACTORY_ADDRESS=", vm.toString(allocationMechanismFactoryAddress))
+        );
+        vm.writeLine(
+            contractAddressFilename,
+            string.concat(
+                "YIELD_DONATING_TOKENIZED_STRATEGY_ADDRESS=",
+                vm.toString(yieldDonatingTokenizedStrategyAddress)
+            )
+        );
+        vm.writeLine(
+            contractAddressFilename,
+            string.concat(
+                "YEARN_V3_STRATEGY_FACTORY_ADDRESS=",
+                vm.toString(yearnV3StrategyFactoryAddress)
+            )
         );
         vm.writeLine(contractAddressFilename, string.concat("HATS_ADDRESS=", vm.toString(hatsAddress)));
         vm.writeLine(
