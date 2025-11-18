@@ -224,6 +224,34 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
         return advanceAmount;
     }
 
+    /// @notice Updates advance configuration parameters
+    /// @dev Only callable by admin
+    /// @param _discountBps New discount rate in basis points
+    /// @param _minWeeks New minimum commitment duration
+    /// @param _maxWeeks New maximum commitment duration
+    function setAdvanceParameters(uint16 _discountBps, uint32 _minWeeks, uint32 _maxWeeks) external {
+        _revertIfNotAdmin();
+
+        _validateAdvanceParameters(_discountBps, _minWeeks, _maxWeeks);
+
+        advanceDiscountBps = _discountBps;
+        minCommitmentWeeks = _minWeeks;
+        maxCommitmentWeeks = _maxWeeks;
+
+        emit AdvanceParametersUpdated(_discountBps, _minWeeks, _maxWeeks);
+    }
+
+    /// @notice Pauses or unpauses advance requests
+    /// @dev Only callable by admin
+    /// @param paused True to pause, false to unpause
+    function setAdvancesPaused(bool paused) external {
+        _revertIfNotAdmin();
+
+        advancesPaused = paused;
+
+        emit AdvancesPausedUpdated(paused);
+    }
+
     // === Internal Functions ===
 
     /// @notice Validates advance configuration parameters
