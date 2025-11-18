@@ -369,4 +369,71 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
 
         return netAmount;
     }
+
+    /// @notice Overrides parent to apply penalties for early commitment breaks
+    /// @dev Penalty is deducted from withdrawal amount and redistributed
+    /// @param deposit Deposit storage reference
+    /// @param _depositId Deposit identifier
+    /// @param _amount Amount to withdraw
+    function _withdraw(
+        Deposit storage deposit,
+        DepositIdentifier _depositId,
+        uint256 _amount
+    ) internal virtual override {
+        require(_amount > 0, ZeroOperation());
+
+        // 1. Check for active commitment
+        AdvanceInfo storage advance = advances[deposit.owner];
+
+        if (advance.commitmentEnd > block.timestamp) {
+            // 2. Calculate penalty for early exit
+            uint256 penalty = _calculatePenalty(address(0), advance);
+
+            if (penalty > 0) {
+                // 3. Apply penalty to withdrawal
+                uint256 netWithdrawal = _amount > penalty ? _amount - penalty : 0;
+
+                // 4. Redistribute penalty to stakers
+                _redistributePenalty(penalty);
+
+                emit CommitmentBroken(deposit.owner, penalty, advance.commitmentEnd - block.timestamp);
+
+                // 5. Clear commitment and outstanding advance
+                uint256 outstanding = advance.advanceAmount - advance.repaidAmount;
+                if (outstanding > 0) {
+                    totalOutstandingAdvances -= outstanding;
+                }
+                delete advances[deposit.owner];
+
+                // 6. Execute withdrawal with net amount
+                if (netWithdrawal > 0) {
+                    super._withdraw(deposit, _depositId, netWithdrawal);
+                }
+
+                _revertIfMinimumStakeAmountNotMet(_depositId);
+                return;
+            }
+        }
+
+        // 7. Normal withdrawal (no active commitment or commitment ended)
+        super._withdraw(deposit, _depositId, _amount);
+        _revertIfMinimumStakeAmountNotMet(_depositId);
+    }
+
+    /// @notice Redistributes penalty to all stakers
+    /// @dev Increases reward rate, effectively paying stakers from penalty
+    function _redistributePenalty(uint256 penalty) internal {
+        if (penalty == 0) return;
+
+        // Add penalty to reward pool by increasing scaled reward rate
+        // This distributes penalty proportionally to all stakers over remaining period
+        if (totalEarningPower > 0 && rewardEndTime > block.timestamp) {
+            uint256 timeRemaining = rewardEndTime - block.timestamp;
+            uint256 additionalRate = (penalty * SCALE_FACTOR) / timeRemaining;
+            scaledRewardRate += additionalRate;
+
+            // Update total rewards to reflect penalty as new rewards
+            totalRewards += penalty;
+        }
+    }
 }
