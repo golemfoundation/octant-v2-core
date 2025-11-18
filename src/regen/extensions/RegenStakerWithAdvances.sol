@@ -18,14 +18,13 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
     // === Structs ===
 
     /// @notice Information about a user's advance reward commitment
-    /// @dev Packed into 2 storage slots for gas efficiency
+    /// @dev Optimally packed into 2 storage slots (32 bytes used, 32 bytes available for future)
     struct AdvanceInfo {
-        uint96 advanceAmount; // Total advance given
-        uint96 repaidAmount; // Amount repaid from rewards
-        uint64 commitmentEnd; // Timestamp when commitment ends
-        uint32 commitmentDuration; // Total commitment duration in seconds
-        uint64 unused; // Padding for future use
-        uint96 earningPowerSnapshot; // Earning power at advance time
+        uint96 advanceAmount; // Total advance given (Slot 1: bytes 0-11)
+        uint96 repaidAmount; // Amount repaid from rewards (Slot 1: bytes 12-23)
+        uint64 commitmentEnd; // Timestamp when commitment ends (Slot 1: bytes 24-31)
+        uint32 commitmentDuration; // Total commitment duration in seconds (Slot 2: bytes 0-3)
+        // 28 bytes available in Slot 2 for future extensions
     }
 
     // === Constants ===
@@ -215,7 +214,6 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
         advance.repaidAmount = 0;
         advance.commitmentEnd = uint64(block.timestamp + commitmentSeconds);
         advance.commitmentDuration = uint32(commitmentSeconds);
-        advance.earningPowerSnapshot = earningPower.toUint96();
 
         // 7. Update global state
         totalOutstandingAdvances += advanceAmount;
@@ -307,9 +305,13 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
     }
 
     /// @notice Calculates maximum allowed outstanding advances
-    /// @dev Currently set to 10% of total rewards
+    /// @dev Set to 10% of uncommitted rewards to prevent insolvency
+    /// @return Maximum amount that can be advanced across all users
     function _getMaxOutstandingAdvances() internal view returns (uint256) {
-        return totalRewards / 10;
+        // Use uncommitted rewards (not lifetime totalRewards) to prevent over-advancing
+        // Example: If totalRewards=1M but 900K already claimed, only 10K can be advanced (10% of 100K)
+        uint256 uncommittedRewards = totalRewards - totalClaimedRewards;
+        return uncommittedRewards / 10;
     }
 
     // === Overridden Functions ===
@@ -423,11 +425,17 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
 
     /// @notice Redistributes penalty to all stakers
     /// @dev Increases reward rate, effectively paying stakers from penalty
+    ///
+    /// Edge Cases:
+    /// - If totalEarningPower == 0 (no stakers): Penalty remains in contract as surplus for future rewards
+    /// - If rewardEndTime <= block.timestamp (reward period ended): Penalty remains as surplus
+    /// - Both cases are acceptable as the penalty stays in the contract and isn't lost
+    ///
+    /// @param penalty Amount to redistribute
     function _redistributePenalty(uint256 penalty) internal {
         if (penalty == 0) return;
 
-        // Add penalty to reward pool by increasing scaled reward rate
-        // This distributes penalty proportionally to all stakers over remaining period
+        // Only redistribute if there are active stakers and an active reward period
         if (totalEarningPower > 0 && rewardEndTime > block.timestamp) {
             uint256 timeRemaining = rewardEndTime - block.timestamp;
             uint256 additionalRate = (penalty * SCALE_FACTOR) / timeRemaining;
@@ -436,10 +444,25 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
             // Update total rewards to reflect penalty as new rewards
             totalRewards += penalty;
         }
+        // Else: Penalty stays in contract as surplus (acceptable behavior)
     }
 
     /// @notice Validates contract has sufficient balance for rewards including outstanding advances
     /// @dev Overrides parent to account for advance liabilities
+    ///
+    /// Formula: required = uncommittedRewards + newRewards + outstandingAdvances
+    ///
+    /// Why add outstandingAdvances twice?
+    /// - uncommittedRewards already includes the gross rewards that will repay advances
+    /// - But we need EXTRA reserves because we can't access the advanced tokens (already given to users)
+    /// - Think of it as: normal reserves + a separate "advance repayment escrow"
+    ///
+    /// Example:
+    /// - uncommittedRewards = 100 (includes 10 for advance repayment)
+    /// - outstandingAdvances = 10 (already paid to users)
+    /// - required = 100 + 10 = 110 total in contract
+    /// - When user claims: gets 0 (all goes to repayment), contract still has 100 left
+    ///
     /// @param _amount New reward amount being added
     /// @return required Total balance required to cover all obligations
     function _validateAndGetRequiredBalance(uint256 _amount) internal view virtual override returns (uint256 required) {
@@ -448,8 +471,7 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
         // Calculate outstanding reward obligations
         uint256 carryOverAmount = totalRewards - totalClaimedRewards;
 
-        // CRITICAL: Outstanding advances are liabilities that must be backed by reserves
-        // Even though advances were already paid out, we need reserves for the repayment flow
+        // CRITICAL: Outstanding advances are liabilities requiring extra reserves
         required = carryOverAmount + _amount + totalOutstandingAdvances;
 
         if (currentBalance < required) {
