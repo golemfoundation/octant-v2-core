@@ -310,4 +310,63 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
     function _getMaxOutstandingAdvances() internal view returns (uint256) {
         return totalRewards / 10;
     }
+
+    // === Overridden Functions ===
+
+    /// @notice Overrides parent to deduct advance repayments from claimed rewards
+    /// @dev Advances are repaid automatically before user receives rewards
+    /// @param _depositId Deposit identifier
+    /// @param deposit Deposit storage reference
+    /// @param _claimer Address claiming rewards
+    /// @return netAmount Amount transferred to user (after advance repayment)
+    function _claimReward(
+        DepositIdentifier _depositId,
+        Deposit storage deposit,
+        address _claimer
+    ) internal virtual override returns (uint256 netAmount) {
+        // 1. Checkpoint rewards (from grandparent Staker logic)
+        _checkpointGlobalReward();
+        _checkpointReward(deposit);
+
+        uint256 grossAmount = deposit.scaledUnclaimedRewardCheckpoint / SCALE_FACTOR;
+
+        if (grossAmount == 0) {
+            return 0;
+        }
+
+        // 2. Check for outstanding advances
+        AdvanceInfo storage advance = advances[deposit.owner];
+        uint256 outstanding = advance.advanceAmount > advance.repaidAmount
+            ? advance.advanceAmount - advance.repaidAmount
+            : 0;
+
+        uint256 repayment = 0;
+
+        if (outstanding > 0) {
+            // 3. Calculate repayment (min of gross amount or outstanding)
+            repayment = grossAmount > outstanding ? outstanding : grossAmount;
+
+            // 4. Update advance state
+            advance.repaidAmount += repayment.toUint96();
+            totalOutstandingAdvances -= repayment;
+
+            emit AdvanceRepaid(deposit.owner, repayment, outstanding - repayment);
+        }
+
+        // 5. Calculate net amount after repayment
+        netAmount = grossAmount - repayment;
+
+        // 6. Consume rewards and update state
+        _consumeRewards(deposit, grossAmount);
+        totalClaimedRewards += grossAmount; // Track gross, not net
+
+        // 7. Transfer net amount to claimer
+        if (netAmount > 0) {
+            SafeERC20.safeTransfer(REWARD_TOKEN, _claimer, netAmount);
+        }
+
+        emit RewardClaimed(_depositId, _claimer, netAmount, deposit.earningPower);
+
+        return netAmount;
+    }
 }
