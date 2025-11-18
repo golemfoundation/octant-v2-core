@@ -82,5 +82,62 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
     /// @notice Emitted when advances are paused or unpaused
     event AdvancesPausedUpdated(bool paused);
 
-    // Constructor and implementation to be added in subsequent tasks
+    // === Constructor ===
+
+    /// @notice Constructor for RegenStakerWithAdvances
+    /// @dev Inherits all RegenStakerBase parameters
+    /// @param _advanceDiscountBps Initial discount rate for advances (in basis points)
+    /// @param _minCommitmentWeeks Minimum commitment duration in weeks
+    /// @param _maxCommitmentWeeks Maximum commitment duration in weeks
+    constructor(
+        IERC20 _rewardsToken,
+        IERC20 _stakeToken,
+        IEarningPowerCalculator _earningPowerCalculator,
+        uint256 _maxBumpTip,
+        address _admin,
+        uint128 _rewardDuration,
+        uint128 _minimumStakeAmount,
+        IAddressSet _stakerAllowset,
+        IAddressSet _stakerBlockset,
+        AccessMode _stakerAccessMode,
+        IAddressSet _allocationMechanismAllowset,
+        string memory _eip712Name,
+        uint16 _advanceDiscountBps,
+        uint32 _minCommitmentWeeks,
+        uint32 _maxCommitmentWeeks
+    )
+        RegenStakerBase(
+            _rewardsToken,
+            _stakeToken,
+            _earningPowerCalculator,
+            _maxBumpTip,
+            _admin,
+            _rewardDuration,
+            _minimumStakeAmount,
+            _stakerAllowset,
+            _stakerBlockset,
+            _stakerAccessMode,
+            _allocationMechanismAllowset,
+            _eip712Name
+        )
+    {
+        _validateAdvanceParameters(_advanceDiscountBps, _minCommitmentWeeks, _maxCommitmentWeeks);
+
+        advanceDiscountBps = _advanceDiscountBps;
+        minCommitmentWeeks = _minCommitmentWeeks;
+        maxCommitmentWeeks = _maxCommitmentWeeks;
+        advancesPaused = false;
+    }
+
+    // === Internal Functions ===
+
+    /// @notice Validates advance configuration parameters
+    function _validateAdvanceParameters(uint16 _discountBps, uint32 _minWeeks, uint32 _maxWeeks) internal pure {
+        if (_discountBps < MIN_DISCOUNT_BPS || _discountBps > MAX_DISCOUNT_BPS) {
+            revert InvalidDiscountBps(_discountBps);
+        }
+        if (_minWeeks == 0 || _maxWeeks == 0 || _minWeeks > _maxWeeks) {
+            revert InvalidCommitmentRange(_minWeeks, _maxWeeks);
+        }
+    }
 }
