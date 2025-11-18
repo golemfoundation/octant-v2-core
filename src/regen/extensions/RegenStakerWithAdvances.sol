@@ -153,6 +153,20 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
         return (advanceAmount, projectedRewards);
     }
 
+    /// @notice Calculates penalty for early withdrawal
+    /// @dev Returns 0 if commitment period has ended
+    /// @param user Address of the user
+    /// @return penalty Penalty amount in reward tokens
+    function getPenaltyForEarlyExit(address user) external view returns (uint256 penalty) {
+        AdvanceInfo storage advance = advances[user];
+
+        if (advance.commitmentEnd <= block.timestamp) {
+            return 0;
+        }
+
+        return _calculatePenalty(user, advance);
+    }
+
     // === Internal Functions ===
 
     /// @notice Validates advance configuration parameters
@@ -185,5 +199,24 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
     /// @notice Applies discount to projected rewards
     function _applyDiscount(uint256 amount, uint256 discountBps) internal pure returns (uint256) {
         return (amount * (BPS_DENOMINATOR - discountBps)) / BPS_DENOMINATOR;
+    }
+
+    /// @notice Internal penalty calculation with graduated schedule
+    /// @dev Penalty = outstanding × (timeRemaining / totalCommitment)
+    function _calculatePenalty(address user, AdvanceInfo storage advance) internal view returns (uint256) {
+        uint256 outstanding = advance.advanceAmount - advance.repaidAmount;
+
+        if (outstanding == 0) {
+            return 0;
+        }
+
+        uint256 timeRemaining = advance.commitmentEnd - block.timestamp;
+
+        // Calculate total commitment duration from commitment end
+        // This is approximate but avoids storing commitmentStart
+        uint256 totalCommitment = maxCommitmentWeeks * SECONDS_PER_WEEK;
+
+        // Graduated penalty: 100% at start → 0% at end
+        return (outstanding * timeRemaining) / totalCommitment;
     }
 }
