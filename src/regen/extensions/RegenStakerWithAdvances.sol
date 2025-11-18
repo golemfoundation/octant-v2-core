@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import { RegenStakerBase } from "../RegenStakerBase.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IEarningPowerCalculator } from "staker/interfaces/IEarningPowerCalculator.sol";
 import { IAddressSet } from "src/utils/IAddressSet.sol";
@@ -167,6 +168,62 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
         return _calculatePenalty(address(0), advance);
     }
 
+    /// @notice Requests an advance on future rewards
+    /// @dev Requires user to have earning power and no active commitment
+    /// @param commitmentWeeks Duration to commit for (in weeks)
+    /// @return advanceAmount Amount of advance given to user
+    function requestAdvance(
+        uint256 commitmentWeeks
+    ) external whenNotPaused nonReentrant returns (uint256 advanceAmount) {
+        if (advancesPaused) revert AdvancesPaused();
+
+        // 1. Validate commitment duration
+        if (commitmentWeeks < minCommitmentWeeks) {
+            revert CommitmentTooShort(commitmentWeeks, minCommitmentWeeks);
+        }
+        if (commitmentWeeks > maxCommitmentWeeks) {
+            revert CommitmentTooLong(commitmentWeeks, maxCommitmentWeeks);
+        }
+
+        // 2. Check for existing commitment
+        AdvanceInfo storage advance = advances[msg.sender];
+        if (advance.commitmentEnd > block.timestamp) {
+            revert CommitmentActive(advance.commitmentEnd);
+        }
+
+        // 3. Validate earning power
+        uint256 earningPower = depositorTotalEarningPower[msg.sender];
+        if (earningPower == 0) {
+            revert NoEarningPower(msg.sender);
+        }
+
+        // 4. Calculate advance
+        uint256 projectedRewards = _calculateProjectedRewards(earningPower, commitmentWeeks);
+        advanceAmount = _applyDiscount(projectedRewards, advanceDiscountBps);
+
+        // 5. Solvency check
+        uint256 maxOutstanding = _getMaxOutstandingAdvances();
+        if (totalOutstandingAdvances + advanceAmount > maxOutstanding) {
+            revert ExceedsAdvanceCap(totalOutstandingAdvances + advanceAmount, maxOutstanding);
+        }
+
+        // 6. Record advance state
+        advance.advanceAmount = advanceAmount.toUint96();
+        advance.repaidAmount = 0;
+        advance.commitmentEnd = uint64(block.timestamp + commitmentWeeks * SECONDS_PER_WEEK);
+        advance.earningPowerSnapshot = earningPower.toUint96();
+
+        // 7. Update global state
+        totalOutstandingAdvances += advanceAmount;
+
+        // 8. Transfer advance to user
+        SafeERC20.safeTransfer(REWARD_TOKEN, msg.sender, advanceAmount);
+
+        emit AdvanceRequested(msg.sender, advanceAmount, advance.commitmentEnd, advanceDiscountBps);
+
+        return advanceAmount;
+    }
+
     // === Internal Functions ===
 
     /// @notice Validates advance configuration parameters
@@ -218,5 +275,11 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
 
         // Graduated penalty: 100% at start → 0% at end
         return (outstanding * timeRemaining) / totalCommitment;
+    }
+
+    /// @notice Calculates maximum allowed outstanding advances
+    /// @dev Currently set to 10% of total rewards
+    function _getMaxOutstandingAdvances() internal view returns (uint256) {
+        return totalRewards / 10;
     }
 }
