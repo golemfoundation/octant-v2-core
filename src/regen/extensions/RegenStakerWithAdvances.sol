@@ -164,7 +164,7 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
             return 0;
         }
 
-        return _calculatePenalty(user, advance);
+        return _calculatePenalty(address(0), advance);
     }
 
     // === Internal Functions ===
@@ -203,7 +203,7 @@ abstract contract RegenStakerWithAdvances is RegenStakerBase {
 
     /// @notice Internal penalty calculation with graduated schedule
     /// @dev Penalty = outstanding × (timeRemaining / totalCommitment)
-    function _calculatePenalty(address user, AdvanceInfo storage advance) internal view returns (uint256) {
+    function _calculatePenalty(address, AdvanceInfo storage advance) internal view returns (uint256) {
         uint256 outstanding = advance.advanceAmount - advance.repaidAmount;
 
         if (outstanding == 0) {
