@@ -12,12 +12,39 @@ The DeployProtocol script handles the sequential deployment of:
 4. Dragon Router
 5. Mock Strategy (for testing)
 6. Hats Protocol & Dragon Hatter
-7. Payment Splitter Factory (if not deployed)
-8. Sky Compounder Strategy Factory (if not deployed)
-9. Morpho Compounder Strategy Factory (if not deployed)
+7. Payment Splitter Factory (conditional)
+8. Sky Compounder Strategy Factory (conditional)
+9. Morpho Compounder Strategy Factory (conditional)
 10. Regen Staker Factory
+11. Allocation Mechanism Factory
 
-*) if not deployed - the script allows to define static addresses for these contracts and skips if found.
+### Smart Deployment with Address Reuse
+
+The deployment script uses a centralized address registry (`script/helpers/DeployedAddresses.sol`) that:
+
+- Reads the `DEPLOYMENT_NETWORK` environment variable to select the network
+- Loads previously deployed contract addresses for that network
+- Skips redeployment for contracts with existing addresses (set to non-zero)
+- Deploys fresh instances for contracts with address(0)
+
+**Why explicit network selection?**
+- Tenderly staging is a mainnet FORK (chain ID = 1)
+- Cannot distinguish between staging and production mainnet by chain ID alone
+- Explicit network selection via env var prevents deployment mistakes
+
+**Supported Networks:**
+- `mainnet` - Ethereum mainnet (production)
+- `sepolia` - Sepolia testnet
+- `staging` - Tenderly virtual testnet (mainnet fork)
+- `anvil` - Local Anvil testnet
+
+This approach:
+- Saves gas by reusing stable factory contracts
+- Ensures consistency across deployments
+- Makes network-specific configuration maintainable
+- Prevents accidental deployments to wrong network
+
+To add addresses for a new network, edit `script/helpers/DeployedAddresses.sol` and add the addresses to the appropriate network function.
 
 ## Prerequisites
 
@@ -29,13 +56,25 @@ The DeployProtocol script handles the sequential deployment of:
 
 Create `.env` file:
 ```
+# Network selection (mainnet, sepolia, staging, or anvil)
+DEPLOYMENT_NETWORK=staging
+
+# Deployment credentials
 PRIVATE_KEY=(deployer private key ex. MetaMask account)
 RPC_URL=https://rpc.ov2sm.octant.build
 VERIFIER_URL=$RPC_URL/verify/etherscan
 VERIFIER_API_KEY=(your Personal Tenderly accessToken)
+
+# Protocol parameters
 MAX_OPEX_SPLIT=5 # to confirm
 MIN_METAPOOL_SPLIT=0 # to confirm
 ```
+
+**Important:** Set `DEPLOYMENT_NETWORK` to match your target environment:
+- Use `staging` for Tenderly virtual testnet (default if not set)
+- Use `mainnet` for production Ethereum mainnet
+- Use `sepolia` for Sepolia testnet
+- Use `anvil` for local Anvil testnet
 
 ## Running the Deployment
 
