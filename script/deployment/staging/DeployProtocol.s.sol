@@ -154,8 +154,16 @@ contract DeployProtocol is Script {
         }
 
         // Deploy Mock Strategy
-        if (mockStrategySingletonAddress == address(0) || mockTokenAddress == address(0) || mockYieldSourceAddress == address(0)) {
-            if (mockStrategySingletonAddress != address(0) || mockTokenAddress != address(0) || mockYieldSourceAddress != address(0)) {
+        if (
+            mockStrategySingletonAddress == address(0) ||
+            mockTokenAddress == address(0) ||
+            mockYieldSourceAddress == address(0)
+        ) {
+            if (
+                mockStrategySingletonAddress != address(0) ||
+                mockTokenAddress != address(0) ||
+                mockYieldSourceAddress != address(0)
+            ) {
                 revert DeploymentFailed();
             }
             deployMockStrategy.deploy();
