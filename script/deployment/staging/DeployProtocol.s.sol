@@ -15,6 +15,7 @@ import { DeploySkyCompounderStrategyFactory } from "script/deploy/DeploySkyCompo
 import { DeployMorphoCompounderStrategyFactory } from "script/deploy/DeployMorphoCompounderStrategyFactory.sol";
 import { DeployRegenStakerFactory } from "script/deploy/DeployRegenStakerFactory.sol";
 import { DeployAllocationMechanismFactory } from "script/deploy/DeployAllocationMechanismFactory.sol";
+import { DeployedAddresses } from "script/helpers/DeployedAddresses.sol";
 
 /**
  * @title DeployProtocol
@@ -35,6 +36,9 @@ contract DeployProtocol is Script {
     DeployRegenStakerFactory public deployRegenStakerFactory;
     DeployAllocationMechanismFactory public deployAllocationMechanismFactory;
 
+    // Address registry for network-specific deployments
+    DeployedAddresses public immutable deployedAddresses;
+
     // Deployed contract addresses
     address public moduleProxyFactoryAddress;
     address public linearAllowanceSingletonForGnosisSafeAddress;
@@ -50,8 +54,19 @@ contract DeployProtocol is Script {
     address public morphoCompounderStrategyFactoryAddress;
     address public regenStakerFactoryAddress;
     address public allocationMechanismFactoryAddress;
+    // External strategy contracts (tracked for reference, not deployed by this script)
+    address public yieldDonatingTokenizedStrategyAddress;
+    address public yearnV3StrategyFactoryAddress;
 
     error DeploymentFailed();
+
+    /**
+     * @notice Constructor to initialize the deployed addresses registry
+     * @dev Initializes the immutable deployedAddresses variable once
+     */
+    constructor() {
+        deployedAddresses = new DeployedAddresses();
+    }
 
     function setUp() public {
         // Initialize deployment scripts
@@ -68,66 +83,140 @@ contract DeployProtocol is Script {
         deployAllocationMechanismFactory = new DeployAllocationMechanismFactory();
     }
 
+    /**
+     * @notice Load previously deployed contract addresses for the current network
+     * @dev Uses DeployedAddresses helper to get network-specific addresses via DEPLOYMENT_NETWORK env var
+     *      Any address set to address(0) will trigger fresh deployment in the run() function
+     *      Set DEPLOYMENT_NETWORK to: "mainnet", "sepolia", "staging", or "anvil"
+     */
+    function setUpDeployedContracts() public {
+        DeployedAddresses.ContractAddresses memory addresses = deployedAddresses.getAddressesByEnv();
+
+        // Load all addresses from the centralized registry
+        // Note: yieldDonatingTokenizedStrategy and yearnV3StrategyFactory are EXTERNAL dependencies,
+        // not deployed by this script. They are pre-existing contracts we reference.
+        moduleProxyFactoryAddress = addresses.moduleProxyFactory;
+        linearAllowanceSingletonForGnosisSafeAddress = addresses.linearAllowanceSingleton;
+        dragonTokenizedStrategyAddress = addresses.dragonTokenizedStrategy;
+        dragonRouterAddress = addresses.dragonRouter;
+        splitCheckerAddress = addresses.splitChecker;
+        mockStrategySingletonAddress = addresses.mockStrategySingleton;
+        mockTokenAddress = addresses.mockToken;
+        mockYieldSourceAddress = addresses.mockYieldSource;
+        hatsAddress = addresses.hats;
+        paymentSplitterFactoryAddress = addresses.paymentSplitterFactory;
+        skyCompounderStrategyFactoryAddress = addresses.skyCompounderStrategyFactory;
+        morphoCompounderStrategyFactoryAddress = addresses.morphoCompounderStrategyFactory;
+        regenStakerFactoryAddress = addresses.regenStakerFactory;
+        allocationMechanismFactoryAddress = addresses.allocationMechanismFactory;
+        yieldDonatingTokenizedStrategyAddress = addresses.yieldDonatingTokenizedStrategy;
+        yearnV3StrategyFactoryAddress = addresses.yearnV3StrategyFactory;
+    }
+
     function run() public {
         string memory startingBlock = vm.toString(block.number);
 
         setUp();
+        setUpDeployedContracts();
 
         // Deploy Module Proxy Factory
-        deployModuleProxyFactory.deploy();
-        moduleProxyFactoryAddress = address(deployModuleProxyFactory.moduleProxyFactory());
-        if (moduleProxyFactoryAddress == address(0)) revert DeploymentFailed();
+        if (moduleProxyFactoryAddress == address(0)) {
+            deployModuleProxyFactory.deploy();
+            moduleProxyFactoryAddress = address(deployModuleProxyFactory.moduleProxyFactory());
+            if (moduleProxyFactoryAddress == address(0)) revert DeploymentFailed();
+        }
 
         // Deploy LinearAllowanceSingletonForGnosisSafe
-        deployLinearAllowanceSingletonForGnosisSafe.deploy();
-        linearAllowanceSingletonForGnosisSafeAddress = address(
-            deployLinearAllowanceSingletonForGnosisSafe.linearAllowanceSingletonForGnosisSafe()
-        );
-        if (linearAllowanceSingletonForGnosisSafeAddress == address(0)) revert DeploymentFailed();
+        if (linearAllowanceSingletonForGnosisSafeAddress == address(0)) {
+            deployLinearAllowanceSingletonForGnosisSafe.deploy();
+            linearAllowanceSingletonForGnosisSafeAddress = address(
+                deployLinearAllowanceSingletonForGnosisSafe.linearAllowanceSingletonForGnosisSafe()
+            );
+            if (linearAllowanceSingletonForGnosisSafeAddress == address(0)) revert DeploymentFailed();
+        }
 
         // Deploy Dragon Tokenized Strategy Implementation
-        deployDragonTokenizedStrategy.deploy();
-        dragonTokenizedStrategyAddress = address(deployDragonTokenizedStrategy.dragonTokenizedStrategySingleton());
-        if (dragonTokenizedStrategyAddress == address(0)) revert DeploymentFailed();
+        if (dragonTokenizedStrategyAddress == address(0)) {
+            deployDragonTokenizedStrategy.deploy();
+            dragonTokenizedStrategyAddress = address(deployDragonTokenizedStrategy.dragonTokenizedStrategySingleton());
+            if (dragonTokenizedStrategyAddress == address(0)) revert DeploymentFailed();
+        }
 
         // Deploy Dragon Router
-        deployDragonRouter.deploy();
-        dragonRouterAddress = address(deployDragonRouter.dragonRouterProxy());
-        if (dragonRouterAddress == address(0)) revert DeploymentFailed();
-        splitCheckerAddress = address(deployDragonRouter.splitCheckerProxy());
+        if (dragonRouterAddress == address(0) || splitCheckerAddress == address(0)) {
+            if (dragonRouterAddress != address(0) || splitCheckerAddress != address(0)) {
+                revert DeploymentFailed();
+            }
+            deployDragonRouter.deploy();
+            dragonRouterAddress = address(deployDragonRouter.dragonRouterProxy());
+            if (dragonRouterAddress == address(0)) revert DeploymentFailed();
+            splitCheckerAddress = address(deployDragonRouter.splitCheckerProxy());
+        }
 
         // Deploy Mock Strategy
-        deployMockStrategy.deploy();
-        mockStrategySingletonAddress = address(deployMockStrategy.mockStrategySingleton());
-        if (mockStrategySingletonAddress == address(0)) revert DeploymentFailed();
-        mockTokenAddress = address(deployMockStrategy.token());
-        mockYieldSourceAddress = address(deployMockStrategy.mockYieldSource());
+        if (
+            mockStrategySingletonAddress == address(0) ||
+            mockTokenAddress == address(0) ||
+            mockYieldSourceAddress == address(0)
+        ) {
+            if (
+                mockStrategySingletonAddress != address(0) ||
+                mockTokenAddress != address(0) ||
+                mockYieldSourceAddress != address(0)
+            ) {
+                revert DeploymentFailed();
+            }
+            deployMockStrategy.deploy();
+            mockStrategySingletonAddress = address(deployMockStrategy.mockStrategySingleton());
+            if (mockStrategySingletonAddress == address(0)) revert DeploymentFailed();
+            mockTokenAddress = address(deployMockStrategy.token());
+            mockYieldSourceAddress = address(deployMockStrategy.mockYieldSource());
+        }
 
         // Deploy HATS
-        deployHatsProtocol.deploy();
-        hatsAddress = address(deployHatsProtocol.hats());
+        if (hatsAddress == address(0)) {
+            deployHatsProtocol.deploy();
+            hatsAddress = address(deployHatsProtocol.hats());
+        }
 
         // Deploy Payment Splitter Factory
-        deployPaymentSplitterFactory.deploy();
-        paymentSplitterFactoryAddress = address(deployPaymentSplitterFactory.paymentSplitterFactory());
+        if (paymentSplitterFactoryAddress == address(0)) {
+            deployPaymentSplitterFactory.deploy();
+            paymentSplitterFactoryAddress = address(deployPaymentSplitterFactory.paymentSplitterFactory());
+            if (paymentSplitterFactoryAddress == address(0)) revert DeploymentFailed();
+        }
 
         // Deploy Compounder Strategy Factories
-        deploySkyCompounderStrategyFactory.deploy();
-        skyCompounderStrategyFactoryAddress = address(
-            deploySkyCompounderStrategyFactory.skyCompounderStrategyFactory()
-        );
-        deployMorphoCompounderStrategyFactory.deploy();
-        morphoCompounderStrategyFactoryAddress = address(
-            deployMorphoCompounderStrategyFactory.morphoCompounderStrategyFactory()
-        );
+        if (skyCompounderStrategyFactoryAddress == address(0)) {
+            deploySkyCompounderStrategyFactory.deploy();
+            skyCompounderStrategyFactoryAddress = address(
+                deploySkyCompounderStrategyFactory.skyCompounderStrategyFactory()
+            );
+            if (skyCompounderStrategyFactoryAddress == address(0)) revert DeploymentFailed();
+        }
+
+        // Deploy Morpho Compounder Strategy Factory
+        if (morphoCompounderStrategyFactoryAddress == address(0)) {
+            deployMorphoCompounderStrategyFactory.deploy();
+            morphoCompounderStrategyFactoryAddress = address(
+                deployMorphoCompounderStrategyFactory.morphoCompounderStrategyFactory()
+            );
+            if (morphoCompounderStrategyFactoryAddress == address(0)) revert DeploymentFailed();
+        }
 
         // Deploy Regen Staker Factory
-        deployRegenStakerFactory.deploy();
-        regenStakerFactoryAddress = address(deployRegenStakerFactory.regenStakerFactory());
+        if (regenStakerFactoryAddress == address(0)) {
+            deployRegenStakerFactory.deploy();
+            regenStakerFactoryAddress = address(deployRegenStakerFactory.regenStakerFactory());
+            if (regenStakerFactoryAddress == address(0)) revert DeploymentFailed();
+        }
 
         // Deploy Allocation Mechanism Factory
-        deployAllocationMechanismFactory.deploy();
-        allocationMechanismFactoryAddress = address(deployAllocationMechanismFactory.allocationMechanismFactory());
+        if (allocationMechanismFactoryAddress == address(0)) {
+            deployAllocationMechanismFactory.deploy();
+            allocationMechanismFactoryAddress = address(deployAllocationMechanismFactory.allocationMechanismFactory());
+            if (allocationMechanismFactoryAddress == address(0)) revert DeploymentFailed();
+        }
 
         // Log deployment addresses
         console2.log("\nDeployment Summary:");
