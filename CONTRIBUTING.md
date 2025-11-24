@@ -50,9 +50,9 @@ Main time cost of developing smart-contract is audits, not development itself. B
 ### As an Author
 - Self-review your code before requesting reviews
 - **Write concise PR descriptions** - Focus on what changed and why, not implementation details
-  - Keep under 15 lines when possible
-  - Link to detailed docs if needed (don't paste them in description)
-  - Use bullet points for clarity
+    - Keep under 15 lines when possible
+    - Link to detailed docs if needed (don't paste them in description)
+    - Use bullet points for clarity
 - Be open to feedback and willing to make changes
 - Use the PR description to highlight areas where you'd like specific feedback
 
