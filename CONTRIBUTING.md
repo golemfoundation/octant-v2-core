@@ -49,7 +49,10 @@ Main time cost of developing smart-contract is audits, not development itself. B
 
 ### As an Author
 - Self-review your code before requesting reviews
-- Provide context in the PR description about what changes were made and why
+- **Write concise PR descriptions** - Focus on what changed and why, not implementation details
+  - Keep under 15 lines when possible
+  - Link to detailed docs if needed (don't paste them in description)
+  - Use bullet points for clarity
 - Be open to feedback and willing to make changes
 - Use the PR description to highlight areas where you'd like specific feedback
 
@@ -73,6 +76,56 @@ Main time cost of developing smart-contract is audits, not development itself. B
 - Follow established security patterns for smart contracts
 - Consider edge cases and potential attack vectors
 - Document security assumptions and considerations
+
+## 🧪 Testing Standards
+
+### Test Structure (Arrange-Act-Assert)
+
+All tests MUST follow the AAA pattern for clarity and maintainability:
+
+```solidity
+function test_deposit_MintsCorrectShares() public {
+    // Arrange - Set up test state
+    uint256 depositAmount = 1000e18;
+    deal(address(asset), user, depositAmount);
+    vm.startPrank(user);
+    asset.approve(address(vault), depositAmount);
+
+    // Act - Execute the operation being tested
+    uint256 shares = vault.deposit(depositAmount, user);
+
+    // Assert - Verify expected outcomes
+    assertEq(shares, expectedShares, "Should mint correct shares");
+    assertEq(vault.balanceOf(user), shares, "User should receive shares");
+    assertEq(asset.balanceOf(address(vault)), depositAmount, "Vault should hold assets");
+    vm.stopPrank();
+}
+```
+
+**Why AAA?**
+- **Arrange**: Makes test setup explicit and reproducible
+- **Act**: Isolates the exact behavior being tested
+- **Assert**: Clearly documents expected outcomes
+
+### Naming Conventions
+
+Follow these patterns for discoverability:
+
+- **Files**: `ContractName.t.sol`, `ContractNameIntegration.t.sol`, `ContractNameInvariants.t.sol`
+- **Unit Tests**: `test_functionName_Scenario()` (e.g., `test_deposit_RevertsWhenPaused()`)
+- **Fuzz Tests**: `testFuzz_functionName_Scenario(uint256 x)` (e.g., `testFuzz_deposit_AlwaysMintsShares(uint256 amount)`)
+- **Revert Tests**: `test_RevertWhen_condition()` (e.g., `test_RevertWhen_DepositExceedsLimit()`)
+
+### Coverage Expectations
+
+- Run `yarn coverage` before submitting PRs
+- Check uncovered branches and add tests for critical paths
+- View detailed reports with `yarn coverage:genhtml`
+- Focus on security-critical functions (access control, asset handling, state transitions)
+
+### Security Requirements
+
+For detailed security and quality requirements (what edge cases to test, anti-patterns to avoid), see [.github/code-review.md](.github/code-review.md#testing-requirements).
 
 ---
 
