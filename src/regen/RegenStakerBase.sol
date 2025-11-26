@@ -133,6 +133,9 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @notice Error thrown when attempting to increase max bump tip during active reward
     error CannotRaiseMaxBumpTipDuringActiveReward();
 
+    /// @notice Error thrown when attempting to change earning power calculator during active reward
+    error CannotChangeEarningPowerCalculatorDuringActiveReward();
+
     /// @notice Error thrown for zero amount operations
     error ZeroOperation();
 
@@ -794,6 +797,14 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     }
 
     // === Overridden Functions ===
+
+    /// @inheritdoc Staker
+    /// @dev Overrides to block changes during active reward periods
+    function setEarningPowerCalculator(address _newEarningPowerCalculator) external virtual override {
+        _revertIfNotAdmin();
+        require(block.timestamp > rewardEndTime, CannotChangeEarningPowerCalculatorDuringActiveReward());
+        _setEarningPowerCalculator(_newEarningPowerCalculator);
+    }
 
     /// @inheritdoc Staker
     /// @notice Overrides to prevent staking 0 tokens.
