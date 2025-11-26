@@ -25,12 +25,14 @@ Think critically. Question patterns. But remember: in DeFi, creativity in securi
 ### Security-First Development
 
 **User funds are sacred.** Every line of code must defend them. When in doubt between gas optimization and security, choose security. Audit costs dwarf development costs - write code that's trivial to audit.
+**NOTE**: The one exception on the above is in rounding, you should ALWAYS round in favor of the protocol.
 
 **Critical invariants:**
 - Assets never disappear without explicit user action
 - Share value never decreases except through reported losses
 - Access control is explicit, never inferred
 - State changes are atomic and complete
+- ALWAYS round in favor of the protocol.
 
 ### The CEI Pattern (Checks-Effects-Interactions)
 
@@ -46,6 +48,7 @@ Violating this pattern is the #1 cause of exploits. State must be consistent bef
 Wrong rounding direction can drain entire vaults:
 - **Deposits/mints**: Round DOWN shares (user gets less, vault protected)
 - **Withdrawals/redeems**: Round UP shares (user pays more, vault protected)
+- ALWAYS round in favor of the protocol.
 
 This is not optional. This is survival.
 
