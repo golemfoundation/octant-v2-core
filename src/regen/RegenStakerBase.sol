@@ -132,6 +132,7 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     error CompoundingNotSupported();
     error CannotRaiseMinimumStakeAmountDuringActiveReward();
     error CannotRaiseMaxBumpTipDuringActiveReward();
+    error CannotChangeEarningPowerCalculatorDuringActiveReward();
     error ZeroOperation();
     error NoOperation();
     error DisablingAllocationMechanismAllowsetNotAllowed();
@@ -830,6 +831,14 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     }
 
     // === Overridden Functions ===
+
+    /// @inheritdoc Staker
+    /// @dev Overrides to block changes during active reward periods
+    function setEarningPowerCalculator(address _newEarningPowerCalculator) external virtual override {
+        _revertIfNotAdmin();
+        require(block.timestamp > rewardEndTime, CannotChangeEarningPowerCalculatorDuringActiveReward());
+        _setEarningPowerCalculator(_newEarningPowerCalculator);
+    }
 
     /// @notice Prevents staking 0, staking below the minimum, staking when paused, and unauthorized staking.
     /// @dev Uses reentrancy guard
