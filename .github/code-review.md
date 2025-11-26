@@ -14,6 +14,7 @@
 - **Deposit/mint**: Round DOWN shares (favors vault)
 - **Withdraw/redeem**: Round UP shares (favors vault)
 - Use `Math.mulDiv` with explicit `Rounding.Down` or `Rounding.Up`
+- ALWAYS ROUND IN FAVOR OF THE PROTOCOL
 
 ### Naming Conventions
 - Contracts: `PascalCase`
@@ -142,6 +143,7 @@
 
 ### Safe Math
 - Use `Math.mulDiv` for precision (OpenZeppelin)
+- ALWAYS ROUND IN FAVOR OF THE PROTOCOL
 
 ### Proxy Deployment
 - Use `Clones.cloneDeterministic` (EIP-1167)
