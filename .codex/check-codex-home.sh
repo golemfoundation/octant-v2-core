@@ -1,26 +1,40 @@
 #!/usr/bin/env bash
-# Query CODEX_HOME directory
+# Discover where Codex looks for configuration by default
 
-CODEX_HOME_DEFAULT="$HOME/.codex"
-CODEX_HOME_ACTUAL="${CODEX_HOME:-$CODEX_HOME_DEFAULT}"
-
-echo "CODEX_HOME environment variable: ${CODEX_HOME:-<not set>}"
-echo "Effective CODEX_HOME: $CODEX_HOME_ACTUAL"
+echo "=== CODEX_HOME Discovery ==="
+echo ""
+echo "CODEX_HOME env var: ${CODEX_HOME:-<not set>}"
 echo ""
 
-if [ -d "$CODEX_HOME_ACTUAL" ]; then
-    echo "Directory exists: $CODEX_HOME_ACTUAL"
-    echo "Contents:"
-    ls -la "$CODEX_HOME_ACTUAL"
+echo "=== Checking potential config locations ==="
+LOCATIONS=(
+    "$HOME/.codex"
+    "$HOME/.config/codex"
+    "/etc/codex"
+    "./.codex"
+    "./codex"
+)
+
+for loc in "${LOCATIONS[@]}"; do
+    if [ -d "$loc" ]; then
+        echo "[EXISTS]  $loc"
+        if [ -f "$loc/config.toml" ]; then
+            echo "          ^ has config.toml"
+        fi
+    else
+        echo "[MISSING] $loc"
+    fi
+done
+
+echo ""
+echo "=== Codex CLI config (if available) ==="
+if command -v codex &> /dev/null; then
+    codex config 2>/dev/null || codex --version 2>/dev/null || echo "codex command found but no config subcommand"
 else
-    echo "Directory does not exist: $CODEX_HOME_ACTUAL"
+    echo "codex CLI not in PATH"
 fi
 
 echo ""
-if [ -f "$CODEX_HOME_ACTUAL/config.toml" ]; then
-    echo "config.toml found:"
-    cat "$CODEX_HOME_ACTUAL/config.toml"
-else
-    echo "No config.toml found in $CODEX_HOME_ACTUAL"
-fi
+echo "=== Environment ==="
+env | grep -i codex || echo "No CODEX env vars found"
 
