@@ -5,7 +5,7 @@
 
 Shutter DAO 0x36 will integrate with Octant v2 through **two distinct components**:
 
-1. **Dragon Vault (MSLV)** — A Multistrategy Locked Vault for treasury capital deployment
+1. **Dragon Vault** — A Multistrategy Vault for treasury capital deployment (no lockup)
 2. **Regen Staker** — A staking contract for SHU tokens enabling public goods funding with matched rewards
 
 | Component | Purpose | Capital |
@@ -26,9 +26,9 @@ Shutter DAO 0x36 will integrate with Octant v2 through **two distinct components
 
 ---
 
-## Part 1: Dragon Vault (MSLV)
+## Part 1: Dragon Vault
 
-The Multistrategy Locked Vault manages treasury capital with custody-based rage quit protection.
+The Multistrategy Vault manages treasury capital with instant liquidity (no lockup or rage quit required).
 
 ### Underlying Strategy
 
@@ -44,7 +44,6 @@ The Multistrategy Locked Vault manages treasury capital with custody-based rage 
 | **Management** | Shutter DAO Treasury (`0x36bD...32c4`) | Administrative role (add strategies, set keeper, set emergency admin). Can delegate to a sub-DAO/multisig later if needed. |
 | **Keeper** | Dedicated Bot/EOA *(Recommended)* | Authorized to call `report()`/`tend()` to harvest yields. See [Operational Considerations](#operational-considerations). |
 | **Emergency Admin** | Shutter DAO Treasury | Can shutdown the vault and perform emergency withdrawals. Note: Emergency actions follow standard DAO voting timeline. |
-| **Regen Governance** | Octant Governance *(Default)* | Controls economic parameters (lockup, rage quit cooldowns). Aligns with Octant's public goods funding. |
 
 ### Yield Distribution
 
@@ -128,36 +127,90 @@ Shutter DAO also supports **Shielded Voting** on Snapshot, which encrypts votes 
 
 ### Phase 1: Dragon Vault Deployment
 
-#### Step 1: Octant Deploys Vault
+The entire deployment can be executed in a **single DAO proposal** with batched transactions. This approach:
+- Deploys all contracts atomically
+- Sets up roles and permissions
+- Deposits treasury capital
+- Must fit within 16M gas (EIP-7825 block gas limit)
 
-The Octant team deploys and configures the Dragon Vault (MSLV) instance for Shutter DAO.
+#### Step 1: Create Fractal Proposal (UI Walkthrough)
 
-**Output**: `DRAGON_VAULT_ADDRESS` *(to be provided post-deployment)*
-
-#### Step 2: Create Fractal Proposal (UI Walkthrough)
-
-**2.1 — Navigate to Shutter DAO on Decent**
+**1.1 — Navigate to Shutter DAO on Decent**
 
 Open [app.decentdao.org/home?dao=eth:0x36bD3044ab68f600f6d3e081056F34f2a58432c4](https://app.decentdao.org/home?dao=eth%3A0x36bD3044ab68f600f6d3e081056F34f2a58432c4)
 
-**2.2 — Connect Wallet**
+**1.2 — Connect Wallet**
 
 Connect a wallet holding SHU tokens (required to meet proposal threshold).
 
-**2.3 — Click "Create Proposal"**
+**1.3 — Click "Create Proposal"**
 
 Navigate to the Proposals tab and click the "Create Proposal" button.
 
-**2.4 — Fill Proposal Details**
+**1.4 — Fill Proposal Details**
 
 | Field | Value |
 |-------|-------|
-| Title | `Deposit 1.5M USDC into Octant Dragon Vault` |
+| Title | `Deploy Octant Dragon Vault and Deposit 1.5M USDC` |
 | Description | See [Proposal Template](#proposal-template) below |
 
-**2.5 — Add Transaction 1 (Approve USDC)**
+**1.5 — Add Transaction 1: Deploy Morpho Strategy**
 
-Click "Add Transaction" and fill in:
+| Field | Value |
+|-------|-------|
+| Target Contract | `[STRATEGY_FACTORY_ADDRESS]` *(TBD by Octant)* |
+| Function | `deployMorphoStrategy(...)` |
+| Parameters | See [Technical Calldata](#technical-calldata-for-verification) |
+
+> **Note**: The strategy deployment includes the donation address (Dragon Router) and payment splitter configuration for yield distribution.
+
+**1.6 — Add Transaction 2: Deploy Dragon Vault**
+
+| Field | Value |
+|-------|-------|
+| Target Contract | `[VAULT_FACTORY_ADDRESS]` *(TBD by Octant)* |
+| Function | `deployNewVault(address asset, string name, string symbol, address roleManager, uint256 profitMaxUnlockTime)` |
+| `asset` | `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48` (USDC) |
+| `name` | `Shutter Dragon Vault` |
+| `symbol` | `sdUSDC` |
+| `roleManager` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` (Treasury) |
+| `profitMaxUnlockTime` | `604800` (7 days) |
+
+**1.7 — Add Transaction 3: Add Strategy to Vault**
+
+| Field | Value |
+|-------|-------|
+| Target Contract | `[DRAGON_VAULT_ADDRESS]` *(from Tx 2)* |
+| Function | `addStrategy(address strategy)` |
+| `strategy` | `[STRATEGY_ADDRESS]` *(from Tx 1)* |
+
+**1.8 — Add Transaction 4: Set Strategy Max Debt**
+
+| Field | Value |
+|-------|-------|
+| Target Contract | `[DRAGON_VAULT_ADDRESS]` |
+| Function | `updateMaxDebtForStrategy(address strategy, uint256 newMaxDebt)` |
+| `strategy` | `[STRATEGY_ADDRESS]` |
+| `newMaxDebt` | `type(uint256).max` |
+
+**1.9 — Add Transaction 5: Set Default Queue**
+
+| Field | Value |
+|-------|-------|
+| Target Contract | `[DRAGON_VAULT_ADDRESS]` |
+| Function | `setDefaultQueue(address[] calldata newDefaultQueue)` |
+| `newDefaultQueue` | `[[STRATEGY_ADDRESS]]` |
+
+**1.10 — Add Transaction 6: Set Deposit Limit**
+
+| Field | Value |
+|-------|-------|
+| Target Contract | `[DRAGON_VAULT_ADDRESS]` |
+| Function | `setDepositLimit(uint256 depositLimit, bool depositLimitActive)` |
+| `depositLimit` | `type(uint256).max` |
+| `depositLimitActive` | `true` |
+
+**1.11 — Add Transaction 7: Approve USDC**
 
 | Field | Value |
 |-------|-------|
@@ -166,9 +219,7 @@ Click "Add Transaction" and fill in:
 | `spender` | `[DRAGON_VAULT_ADDRESS]` |
 | `amount` | `1500000000000` |
 
-**2.6 — Add Transaction 2 (Deposit USDC)**
-
-Click "Add Transaction" again:
+**1.12 — Add Transaction 8: Deposit USDC**
 
 | Field | Value |
 |-------|-------|
@@ -177,42 +228,59 @@ Click "Add Transaction" again:
 | `assets` | `1500000000000` |
 | `receiver` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` |
 
-**2.7 — Submit Proposal**
+**1.13 — Submit Proposal**
 
 Review all details and click "Submit Proposal". Sign the transaction with your wallet.
 
-#### Step 3: Vote
+> ⚠️ **Gas Consideration**: All transactions must fit within 16M gas (EIP-7825). If deployment exceeds this limit, consider splitting into two proposals: (1) Deploy contracts, (2) Deposit funds.
+
+#### Step 2: Vote
 
 1. Share the proposal link on the [Shutter Forum](https://shutternetwork.discourse.group/) for discussion
 2. SHU holders vote during the 72-hour voting period
 3. Proposal passes if quorum (3%) is met and majority votes "For"
 
-#### Step 4: Execute
+#### Step 3: Execute
 
 Once the voting period ends and the proposal passes:
 
 1. Return to the proposal page on Decent
 2. Click "Execute" (available during the 72-hour execution window)
 3. Sign the execution transaction
-4. Verify on Etherscan that both transactions succeeded
+4. Verify on Etherscan that all transactions succeeded
+
+#### Step 4: Verify Deployment
+
+After execution, verify:
+
+- [ ] Dragon Vault deployed at expected address
+- [ ] Strategy deployed with correct donation address
+- [ ] Treasury received vault shares
+- [ ] Funds deployed to underlying strategy (if autoAllocate enabled) OR idle in vault (if keeper must allocate)
 
 ### Proposal Template
 
 ```markdown
 ## Summary
 
-This proposal authorizes Shutter DAO 0x36 to deposit 1,500,000 USDC into the 
-Octant Dragon Vault as part of the Octant v2 pilot integration.
+This proposal deploys the Octant Dragon Vault infrastructure and deposits 
+1,500,000 USDC from Shutter DAO 0x36 treasury as part of the Octant v2 pilot.
 
 ## Background
 
 Octant v2 enables DAOs to optimize treasury yield while funding public goods. 
 See: [Octant v2 Pilot Proposal](https://shutternetwork.discourse.group/t/octant-v2-pilot-to-optimize-treasury-strengthen-ecosystem/760)
 
-## Transactions
+## Transactions (8 total)
 
-1. **Approve USDC**: Allow Dragon Vault to spend 1.5M USDC
-2. **Deposit USDC**: Deposit 1.5M USDC into Dragon Vault, receiving shares to Treasury
+1. **Deploy Morpho Strategy**: Create yield strategy with donation configuration
+2. **Deploy Dragon Vault**: Create vault with Treasury as role manager
+3. **Add Strategy**: Register strategy with vault
+4. **Set Max Debt**: Allow full allocation to strategy
+5. **Set Default Queue**: Configure withdrawal order
+6. **Set Deposit Limit**: Enable deposits
+7. **Approve USDC**: Allow Dragon Vault to spend 1.5M USDC
+8. **Deposit USDC**: Deposit 1.5M USDC, receiving shares to Treasury
 
 ## Yield Distribution
 
@@ -222,12 +290,11 @@ See: [Octant v2 Pilot Proposal](https://shutternetwork.discourse.group/t/octant-
 ## Risk Considerations
 
 - Strategy: Morpho Steakhouse USDC (Credora A+ rated)
-- Custody: Treasury retains share ownership with rage quit rights
-- Lockup: 7-day cooldown for withdrawals
+- Custody: Treasury retains full share ownership
+- Liquidity: Instant withdrawals (no lockup period)
 
 ## Links
 
-- [Dragon Vault Address]: `[DRAGON_VAULT_ADDRESS]`
 - [Morpho Strategy](https://app.morpho.org/ethereum/vault/0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB/steakhouse-usdc)
 ```
 
@@ -297,18 +364,28 @@ If the Treasury is set as Keeper, a DAO vote is required for every yield harvest
 - No governance bottleneck for routine operations
 - Faster yield compounding
 
+### AutoAllocate vs Manual Allocation
+
+The vault supports two modes for deploying deposited funds to strategies:
+
+| Mode | Behavior | Use Case |
+|------|----------|----------|
+| **AutoAllocate ON** | Deposits automatically deployed to `defaultQueue[0]` | Set-and-forget, higher gas per deposit |
+| **AutoAllocate OFF** | Deposits remain idle until Keeper calls `updateDebt()` | Lower deposit gas, requires active management |
+
+> **Recommendation**: Enable autoAllocate for simplicity. The Keeper can still call `updateDebt()` to rebalance between strategies.
+
 ### Emergency Admin
 
 The Treasury serves as Emergency Admin. Emergency actions (shutdown, forced withdrawals) will follow standard DAO voting timelines unless a separate multisig is designated for faster response.
 
-### Rage Quit Mechanism
+### Withdrawals
 
-Withdrawals from the Dragon Vault require:
-1. **Initiate Rage Quit** — Lock shares for withdrawal
-2. **Wait Cooldown Period** — Default: 7 days
-3. **Execute Withdrawal** — Receive underlying assets
+The Dragon Vault uses the base `MultistrategyVault` (no lockup). Withdrawals are instant:
+1. Call `withdraw(assets, receiver, owner)` or `redeem(shares, receiver, owner)`
+2. Receive underlying assets immediately
 
-This protects against flash loan attacks and ensures orderly exits. Locked shares cannot be transferred during the cooldown period.
+If funds are deployed to strategies, the vault automatically withdraws from the default queue.
 
 ---
 
