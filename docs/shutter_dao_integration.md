@@ -1,4 +1,4 @@
-# Shutter DAO 0x36 × Octant v2 Integration Guide
+# Shutter DAO 0x36 × Octant v2 Integration Plan
 
 
 ## Overview
