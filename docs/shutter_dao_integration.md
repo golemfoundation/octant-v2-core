@@ -232,7 +232,7 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 
 Review all details and click "Submit Proposal". Sign the transaction with your wallet.
 
-> ⚠️ **Gas Consideration**: All transactions must fit within 16M gas (EIP-7825). If deployment exceeds this limit, consider splitting into two proposals: (1) Deploy contracts, (2) Deposit funds.
+> ✅ **Gas Verified**: The batched proposal uses ~3.2M gas, well under the 16M EIP-7825 block gas limit (~80% headroom). See `ShutterDAOGasProfilingTest` for details.
 
 #### Step 2: Vote
 
