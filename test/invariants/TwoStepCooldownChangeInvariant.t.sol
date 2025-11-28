@@ -39,8 +39,8 @@ contract TwoStepCooldownChangeInvariantTest is Test {
 
         // Setup roles
         vm.startPrank(gov);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
-        vault.setDepositLimit(type(uint256).max, false);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.set_deposit_limit(type(uint256).max, false);
         vm.stopPrank();
     }
 

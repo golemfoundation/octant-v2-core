@@ -210,7 +210,7 @@ library DebtManagementLib {
             }
 
             // If there are unrealised losses we don't let the vault reduce its debt until there is a new report
-            uint256 unrealisedLossesShare = IMultistrategyVault(address(this)).assessShareOfUnrealisedLosses(
+            uint256 unrealisedLossesShare = IMultistrategyVault(address(this)).assess_share_of_unrealised_losses(
                 strategy,
                 vars.currentDebt,
                 vars.assetsToWithdraw

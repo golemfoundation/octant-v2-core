@@ -35,37 +35,37 @@ contract EmergencyShutdownTest is Test {
         strategy = new MockYieldStrategy(address(asset), address(vault));
 
         // Set roles - equivalent to the fixture in the Python test
-        vault.addRole(gov, IMultistrategyVault.Roles.EMERGENCY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.EMERGENCY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
 
         // set max deposit limit
-        vault.setDepositLimit(type(uint256).max, false);
+        vault.set_deposit_limit(type(uint256).max, false);
     }
 
     function testShutdown() public {
         // Test that unauthorized users can't shut down
         vm.prank(panda);
         vm.expectRevert(IMultistrategyVault.NotAllowed.selector);
-        vault.shutdownVault();
+        vault.shutdown_vault();
 
         // Test that authorized users can shut down
-        vault.shutdownVault();
+        vault.shutdown_vault();
         assertTrue(vault.isShutdown());
     }
 
     function testShutdownGivesDebtManagerRole() public {
         // Set panda as EMERGENCY_MANAGER only
-        vault.setRole(panda, 1 << uint256(IMultistrategyVault.Roles.EMERGENCY_MANAGER));
+        vault.set_role(panda, 1 << uint256(IMultistrategyVault.Roles.EMERGENCY_MANAGER));
 
         // Verify panda doesn't have DEBT_MANAGER initially
         assertTrue((vault.roles(panda) & (1 << uint256(IMultistrategyVault.Roles.DEBT_MANAGER))) == 0);
 
         // Have panda shut down the vault
         vm.prank(panda);
-        vault.shutdownVault();
+        vault.shutdown_vault();
 
         // Verify panda now has DEBT_MANAGER role
         assertTrue((vault.roles(panda) & (1 << uint256(IMultistrategyVault.Roles.DEBT_MANAGER))) != 0);
@@ -79,14 +79,14 @@ contract EmergencyShutdownTest is Test {
         mintAndDepositIntoVault(1e18);
 
         // Shut down vault
-        vault.shutdownVault();
+        vault.shutdown_vault();
 
         // Verify deposit limit is 0
         assertEq(vault.maxDeposit(gov), 0);
 
         // Try to set deposit limit
         vm.expectRevert(IMultistrategyVault.VaultShutdown.selector);
-        vault.setDepositLimit(1e18, false);
+        vault.set_deposit_limit(1e18, false);
 
         // Verify deposit limit is still 0
         assertEq(vault.maxDeposit(gov), 0);
@@ -97,7 +97,7 @@ contract EmergencyShutdownTest is Test {
         mintAndDepositIntoVault(1e18);
 
         // Shut down vault
-        vault.shutdownVault();
+        vault.shutdown_vault();
 
         // Verify deposit limit is 0
         assertEq(vault.maxDeposit(gov), 0);
@@ -107,7 +107,7 @@ contract EmergencyShutdownTest is Test {
 
         // Try to set deposit limit module
         vm.expectRevert(IMultistrategyVault.VaultShutdown.selector);
-        vault.setDepositLimitModule(address(limitModule), false);
+        vault.set_deposit_limit_module(address(limitModule), false);
 
         // Verify deposit limit is still 0
         assertEq(vault.maxDeposit(gov), 0);
@@ -119,13 +119,13 @@ contract EmergencyShutdownTest is Test {
 
         // Deploy and set limit module
         MockDepositLimitModule limitModule = new MockDepositLimitModule();
-        vault.setDepositLimitModule(address(limitModule), true);
+        vault.set_deposit_limit_module(address(limitModule), true);
 
         // Verify deposit is allowed
         assertTrue(vault.maxDeposit(gov) > 0);
 
         // Shut down vault
-        vault.shutdownVault();
+        vault.shutdown_vault();
 
         // Verify deposit limit module is removed
         assertEq(vault.depositLimitModule(), address(0));
@@ -140,7 +140,7 @@ contract EmergencyShutdownTest is Test {
         mintAndDepositIntoVault(depositAmount);
 
         // Shut down vault
-        vault.shutdownVault();
+        vault.shutdown_vault();
 
         // Verify no more deposits allowed
         assertEq(vault.maxDeposit(gov), 0);
@@ -179,8 +179,8 @@ contract EmergencyShutdownTest is Test {
         assertGt(vaultBalance, 0);
 
         // Add strategy to vault and allocate all funds to it
-        vault.addStrategy(address(strategy), true);
-        vault.updateMaxDebtForStrategy(address(strategy), type(uint256).max);
+        vault.add_strategy(address(strategy), true);
+        vault.update_max_debt_for_strategy(address(strategy), type(uint256).max);
         addDebtToStrategy(address(strategy), vaultBalance);
 
         // Verify funds were allocated
@@ -188,13 +188,13 @@ contract EmergencyShutdownTest is Test {
         assertEq(asset.balanceOf(address(vault)), 0);
 
         // Shut down vault
-        vault.shutdownVault();
+        vault.shutdown_vault();
 
         // Verify no more deposits allowed
         assertEq(vault.maxDeposit(gov), 0);
 
         // Return funds from strategy
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Verify funds returned
         assertEq(asset.balanceOf(address(strategy)), 0);
@@ -210,6 +210,6 @@ contract EmergencyShutdownTest is Test {
     }
 
     function addDebtToStrategy(address strategyAddress, uint256 amount) internal {
-        vault.updateDebt(strategyAddress, amount, 0);
+        vault.update_debt(strategyAddress, amount, 0);
     }
 }
