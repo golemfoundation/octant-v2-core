@@ -107,12 +107,11 @@ contract ShutterDAOIntegrationTest is Test {
 
     function _deployVaultAndStrategy() internal {
         // Donation Splitter (0% ESF, 100% Dragon Pool)
-        address[] memory payees = new address[](2);
-        payees[0] = makeAddr("ESF");
-        payees[1] = makeAddr("DragonFundingPool");
-        uint256[] memory shares = new uint256[](2);
-        shares[0] = 0;
-        shares[1] = 100;
+        // ESF is excluded from payees because PaymentSplitter requires shares > 0
+        address[] memory payees = new address[](1);
+        payees[0] = makeAddr("DragonFundingPool");
+        uint256[] memory shares = new uint256[](1);
+        shares[0] = 100;
 
         PaymentSplitter paymentSplitterImpl = new PaymentSplitter();
         bytes memory initData = abi.encodeCall(PaymentSplitter.initialize, (payees, shares));
@@ -402,12 +401,11 @@ contract ShutterDAOGasProfilingTest is Test {
         PaymentSplitter paymentSplitter;
         {
             // PaymentSplitter setup (proxy pattern)
-            address[] memory payees = new address[](2);
-            payees[0] = makeAddr("ESF");
-            payees[1] = makeAddr("DragonFundingPool");
-            uint256[] memory shares = new uint256[](2);
-            shares[0] = 0;
-            shares[1] = 100;
+            // ESF is excluded from payees because PaymentSplitter requires shares > 0
+            address[] memory payees = new address[](1);
+            payees[0] = makeAddr("DragonFundingPool");
+            uint256[] memory shares = new uint256[](1);
+            shares[0] = 100;
 
             PaymentSplitter paymentSplitterImpl = new PaymentSplitter();
             bytes memory initData = abi.encodeCall(PaymentSplitter.initialize, (payees, shares));
