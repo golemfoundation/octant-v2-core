@@ -38,7 +38,7 @@ contract ShutterDAOIntegrationTest is Test {
     address constant MORPHO_STEAKHOUSE_VAULT = 0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB;
 
     // === Constants ===
-    uint256 constant TREASURY_USDC_BALANCE = 1_500_000e6;
+    uint256 constant TREASURY_USDC_BALANCE = 1_200_000e6;
     uint256 constant SHU_HOLDER_BALANCE = 100_000e18;
     uint256 constant REWARD_DURATION = 90 days;
     uint256 constant PROFIT_MAX_UNLOCK_TIME = 7 days;
@@ -109,8 +109,8 @@ contract ShutterDAOIntegrationTest is Test {
         payees[0] = makeAddr("ESF");
         payees[1] = makeAddr("DragonFundingPool");
         uint256[] memory shares = new uint256[](2);
-        shares[0] = 5;
-        shares[1] = 95;
+        shares[0] = 0;
+        shares[1] = 100;
 
         PaymentSplitter paymentSplitterImpl = new PaymentSplitter();
         bytes memory initData = abi.encodeCall(PaymentSplitter.initialize, (payees, shares));
@@ -361,7 +361,7 @@ contract ShutterDAOGasProfilingTest is Test {
     address constant USDC_TOKEN = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
     address constant MORPHO_STEAKHOUSE_VAULT = 0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB;
 
-    uint256 constant TREASURY_USDC_BALANCE = 1_500_000e6;
+    uint256 constant TREASURY_USDC_BALANCE = 1_200_000e6;
     uint256 constant PROFIT_MAX_UNLOCK_TIME = 7 days;
     uint256 constant EIP_7825_BLOCK_GAS_LIMIT = 16_000_000;
 
@@ -402,8 +402,8 @@ contract ShutterDAOGasProfilingTest is Test {
         payees[0] = makeAddr("ESF");
         payees[1] = makeAddr("DragonFundingPool");
         uint256[] memory shares = new uint256[](2);
-        shares[0] = 5;
-        shares[1] = 95;
+        shares[0] = 0;
+        shares[1] = 100;
 
         PaymentSplitter paymentSplitterImpl = new PaymentSplitter();
         bytes memory initData = abi.encodeCall(PaymentSplitter.initialize, (payees, shares));

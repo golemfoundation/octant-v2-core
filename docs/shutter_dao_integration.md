@@ -10,7 +10,7 @@ Shutter DAO 0x36 will integrate with Octant v2 through **two distinct components
 
 | Component | Purpose | Capital |
 |-----------|---------|---------|
-| Dragon Vault | Generate yield to fund Regen Staker rewards | 1.5M USDC |
+| Dragon Vault | Generate yield to fund Regen Staker rewards | 1.2M USDC |
 | Regen Staker | Public goods funding (matched rewards) | SHU tokens |
 
 ---
@@ -49,17 +49,17 @@ The Multistrategy Vault manages treasury capital with instant liquidity (no lock
 
 | Destination | Allocation |
 |-------------|------------|
-| Ethereum Sustainability Fund (ESF) | 5% |
-| Dragon Funding Pool | 95% |
+| Ethereum Sustainability Fund (ESF) | 0% |
+| Dragon Funding Pool | 100% |
 
 ### Yield Projections (assuming 5% APY)
 
 | Metric | Annual |
 |--------|--------|
 | Gross Yield | 75,000 USDC |
-| To ESF | 3,750 USDC |
-| To Dragon Funding Pool | 71,250 USDC |
-| Epochs Supported | ~3 per year (~23,750 USDC each) |
+| To ESF | 0 USDC |
+| To Dragon Funding Pool | 75,000 USDC |
+| Epochs Supported | ~3 per year (~25,000 USDC each) |
 
 ---
 
@@ -151,7 +151,7 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 
 | Field | Value |
 |-------|-------|
-| Title | `Deploy Octant Dragon Vault and Deposit 1.5M USDC` |
+| Title | `Deploy Octant Dragon Vault and Deposit 1.2M USDC` |
 | Description | See [Proposal Template](#proposal-template) below |
 
 **1.5 — Add Transaction 1: Deploy Morpho Strategy**
@@ -217,7 +217,7 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 | Target Contract | `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48` (USDC) |
 | Function | `approve(address spender, uint256 amount)` |
 | `spender` | `[DRAGON_VAULT_ADDRESS]` |
-| `amount` | `1500000000000` |
+| `amount` | `1200000000000` |
 
 **1.12 — Add Transaction 8: Deposit USDC**
 
@@ -225,7 +225,7 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 |-------|-------|
 | Target Contract | `[DRAGON_VAULT_ADDRESS]` |
 | Function | `deposit(uint256 assets, address receiver)` |
-| `assets` | `1500000000000` |
+| `assets` | `1200000000000` |
 | `receiver` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` |
 
 **1.13 — Submit Proposal**
@@ -264,7 +264,7 @@ After execution, verify:
 ## Summary
 
 This proposal deploys the Octant Dragon Vault infrastructure and deposits 
-1,500,000 USDC from Shutter DAO 0x36 treasury as part of the Octant v2 pilot.
+1,200,000 USDC from Shutter DAO 0x36 treasury as part of the Octant v2 pilot.
 
 ## Background
 
@@ -279,13 +279,13 @@ See: [Octant v2 Pilot Proposal](https://shutternetwork.discourse.group/t/octant-
 4. **Set Max Debt**: Allow full allocation to strategy
 5. **Set Default Queue**: Configure withdrawal order
 6. **Set Deposit Limit**: Enable deposits
-7. **Approve USDC**: Allow Dragon Vault to spend 1.5M USDC
-8. **Deposit USDC**: Deposit 1.5M USDC, receiving shares to Treasury
+7. **Approve USDC**: Allow Dragon Vault to spend 1.2M USDC
+8. **Deposit USDC**: Deposit 1.2M USDC, receiving shares to Treasury
 
 ## Yield Distribution
 
-- 5% → Ethereum Sustainability Fund
-- 95% → Dragon Funding Pool (Shutter ecosystem grants)
+- 0% → Ethereum Sustainability Fund
+- 100% → Dragon Funding Pool (Shutter ecosystem grants)
 
 ## Risk Considerations
 
@@ -309,12 +309,12 @@ Function: approve(address,uint256)
 Selector: 0x095ea7b3
 Parameters:
   spender: [DRAGON_VAULT_ADDRESS]
-  amount:  1500000000000 (0x15d3ef79800)
+  amount:  1200000000000 (0x1176592e000)
 
 Encoded (with placeholder vault 0x1234...5678):
 0x095ea7b3
   0000000000000000000000001234567890123456789012345678901234567890  // spender
-  00000000000000000000000000000000000000000000000000000015d3ef79800 // amount
+  000000000000000000000000000000000000000000000000000001176592e000 // amount
 ```
 
 **Transaction 2 — Deposit**
@@ -323,12 +323,12 @@ Encoded (with placeholder vault 0x1234...5678):
 Function: deposit(uint256,address)
 Selector: 0x6e553f65
 Parameters:
-  assets:   1500000000000 (0x15d3ef79800)
+  assets:   1200000000000 (0x1176592e000)
   receiver: 0x36bD3044ab68f600f6d3e081056F34f2a58432c4
 
 Encoded:
 0x6e553f65
-  00000000000000000000000000000000000000000000000000000015d3ef79800 // assets
+  000000000000000000000000000000000000000000000000000001176592e000 // assets
   00000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c4  // receiver
 ```
 
