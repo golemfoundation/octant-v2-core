@@ -20,6 +20,7 @@ import { MorphoCompounderStrategy } from "src/strategies/yieldDonating/MorphoCom
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20Staking } from "staker/interfaces/IERC20Staking.sol";
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 /**
  * @title ShutterDAOIntegrationTest
@@ -111,8 +112,10 @@ contract ShutterDAOIntegrationTest is Test {
         shares[0] = 5;
         shares[1] = 95;
 
-        paymentSplitter = new PaymentSplitter();
-        paymentSplitter.initialize(payees, shares);
+        PaymentSplitter paymentSplitterImpl = new PaymentSplitter();
+        bytes memory initData = abi.encodeCall(PaymentSplitter.initialize, (payees, shares));
+        ERC1967Proxy proxy = new ERC1967Proxy(address(paymentSplitterImpl), initData);
+        paymentSplitter = PaymentSplitter(payable(address(proxy)));
 
         // Deploy Morpho Strategy
         vm.prank(SHUTTER_TREASURY);
@@ -394,7 +397,18 @@ contract ShutterDAOGasProfilingTest is Test {
         );
 
         TokenizedStrategy strategyImpl = new TokenizedStrategy();
-        PaymentSplitter paymentSplitter = new PaymentSplitter(); // Should be pre-deployed ideally
+        // PaymentSplitter setup (proxy pattern)
+        address[] memory payees = new address[](2);
+        payees[0] = makeAddr("ESF");
+        payees[1] = makeAddr("DragonFundingPool");
+        uint256[] memory shares = new uint256[](2);
+        shares[0] = 5;
+        shares[1] = 95;
+
+        PaymentSplitter paymentSplitterImpl = new PaymentSplitter();
+        bytes memory initData = abi.encodeCall(PaymentSplitter.initialize, (payees, shares));
+        ERC1967Proxy proxy = new ERC1967Proxy(address(paymentSplitterImpl), initData);
+        PaymentSplitter paymentSplitter = PaymentSplitter(payable(address(proxy)));
 
         uint256 gasAfterFactoryDeploy = gasleft();
 
