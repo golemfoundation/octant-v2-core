@@ -34,15 +34,15 @@ contract BuyDebtTest is Test {
         strategy = new MockYieldStrategy(address(asset), address(vault));
 
         // Set roles - equivalent to the fixture in the Python test
-        vault.addRole(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.REVOKE_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEBT_PURCHASER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.REVOKE_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEBT_PURCHASER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
 
         // set max deposit limit
-        vault.setDepositLimit(type(uint256).max, false);
+        vault.set_deposit_limit(type(uint256).max, false);
     }
 
     function testBuyDebtStrategyNotActiveReverts() public {
@@ -58,12 +58,12 @@ contract BuyDebtTest is Test {
 
         // Try to buy debt - should revert because strategy not active
         vm.expectRevert(IMultistrategyVault.InactiveStrategy.selector);
-        vault.buyDebt(address(inactiveStrategy), fishAmount);
+        vault.buy_debt(address(inactiveStrategy), fishAmount);
     }
 
     function testBuyDebtNoDebtReverts() public {
         // Add strategy to vault but don't allocate any debt
-        vault.addStrategy(address(strategy), false);
+        vault.add_strategy(address(strategy), false);
 
         // Deposit into vault
         mintAndDepositIntoVault(fish, fishAmount);
@@ -74,12 +74,12 @@ contract BuyDebtTest is Test {
 
         // Try to buy debt - should revert because strategy has no debt
         vm.expectRevert(IMultistrategyVault.NothingToBuy.selector);
-        vault.buyDebt(address(strategy), fishAmount);
+        vault.buy_debt(address(strategy), fishAmount);
     }
 
     function testBuyDebtNoAmountReverts() public {
         // Add strategy to vault
-        vault.addStrategy(address(strategy), false);
+        vault.add_strategy(address(strategy), false);
 
         // Deposit into vault
         mintAndDepositIntoVault(fish, fishAmount);
@@ -93,12 +93,12 @@ contract BuyDebtTest is Test {
 
         // Try to buy 0 debt - should revert
         vm.expectRevert(IMultistrategyVault.NothingToBuyWith.selector);
-        vault.buyDebt(address(strategy), 0);
+        vault.buy_debt(address(strategy), 0);
     }
 
     function testBuyDebtMoreThanAvailableWithdrawsCurrentDebt() public {
         // Add strategy to vault
-        vault.addStrategy(address(strategy), false);
+        vault.add_strategy(address(strategy), false);
 
         // Deposit into vault
         mintAndDepositIntoVault(fish, fishAmount);
@@ -116,7 +116,7 @@ contract BuyDebtTest is Test {
         // Try to buy more debt than available
         vm.expectEmit(true, true, false, true);
         emit IMultistrategyVault.DebtPurchased(address(strategy), fishAmount);
-        vault.buyDebt(address(strategy), fishAmount * 2);
+        vault.buy_debt(address(strategy), fishAmount * 2);
 
         // Check results
         assertEq(vault.totalIdle(), fishAmount);
@@ -133,7 +133,7 @@ contract BuyDebtTest is Test {
 
     function testBuyDebtFullDebt() public {
         // Add strategy to vault
-        vault.addStrategy(address(strategy), false);
+        vault.add_strategy(address(strategy), false);
 
         // Deposit into vault
         mintAndDepositIntoVault(fish, fishAmount);
@@ -156,7 +156,7 @@ contract BuyDebtTest is Test {
         vm.expectEmit(true, true, true, true);
         emit IMultistrategyVault.DebtPurchased(address(strategy), fishAmount);
 
-        vault.buyDebt(address(strategy), fishAmount);
+        vault.buy_debt(address(strategy), fishAmount);
 
         // Check results
         assertEq(vault.totalIdle(), fishAmount);
@@ -173,7 +173,7 @@ contract BuyDebtTest is Test {
 
     function testBuyDebtHalfDebt() public {
         // Add strategy to vault
-        vault.addStrategy(address(strategy), false);
+        vault.add_strategy(address(strategy), false);
 
         // Deposit into vault
         mintAndDepositIntoVault(fish, fishAmount);
@@ -194,7 +194,7 @@ contract BuyDebtTest is Test {
         // Buy half debt
         vm.expectEmit(true, true, false, true);
         emit IMultistrategyVault.DebtPurchased(address(strategy), toBuy);
-        vault.buyDebt(address(strategy), toBuy);
+        vault.buy_debt(address(strategy), toBuy);
 
         // Check results
         assertEq(vault.totalIdle(), toBuy);
@@ -221,9 +221,9 @@ contract BuyDebtTest is Test {
 
     function addDebtToStrategy(address strategyAddress, uint256 amount) internal {
         // First set max debt
-        vault.updateMaxDebtForStrategy(strategyAddress, type(uint256).max);
+        vault.update_max_debt_for_strategy(strategyAddress, type(uint256).max);
         // Then update debt
-        vault.updateDebt(strategyAddress, amount, 0);
+        vault.update_debt(strategyAddress, amount, 0);
     }
 
     function createStrategy() internal returns (MockYieldStrategy) {

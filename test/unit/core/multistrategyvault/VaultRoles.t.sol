@@ -34,12 +34,12 @@ contract VaultRolesTest is Test {
 
     function testSetRole() public {
         // Gov can set role
-        vault.setRole(fish, uint256(IMultistrategyVault.Roles.DEBT_MANAGER));
+        vault.set_role(fish, uint256(IMultistrategyVault.Roles.DEBT_MANAGER));
 
         // Fish tries to set role (should fail)
         vm.prank(fish);
         vm.expectRevert(IMultistrategyVault.NotAllowed.selector);
-        vault.setRole(fish, uint256(IMultistrategyVault.Roles.DEBT_MANAGER));
+        vault.set_role(fish, uint256(IMultistrategyVault.Roles.DEBT_MANAGER));
     }
 
     function testTransfersRoleManager() public {
@@ -48,13 +48,13 @@ contract VaultRolesTest is Test {
         assertEq(vault.futureRoleManager(), Constants.ZERO_ADDRESS);
 
         // Gov transfers role to strategist
-        vault.transferRoleManager(strategist);
+        vault.transfer_role_manager(strategist);
         assertEq(vault.roleManager(), gov);
         assertEq(vault.futureRoleManager(), strategist);
 
         // Strategist accepts role
         vm.prank(strategist);
-        vault.acceptRoleManager();
+        vault.accept_role_manager();
         assertEq(vault.roleManager(), strategist);
         assertEq(vault.futureRoleManager(), Constants.ZERO_ADDRESS);
     }
@@ -65,13 +65,13 @@ contract VaultRolesTest is Test {
         assertEq(vault.futureRoleManager(), Constants.ZERO_ADDRESS);
 
         // Gov transfers role to strategist
-        vault.transferRoleManager(strategist);
+        vault.transfer_role_manager(strategist);
         assertEq(vault.roleManager(), gov);
         assertEq(vault.futureRoleManager(), strategist);
 
         // Gov tries to accept (should fail)
         vm.expectRevert(IMultistrategyVault.NotFutureRoleManager.selector);
-        vault.acceptRoleManager();
+        vault.accept_role_manager();
 
         // State should remain unchanged
         assertEq(vault.roleManager(), gov);
@@ -86,7 +86,7 @@ contract VaultRolesTest is Test {
         // Strategist tries to transfer role (should fail)
         vm.prank(strategist);
         vm.expectRevert(IMultistrategyVault.NotAllowed.selector);
-        vault.transferRoleManager(strategist);
+        vault.transfer_role_manager(strategist);
 
         // State should remain unchanged
         assertEq(vault.roleManager(), gov);
@@ -99,23 +99,23 @@ contract VaultRolesTest is Test {
         assertEq(vault.futureRoleManager(), Constants.ZERO_ADDRESS);
 
         // Gov transfers role to strategist
-        vault.transferRoleManager(strategist);
+        vault.transfer_role_manager(strategist);
         assertEq(vault.roleManager(), gov);
         assertEq(vault.futureRoleManager(), strategist);
 
         // Gov changes future manager to bunny
-        vault.transferRoleManager(bunny);
+        vault.transfer_role_manager(bunny);
         assertEq(vault.roleManager(), gov);
         assertEq(vault.futureRoleManager(), bunny);
 
         // Strategist tries to accept (should fail)
         vm.prank(strategist);
         vm.expectRevert(IMultistrategyVault.NotFutureRoleManager.selector);
-        vault.acceptRoleManager();
+        vault.accept_role_manager();
 
         // Bunny accepts the role
         vm.prank(bunny);
-        vault.acceptRoleManager();
+        vault.accept_role_manager();
         assertEq(vault.roleManager(), bunny);
         assertEq(vault.futureRoleManager(), Constants.ZERO_ADDRESS);
     }

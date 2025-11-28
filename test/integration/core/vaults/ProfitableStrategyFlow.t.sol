@@ -82,7 +82,7 @@ contract ProfitableStrategyFlowTest is Test {
         _createVault();
         accountant = new MockAccountant(address(vault));
         vm.prank(gov);
-        vault.setAccountant(address(accountant));
+        vault.set_accountant(address(accountant));
 
         // Set performance fee
         accountant.setFees(address(strategy), 0, vars.performanceFee, 0);
@@ -117,7 +117,7 @@ contract ProfitableStrategyFlowTest is Test {
         strategy.report(); // This is needed to update strategy's internal accounting
 
         vm.prank(gov);
-        (uint256 gain, uint256 loss) = vault.processReport(address(strategy));
+        (uint256 gain, uint256 loss) = vault.process_report(address(strategy));
 
         assertEq(gain, vars.firstProfit, "Reported gain should match first profit");
         assertEq(loss, 0, "Should have no loss");
@@ -149,7 +149,7 @@ contract ProfitableStrategyFlowTest is Test {
 
         // Increase max debt for strategy to allow more deposits
         vm.startPrank(gov);
-        vault.updateMaxDebtForStrategy(address(strategy), strategy.totalAssets() + vars.depositAmount);
+        vault.update_max_debt_for_strategy(address(strategy), strategy.totalAssets() + vars.depositAmount);
         vm.stopPrank();
 
         // Add debt for user2's deposit
@@ -168,7 +168,7 @@ contract ProfitableStrategyFlowTest is Test {
         strategy.report(); // Update strategy's internal accounting
 
         vm.prank(gov);
-        (gain, loss) = vault.processReport(address(strategy));
+        (gain, loss) = vault.process_report(address(strategy));
 
         assertEq(gain, vars.secondProfit, "Reported gain should match second profit");
         assertEq(loss, 0, "Should have no loss");
@@ -188,7 +188,7 @@ contract ProfitableStrategyFlowTest is Test {
         // Set minimum total idle
         vars.minTotalIdle = vars.depositAmount / 2;
         vm.prank(gov);
-        vault.setMinimumTotalIdle(vars.minTotalIdle);
+        vault.set_minimum_total_idle(vars.minTotalIdle);
 
         // Update debt to respect minimum idle
         vars.newDebt = strategy.totalAssets() - vars.depositAmount / 4;
@@ -260,7 +260,7 @@ contract ProfitableStrategyFlowTest is Test {
         assertEq(vault.strategies(address(strategy)).currentDebt, 0, "Strategy should have no debt");
 
         vm.prank(gov);
-        vault.revokeStrategy(address(strategy));
+        vault.revoke_strategy(address(strategy));
 
         assertEq(vault.strategies(address(strategy)).activation, 0, "Strategy should be deactivated");
     }
@@ -270,24 +270,24 @@ contract ProfitableStrategyFlowTest is Test {
         vault = MultistrategyVault(vaultFactory.deployNewVault(address(asset), "Test Vault", "vTST", gov, 7 days));
 
         // Add roles to gov
-        vault.addRole(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.REVOKE_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.FORCE_REVOKE_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.ACCOUNTANT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.REPORTING_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MINIMUM_IDLE_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.PROFIT_UNLOCK_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.REVOKE_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.FORCE_REVOKE_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ACCOUNTANT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.REPORTING_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MINIMUM_IDLE_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.PROFIT_UNLOCK_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
 
         strategy = _createStrategy();
 
         // Set deposit limit to max
-        vault.setDepositLimit(type(uint256).max, true);
-        vault.addStrategy(address(strategy), true);
-        vault.updateMaxDebtForStrategy(address(strategy), fishAmount);
+        vault.set_deposit_limit(type(uint256).max, true);
+        vault.add_strategy(address(strategy), true);
+        vault.update_max_debt_for_strategy(address(strategy), fishAmount);
         vm.stopPrank();
     }
 
@@ -304,7 +304,7 @@ contract ProfitableStrategyFlowTest is Test {
 
     function _addDebtToStrategy(address strategyAddress, uint256 amount) internal {
         vm.prank(gov);
-        vault.updateDebt(strategyAddress, amount, 0);
+        vault.update_debt(strategyAddress, amount, 0);
     }
 
     function _airdropAsset(address to, uint256 amount) internal {

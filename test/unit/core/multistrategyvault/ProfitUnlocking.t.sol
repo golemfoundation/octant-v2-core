@@ -75,19 +75,19 @@ contract ProfitUnlockingTest is Test {
 
         vm.startPrank(gov);
         // Add roles to gov
-        vault.addRole(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.ACCOUNTANT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.REPORTING_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.PROFIT_UNLOCK_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ACCOUNTANT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.REPORTING_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.PROFIT_UNLOCK_MANAGER);
 
         // Setup strategy
         strategy = new MockYieldStrategy(address(asset), address(vault));
-        vault.addStrategy(address(strategy), true);
-        vault.updateMaxDebtForStrategy(address(strategy), type(uint256).max);
-        vault.setDepositLimit(type(uint256).max, true);
+        vault.add_strategy(address(strategy), true);
+        vault.update_max_debt_for_strategy(address(strategy), type(uint256).max);
+        vault.set_deposit_limit(type(uint256).max, true);
 
         vm.stopPrank();
     }
@@ -155,7 +155,7 @@ contract ProfitUnlockingTest is Test {
 
         // Process report
         vm.prank(gov);
-        (uint256 gain, uint256 loss) = vault.processReport(address(strategy));
+        (uint256 gain, uint256 loss) = vault.process_report(address(strategy));
 
         // Verify the report
         assertEq(gain, profit);
@@ -174,7 +174,7 @@ contract ProfitUnlockingTest is Test {
 
         // Make sure accountant is not set to match original test
         vm.prank(gov);
-        vault.setAccountant(address(0));
+        vault.set_accountant(address(0));
 
         // Deposit
         vm.startPrank(fish);
@@ -184,14 +184,14 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), amount, 0);
+        vault.update_debt(address(strategy), amount, 0);
 
         // Create first profit
         vm.prank(gov);
         asset.transfer(address(strategy), firstProfit);
 
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Initial checks
         assertPricePerShare(1 * 10 ** 18);
@@ -216,7 +216,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Verify strategy debt is zero
         assertEq(vault.strategies(address(strategy)).currentDebt, 0);
@@ -276,14 +276,14 @@ contract ProfitUnlockingTest is Test {
 
         // Set up accountant with 100% refund
         vm.startPrank(gov);
-        vault.setAccountant(address(accountant));
+        vault.set_accountant(address(accountant));
         accountant.setFees(address(strategy), state.managementFee, state.performanceFee, state.refundRatio);
 
         // Important: Pre-fund the accountant with 2x the amount
         asset.mint(address(accountant), 2 * state.amount);
 
         // Allocate to strategy
-        vault.updateDebt(address(strategy), state.amount, 0);
+        vault.update_debt(address(strategy), state.amount, 0);
         vm.stopPrank();
 
         // Create first profit - this should trigger refunds
@@ -291,7 +291,7 @@ contract ProfitUnlockingTest is Test {
         asset.transfer(address(strategy), state.firstProfit);
 
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Check PPS and vault totals
         assertPricePerShare(1 * 10 ** 18);
@@ -314,7 +314,7 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), state.amount, 0);
+        vault.update_debt(address(strategy), state.amount, 0);
 
         // Create first profit
         createAndCheckProfit(state.firstProfit);
@@ -350,7 +350,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Strategy debt should be 0, PPS still 3.0
         assertEq(vault.strategies(address(strategy)).currentDebt, 0);
@@ -387,7 +387,7 @@ contract ProfitUnlockingTest is Test {
 
         // Set up accountant
         vm.startPrank(gov);
-        vault.setAccountant(address(flexibleAccountant));
+        vault.set_accountant(address(flexibleAccountant));
         flexibleAccountant.setFees(address(strategy), state.managementFee, state.performanceFee, state.refundRatio);
         vm.stopPrank();
 
@@ -399,14 +399,14 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), state.amount, 0);
+        vault.update_debt(address(strategy), state.amount, 0);
 
         // Create profit
         vm.prank(gov);
         asset.transfer(address(strategy), state.firstProfit);
 
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Initial checks
         assertPricePerShare(1.0 * 10 ** 18);
@@ -443,7 +443,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Verify strategy debt is zero
         assertEq(vault.strategies(address(strategy)).currentDebt, 0);
@@ -516,7 +516,7 @@ contract ProfitUnlockingTest is Test {
 
         // Set flexible accountant as accountant
         vm.startPrank(gov);
-        vault.setAccountant(address(flexibleAccountant));
+        vault.set_accountant(address(flexibleAccountant));
         vm.stopPrank();
 
         // Set up accountant with performance fee and refund ratio
@@ -535,7 +535,7 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), state.amount, 0);
+        vault.update_debt(address(strategy), state.amount, 0);
 
         // Calculate expected values
         state.totalFees = (state.firstProfit * state.performanceFee) / MAX_BPS;
@@ -546,7 +546,7 @@ contract ProfitUnlockingTest is Test {
         asset.transfer(address(strategy), state.firstProfit);
 
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Record timestamp for later calculations
         state.timestamp = block.timestamp;
@@ -617,7 +617,7 @@ contract ProfitUnlockingTest is Test {
         asset.transfer(address(strategy), state.secondProfit);
 
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Convert fee and refund values to shares
         uint256 totalSecondFeesShares = vault.convertToShares(state.totalSecondFees);
@@ -668,7 +668,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Check totals after withdrawal
         checkVaultTotals(
@@ -737,7 +737,7 @@ contract ProfitUnlockingTest is Test {
 
         // set flexible accountant as accountant
         vm.startPrank(gov);
-        vault.setAccountant(address(flexibleAccountant));
+        vault.set_accountant(address(flexibleAccountant));
         vm.stopPrank();
 
         // Set up accountant with performance fee and no refunds
@@ -753,14 +753,14 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), state.amount, 0);
+        vault.update_debt(address(strategy), state.amount, 0);
 
         // Create first profit
         vm.prank(gov);
         asset.transfer(address(strategy), state.firstProfit);
 
         vm.prank(gov);
-        (uint256 gain, ) = vault.processReport(address(strategy));
+        (uint256 gain, ) = vault.process_report(address(strategy));
 
         // Record first profit fees and convert to shares
         state.firstProfitFees = (state.firstProfit * state.performanceFee) / MAX_BPS;
@@ -822,7 +822,7 @@ contract ProfitUnlockingTest is Test {
         asset.transfer(address(strategy), state.secondProfit);
 
         vm.prank(gov);
-        (gain, ) = vault.processReport(address(strategy));
+        (gain, ) = vault.process_report(address(strategy));
         // Record second profit fees and add to total fees shares
         uint256 secondProfitFees = (state.secondProfit * state.performanceFee) / MAX_BPS;
         state.totalFeesShares += vault.convertToShares(secondProfitFees);
@@ -875,7 +875,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Strategy debt should be zero
         assertEq(vault.strategies(address(strategy)).currentDebt, 0);
@@ -948,7 +948,7 @@ contract ProfitUnlockingTest is Test {
 
         // Setup accountant with no fees
         vm.startPrank(gov);
-        vault.setAccountant(address(flexibleAccountant));
+        vault.set_accountant(address(flexibleAccountant));
         flexibleAccountant.setFees(address(strategy), state.managementFee, state.performanceFee, state.refundRatio);
         vm.stopPrank();
 
@@ -960,14 +960,14 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), state.amount, 0);
+        vault.update_debt(address(strategy), state.amount, 0);
 
         // Create profit
         vm.prank(gov);
         asset.transfer(address(strategy), state.firstProfit);
 
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Initial checks
         assertPricePerShare(1 * 10 ** 18);
@@ -1000,7 +1000,7 @@ contract ProfitUnlockingTest is Test {
         strategy.simulateLoss(state.firstLoss);
 
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Price should reflect loss
         uint256 expectedPPS = ((state.amount + state.firstProfit - state.firstLoss) * 10 ** vault.decimals()) /
@@ -1024,7 +1024,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Strategy debt should be zero
         assertEq(vault.strategies(address(strategy)).currentDebt, 0);
@@ -1065,7 +1065,7 @@ contract ProfitUnlockingTest is Test {
 
         // Setup accountant
         vm.startPrank(gov);
-        vault.setAccountant(address(flexibleAccountant));
+        vault.set_accountant(address(flexibleAccountant));
         flexibleAccountant.setFees(address(strategy), managementFee, performanceFee, refundRatio);
         vm.stopPrank();
 
@@ -1077,7 +1077,7 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), amount, 0);
+        vault.update_debt(address(strategy), amount, 0);
 
         // Create a loss scenario
         vm.prank(gov);
@@ -1086,7 +1086,7 @@ contract ProfitUnlockingTest is Test {
         // Report and process the loss
 
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
         // Calculate fees
         uint256 totalFees = (amount *
             managementFee *
@@ -1112,7 +1112,7 @@ contract ProfitUnlockingTest is Test {
 
         // Update strategy debt to 0
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Fish redeems shares
         vm.startPrank(fish);
@@ -1147,7 +1147,7 @@ contract ProfitUnlockingTest is Test {
 
         // Setup accountant with pre-funded assets
         vm.startPrank(gov);
-        vault.setAccountant(address(flexibleAccountant));
+        vault.set_accountant(address(flexibleAccountant));
         flexibleAccountant.setFees(address(strategy), managementFee, performanceFee, refundRatio);
 
         // Important: Pre-fund the accountant with the loss amount
@@ -1162,7 +1162,7 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), amount, 0);
+        vault.update_debt(address(strategy), amount, 0);
 
         // Calculate expected refunds
         uint256 totalRefunds = (firstLoss * refundRatio) / MAX_BPS;
@@ -1174,7 +1174,7 @@ contract ProfitUnlockingTest is Test {
         // Report and process the loss
 
         vm.prank(gov);
-        (, uint256 loss) = vault.processReport(address(strategy));
+        (, uint256 loss) = vault.process_report(address(strategy));
 
         // Verify refunds were processed
         assertEq(loss, firstLoss);
@@ -1199,7 +1199,7 @@ contract ProfitUnlockingTest is Test {
         // Try to update strategy debt to 0 - should revert
         vm.prank(gov);
         vm.expectRevert(IMultistrategyVault.NewDebtEqualsCurrentDebt.selector);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Verify strategy debt is already 0
         assertEq(vault.strategies(address(strategy)).currentDebt, 0);
@@ -1247,7 +1247,7 @@ contract ProfitUnlockingTest is Test {
 
         // Setup accountant with funds for refunds
         vm.startPrank(gov);
-        vault.setAccountant(address(flexibleAccountant));
+        vault.set_accountant(address(flexibleAccountant));
         flexibleAccountant.setFees(address(strategy), state.managementFee, state.performanceFee, state.refundRatio);
 
         // Important: Pre-fund the accountant with 2x the amount as in Python test
@@ -1262,7 +1262,7 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), state.amount, 0);
+        vault.update_debt(address(strategy), state.amount, 0);
 
         // Calculate expected refunds for profit
         state.totalRefunds = (state.firstProfit * state.refundRatio) / MAX_BPS;
@@ -1272,7 +1272,7 @@ contract ProfitUnlockingTest is Test {
         asset.transfer(address(strategy), state.firstProfit);
 
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Record timestamp for later calculations
         state.timestamp = block.timestamp;
@@ -1318,7 +1318,7 @@ contract ProfitUnlockingTest is Test {
         strategy.simulateLoss(firstLoss);
 
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // The price per share should remain the same after loss with refunds
         assertApproxEqRel(vault.pricePerShare(), state.pricePerShare, 1e14);
@@ -1356,7 +1356,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Check totals after withdrawal
         checkVaultTotals(
@@ -1414,7 +1414,7 @@ contract ProfitUnlockingTest is Test {
 
         // Setup accountant with no fees
         vm.startPrank(gov);
-        vault.setAccountant(address(flexibleAccountant));
+        vault.set_accountant(address(flexibleAccountant));
         flexibleAccountant.setFees(address(strategy), state.managementFee, state.performanceFee, state.refundRatio);
         vm.stopPrank();
 
@@ -1426,14 +1426,14 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), state.amount, 0);
+        vault.update_debt(address(strategy), state.amount, 0);
 
         // Create first profit
         vm.prank(gov);
         asset.transfer(address(strategy), state.firstProfit);
 
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Record timestamp for later calculations
         state.timestamp = block.timestamp;
@@ -1474,7 +1474,7 @@ contract ProfitUnlockingTest is Test {
         strategy.simulateLoss(state.firstLoss);
 
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // The price per share should remain the same after loss (buffer absorbs it)
         assertApproxEqRel(vault.pricePerShare(), state.pricePerShare, 1e14);
@@ -1511,7 +1511,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Strategy debt should be zero
         assertEq(vault.strategies(address(strategy)).currentDebt, 0);
@@ -1561,7 +1561,7 @@ contract ProfitUnlockingTest is Test {
 
         // Setup accountant with management fee only
         vm.startPrank(gov);
-        vault.setAccountant(address(flexibleAccountant));
+        vault.set_accountant(address(flexibleAccountant));
         flexibleAccountant.setFees(address(strategy), state.managementFee, state.performanceFee, state.refundRatio);
         vm.stopPrank();
 
@@ -1573,7 +1573,7 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), state.amount, 0);
+        vault.update_debt(address(strategy), state.amount, 0);
 
         // Create first profit - need to bypass fees for the profit as in Python test
         uint256 initialDebt = vault.strategies(address(strategy)).currentDebt;
@@ -1587,7 +1587,7 @@ contract ProfitUnlockingTest is Test {
 
         // Process report
         vm.prank(gov);
-        (uint256 gain, ) = vault.processReport(address(strategy));
+        (uint256 gain, ) = vault.process_report(address(strategy));
 
         // Verify gain and calculate total profit fees
         assertEq(gain, state.firstProfit);
@@ -1631,7 +1631,7 @@ contract ProfitUnlockingTest is Test {
         strategy.simulateLoss(state.firstLoss);
 
         vm.prank(gov);
-        (, uint256 loss) = vault.processReport(address(strategy));
+        (, uint256 loss) = vault.process_report(address(strategy));
 
         // Verify loss is as expected
         assertEq(loss, state.firstLoss);
@@ -1665,7 +1665,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Strategy debt should be zero
         assertEq(vault.strategies(address(strategy)).currentDebt, 0);
@@ -1737,7 +1737,7 @@ contract ProfitUnlockingTest is Test {
 
         // Setup accountant with management fee
         vm.startPrank(gov);
-        vault.setAccountant(address(flexibleAccountant));
+        vault.set_accountant(address(flexibleAccountant));
         flexibleAccountant.setFees(address(strategy), state.managementFee, state.performanceFee, state.refundRatio);
         vm.stopPrank();
 
@@ -1749,7 +1749,7 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), state.amount, 0);
+        vault.update_debt(address(strategy), state.amount, 0);
 
         // Create first profit - bypass fees for profit as in Python test
         uint256 initialDebt = vault.strategies(address(strategy)).currentDebt;
@@ -1757,7 +1757,7 @@ contract ProfitUnlockingTest is Test {
         asset.transfer(address(strategy), state.firstProfit);
 
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Calculate profit fees
         uint256 totalProfitFees = vault.strategies(address(strategy)).currentDebt - initialDebt - state.firstProfit;
@@ -1796,7 +1796,7 @@ contract ProfitUnlockingTest is Test {
         strategy.simulateLoss(state.firstLoss);
 
         vm.prank(gov);
-        (, uint256 totalLossFees) = vault.processReport(address(strategy));
+        (, uint256 totalLossFees) = vault.process_report(address(strategy));
 
         uint256 totalLossFeesShares = vault.convertToShares(totalLossFees);
 
@@ -1840,7 +1840,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Strategy debt should be zero, price unchanged
         assertEq(vault.strategies(address(strategy)).currentDebt, 0);
@@ -1900,7 +1900,7 @@ contract ProfitUnlockingTest is Test {
 
         // Setup accountant
         vm.startPrank(gov);
-        vault.setAccountant(address(flexibleAccountant));
+        vault.set_accountant(address(flexibleAccountant));
         flexibleAccountant.setFees(address(strategy), managementFee, performanceFee, refundRatio);
 
         // Important: Pre-fund the accountant with the loss amount
@@ -1915,7 +1915,7 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), amount, 0);
+        vault.update_debt(address(strategy), amount, 0);
 
         // Fast forward one year to charge the full management fee (like in Python test)
         skip(YEAR);
@@ -1928,7 +1928,7 @@ contract ProfitUnlockingTest is Test {
         strategy.simulateLoss(firstLoss);
 
         vm.prank(gov);
-        (, uint256 loss) = vault.processReport(address(strategy));
+        (, uint256 loss) = vault.process_report(address(strategy));
 
         // Verify loss amount
         assertEq(loss, firstLoss);
@@ -2015,7 +2015,7 @@ contract ProfitUnlockingTest is Test {
 
         // Deploy accountan
         vm.startPrank(gov);
-        vault.setAccountant(address(flexibleAccountant));
+        vault.set_accountant(address(flexibleAccountant));
         flexibleAccountant.setFees(address(strategy), managementFee, performanceFee, refundRatio);
         vm.stopPrank();
 
@@ -2027,7 +2027,7 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), amount, 0);
+        vault.update_debt(address(strategy), amount, 0);
 
         // Skip time needed for the protocol to assess fees
         increaseTimeAndCheckProfitBuffer(10 days);
@@ -2041,7 +2041,7 @@ contract ProfitUnlockingTest is Test {
         vm.prank(gov);
         strategy.report();
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Assert both accounts got paid fees and the PPS stayed exactly the same
         assertGt(vault.balanceOf(address(flexibleAccountant)), 0);
@@ -2073,7 +2073,7 @@ contract ProfitUnlockingTest is Test {
         vm.prank(gov);
         strategy.report();
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Assert both accounts got paid fees again and the PPS stayed the same
         assertGt(vault.balanceOf(address(flexibleAccountant)), 0);
@@ -2088,7 +2088,7 @@ contract ProfitUnlockingTest is Test {
 
         // Set up vault with no fees
         vm.startPrank(gov);
-        vault.setAccountant(address(0)); // No accountant
+        vault.set_accountant(address(0)); // No accountant
         vm.stopPrank();
 
         // Deposit
@@ -2099,7 +2099,7 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), amount, 0);
+        vault.update_debt(address(strategy), amount, 0);
 
         // Create profit
         vm.prank(gov);
@@ -2107,7 +2107,7 @@ contract ProfitUnlockingTest is Test {
         vm.prank(gov);
         strategy.report();
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Record timestamp
         uint256 timestamp = 1; // set to 1 to avoid warp bug
@@ -2148,7 +2148,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Strategy debt should be zero
         assertEq(vault.strategies(address(strategy)).currentDebt, 0);
@@ -2190,7 +2190,7 @@ contract ProfitUnlockingTest is Test {
 
         // Set up vault with no fees
         vm.startPrank(gov);
-        vault.setAccountant(address(0)); // No accountant
+        vault.set_accountant(address(0)); // No accountant
         vm.stopPrank();
 
         // Deposit
@@ -2201,7 +2201,7 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), amount, 0);
+        vault.update_debt(address(strategy), amount, 0);
 
         // Create profit
         vm.prank(gov);
@@ -2209,7 +2209,7 @@ contract ProfitUnlockingTest is Test {
         vm.prank(gov);
         strategy.report();
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Initial checks
         assertPricePerShare(1 * 10 ** 18);
@@ -2249,7 +2249,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Strategy debt should be zero
         assertEq(vault.strategies(address(strategy)).currentDebt, 0);
@@ -2292,7 +2292,7 @@ contract ProfitUnlockingTest is Test {
 
         // Set up vault with no accountant
         vm.startPrank(gov);
-        vault.setAccountant(address(0));
+        vault.set_accountant(address(0));
         vm.stopPrank();
 
         // Deposit
@@ -2303,13 +2303,13 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), amount, 0);
+        vault.update_debt(address(strategy), amount, 0);
 
         // Create first profit
         vm.prank(gov);
         asset.transfer(address(strategy), firstProfit);
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Record timestamp
         uint256 timestamp = 1; // set to 1 to avoid warp bug
@@ -2351,7 +2351,7 @@ contract ProfitUnlockingTest is Test {
         vm.prank(gov);
         asset.transfer(address(strategy), secondProfit);
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Record new timestamp
         timestamp = 1 + WEEK;
@@ -2392,7 +2392,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Strategy debt should be zero
         assertEq(vault.strategies(address(strategy)).currentDebt, 0);
@@ -2437,7 +2437,7 @@ contract ProfitUnlockingTest is Test {
 
         // Set up vault with no accountant
         vm.startPrank(gov);
-        vault.setAccountant(address(0));
+        vault.set_accountant(address(0));
         vm.stopPrank();
 
         // Deposit
@@ -2448,13 +2448,13 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), amount, 0);
+        vault.update_debt(address(strategy), amount, 0);
 
         // Create first profit
         vm.prank(gov);
         asset.transfer(address(strategy), firstProfit);
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Record timestamp
         uint256 timestamp = 1; // set to 1 to avoid warp bug
@@ -2497,7 +2497,7 @@ contract ProfitUnlockingTest is Test {
         vm.prank(gov);
         asset.transfer(address(strategy), secondProfit);
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Record new timestamp
         timestamp = 1 + WEEK;
@@ -2530,7 +2530,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Strategy debt should be zero
         assertEq(vault.strategies(address(strategy)).currentDebt, 0);
@@ -2572,7 +2572,7 @@ contract ProfitUnlockingTest is Test {
 
         // Set up vault with no accountant
         vm.startPrank(gov);
-        vault.setAccountant(address(0));
+        vault.set_accountant(address(0));
         vm.stopPrank();
 
         // Deposit
@@ -2583,7 +2583,7 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), amount, 0);
+        vault.update_debt(address(strategy), amount, 0);
 
         // Create first profit
         createAndCheckProfit(firstProfit);
@@ -2629,7 +2629,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Strategy debt should be zero
         assertEq(vault.strategies(address(strategy)).currentDebt, 0);
@@ -2671,7 +2671,7 @@ contract ProfitUnlockingTest is Test {
 
         // Set up vault with no accountant
         vm.startPrank(gov);
-        vault.setAccountant(address(0));
+        vault.set_accountant(address(0));
 
         // Update profit max unlock time to zero BEFORE creating profits
         vault.setProfitMaxUnlockTime(0);
@@ -2691,7 +2691,7 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), amount, 0);
+        vault.update_debt(address(strategy), amount, 0);
 
         // Create profit
         createAndCheckProfit(firstProfit);
@@ -2709,7 +2709,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Strategy debt should be zero
         assertEq(vault.strategies(address(strategy)).currentDebt, 0);
@@ -2756,7 +2756,7 @@ contract ProfitUnlockingTest is Test {
 
         // Setup accountant with performance fee
         vm.startPrank(gov);
-        vault.setAccountant(address(flexibleAccountant));
+        vault.set_accountant(address(flexibleAccountant));
         flexibleAccountant.setFees(address(strategy), managementFee, performanceFee, refundRatio);
 
         // Update profit max unlock time to zero BEFORE creating profits
@@ -2777,7 +2777,7 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), amount, 0);
+        vault.update_debt(address(strategy), amount, 0);
 
         // Record initial price per share
         uint256 firstPricePerShare = vault.pricePerShare();
@@ -2788,7 +2788,7 @@ contract ProfitUnlockingTest is Test {
 
         // Process report
         vm.prank(gov);
-        (uint256 gain, uint256 loss) = vault.processReport(address(strategy));
+        (uint256 gain, uint256 loss) = vault.process_report(address(strategy));
 
         // Verify the correct gain and loss
         assertEq(gain, firstProfit);
@@ -2811,7 +2811,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Strategy debt should be zero
         assertEq(vault.strategies(address(strategy)).currentDebt, 0);
@@ -2868,7 +2868,7 @@ contract ProfitUnlockingTest is Test {
 
         // Set up vault with no accountant
         vm.startPrank(gov);
-        vault.setAccountant(address(0));
+        vault.set_accountant(address(0));
 
         // Update profit max unlock time to zero BEFORE creating the loss
         vault.setProfitMaxUnlockTime(0);
@@ -2888,14 +2888,14 @@ contract ProfitUnlockingTest is Test {
 
         // Allocate to strategy
         vm.prank(gov);
-        vault.updateDebt(address(strategy), amount, 0);
+        vault.update_debt(address(strategy), amount, 0);
 
         // Create and check loss
         vm.prank(gov);
         strategy.simulateLoss(firstLoss);
 
         vm.prank(gov);
-        (uint256 gain, uint256 loss) = vault.processReport(address(strategy));
+        (uint256 gain, uint256 loss) = vault.process_report(address(strategy));
 
         // Verify the loss was processed correctly
         assertEq(gain, 0);
@@ -2914,7 +2914,7 @@ contract ProfitUnlockingTest is Test {
 
         // Withdraw from strategy to idle
         vm.prank(gov);
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Strategy debt should be zero
         assertEq(vault.strategies(address(strategy)).currentDebt, 0);

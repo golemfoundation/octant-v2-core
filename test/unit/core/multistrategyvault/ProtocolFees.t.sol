@@ -51,19 +51,19 @@ contract ProtocolFeesTest is Test {
 
         vm.startPrank(gov);
         // Add roles to gov
-        vault.addRole(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.REVOKE_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.FORCE_REVOKE_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.ACCOUNTANT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.REPORTING_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MINIMUM_IDLE_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.REVOKE_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.FORCE_REVOKE_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ACCOUNTANT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.REPORTING_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MINIMUM_IDLE_MANAGER);
 
         // Set deposit limit to max
-        vault.setDepositLimit(type(uint256).max, true);
+        vault.set_deposit_limit(type(uint256).max, true);
         vm.stopPrank();
 
         return vault;
@@ -82,14 +82,14 @@ contract ProtocolFeesTest is Test {
 
     function addStrategyToVault(MultistrategyVault _vault, address strategyAddress) internal {
         vm.prank(gov);
-        _vault.addStrategy(strategyAddress, true);
+        _vault.add_strategy(strategyAddress, true);
         vm.prank(gov);
-        _vault.updateMaxDebtForStrategy(strategyAddress, type(uint256).max);
+        _vault.update_max_debt_for_strategy(strategyAddress, type(uint256).max);
     }
 
     function addDebtToStrategy(MultistrategyVault _vault, address strategyAddress, uint256 amount) internal {
         vm.prank(gov);
-        _vault.updateDebt(strategyAddress, amount, 0);
+        _vault.update_debt(strategyAddress, amount, 0);
     }
 
     function setFactoryFeeConfig(uint256 protocolFee, address recipient) internal {
@@ -115,7 +115,7 @@ contract ProtocolFeesTest is Test {
 
         // Set accountant for vault
         vm.prank(gov);
-        _vault.setAccountant(address(_accountant));
+        _vault.set_accountant(address(_accountant));
 
         // Deposit assets
         userDeposit(fish, _vault, amount);
@@ -149,7 +149,7 @@ contract ProtocolFeesTest is Test {
         // Process report
         vm.prank(gov);
 
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Check protocol shares
         uint256 sharesProtocol = vault.balanceOf(gov);
@@ -192,7 +192,7 @@ contract ProtocolFeesTest is Test {
 
         // Process report
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Check protocol shares
         uint256 sharesProtocol = vault.balanceOf(gov);
@@ -232,7 +232,7 @@ contract ProtocolFeesTest is Test {
         // Process report
         vm.prank(gov);
 
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Check protocol shares (should be 0)
         uint256 sharesProtocol = vault.balanceOf(gov);
@@ -273,7 +273,7 @@ contract ProtocolFeesTest is Test {
         // Process report
         vm.prank(gov);
 
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Check protocol shares (should be 0)
         uint256 sharesProtocol = vault.balanceOf(gov);

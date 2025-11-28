@@ -57,20 +57,20 @@ contract VaultSharesTest is Test {
         );
 
         // Set up roles for governance
-        newVault.addRole(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        newVault.add_role(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
         // report manager
-        newVault.addRole(reportingManager, IMultistrategyVault.Roles.REPORTING_MANAGER);
+        newVault.add_role(reportingManager, IMultistrategyVault.Roles.REPORTING_MANAGER);
         // strategy manager
-        newVault.addRole(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
+        newVault.add_role(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
         // MAX_DEBT_MANAGER
-        newVault.addRole(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
+        newVault.add_role(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
         // DEBT_MANAGER
-        newVault.addRole(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
+        newVault.add_role(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
         // DEBT_PURCHASER
-        newVault.addRole(debtPurchaser, IMultistrategyVault.Roles.DEBT_PURCHASER);
+        newVault.add_role(debtPurchaser, IMultistrategyVault.Roles.DEBT_PURCHASER);
 
         if (depositLimit > 0) {
-            newVault.setDepositLimit(depositLimit, true);
+            newVault.set_deposit_limit(depositLimit, true);
         }
 
         return newVault;
@@ -84,8 +84,8 @@ contract VaultSharesTest is Test {
 
         // Add strategy to vault
         vm.startPrank(gov);
-        newVault.addStrategy(address(newStrategy), true);
-        newVault.updateMaxDebtForStrategy(address(newStrategy), type(uint256).max);
+        newVault.add_strategy(address(newStrategy), true);
+        newVault.update_max_debt_for_strategy(address(newStrategy), type(uint256).max);
         vm.stopPrank();
 
         // User deposit
@@ -95,7 +95,7 @@ contract VaultSharesTest is Test {
         vm.stopPrank();
 
         // Allocate to strategy
-        newVault.updateDebt(address(newStrategy), amount, 0);
+        newVault.update_debt(address(newStrategy), amount, 0);
 
         return (newVault, newStrategy);
     }
@@ -116,7 +116,7 @@ contract VaultSharesTest is Test {
 
         // Process report
         vm.startPrank(reportingManager);
-        v.processReport(address(strat));
+        v.process_report(address(strat));
         vm.stopPrank();
 
         // Return the reported fees
@@ -440,7 +440,7 @@ contract VaultSharesTest is Test {
 
         vm.expectEmit(true, true, true, true);
         emit IMultistrategyVault.UpdateDepositLimit(depositLimit);
-        vault.setDepositLimit(depositLimit, true);
+        vault.set_deposit_limit(depositLimit, true);
 
         assertEq(vault.depositLimit(), depositLimit);
     }
@@ -451,7 +451,7 @@ contract VaultSharesTest is Test {
 
         vm.expectEmit(true, true, true, true);
         emit IMultistrategyVault.UpdateDepositLimit(depositLimit);
-        vault.setDepositLimit(depositLimit, true);
+        vault.set_deposit_limit(depositLimit, true);
 
         assertEq(vault.depositLimit(), depositLimit);
     }
@@ -462,7 +462,7 @@ contract VaultSharesTest is Test {
 
         vm.expectEmit(true, true, true, true);
         emit IMultistrategyVault.UpdateDepositLimit(depositLimit);
-        vault.setDepositLimit(depositLimit, true);
+        vault.set_deposit_limit(depositLimit, true);
 
         assertEq(vault.depositLimit(), depositLimit);
     }
@@ -478,13 +478,13 @@ contract VaultSharesTest is Test {
         createProfit(strategy, vault, firstProfit);
 
         // Withdraw funds from strategy
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Verify more shares than deposits due to profit unlock
         assertGt(vault.totalSupply(), amount);
 
         // Set deposit limit to max
-        vault.setDepositLimit(type(uint256).max, true);
+        vault.set_deposit_limit(type(uint256).max, true);
 
         // User redeems shares
         vm.startPrank(fish);
@@ -501,7 +501,7 @@ contract VaultSharesTest is Test {
         assertEq(vault.totalSupply(), 0);
 
         // Before the second deposit attempt, add:
-        vault.setDepositLimit(type(uint256).max, true);
+        vault.set_deposit_limit(type(uint256).max, true);
 
         // Deposit again
         vm.startPrank(fish);
@@ -524,7 +524,7 @@ contract VaultSharesTest is Test {
         createProfit(strategy, vault, firstProfit);
 
         // Withdraw funds from strategy
-        vault.updateDebt(address(strategy), 0, 0);
+        vault.update_debt(address(strategy), 0, 0);
 
         // Verify more shares than deposits due to profit unlock
         assertGt(vault.totalSupply(), amount);
@@ -544,7 +544,7 @@ contract VaultSharesTest is Test {
         assertEq(vault.totalSupply(), 0);
 
         // Before the second deposit attempt, add:
-        vault.setDepositLimit(type(uint256).max, true);
+        vault.set_deposit_limit(type(uint256).max, true);
 
         // Mint again
         vm.startPrank(fish);
@@ -573,7 +573,7 @@ contract VaultSharesTest is Test {
 
         // Process report
         vm.startPrank(reportingManager);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
         vm.stopPrank();
 
         // Verify zero total assets but non-zero supply
@@ -609,7 +609,7 @@ contract VaultSharesTest is Test {
 
         // Process report
         vm.startPrank(reportingManager);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
         vm.stopPrank();
 
         // Verify zero total assets but non-zero supply
