@@ -95,23 +95,23 @@ contract ShutterDAOIntegrationTest is Test {
             octantGovernance
         );
 
-        vm.startPrank(octantGovernance);
+        vm.startPrank(shutterDAOTreasury);
         dragonVault = MultistrategyVault(
             vaultFactory.deployNewVault(
                 address(usdc),
                 "Shutter Dragon Vault",
                 "sdUSDC",
-                octantGovernance,
+                shutterDAOTreasury,
                 PROFIT_MAX_UNLOCK_TIME
             )
         );
 
-        dragonVault.addRole(octantGovernance, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
-        dragonVault.addRole(octantGovernance, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
-        dragonVault.addRole(octantGovernance, IMultistrategyVault.Roles.DEBT_MANAGER);
-        dragonVault.addRole(octantGovernance, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        dragonVault.addRole(octantGovernance, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
-        dragonVault.addRole(octantGovernance, IMultistrategyVault.Roles.QUEUE_MANAGER);
+        dragonVault.addRole(shutterDAOTreasury, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        dragonVault.addRole(shutterDAOTreasury, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
+        dragonVault.addRole(shutterDAOTreasury, IMultistrategyVault.Roles.DEBT_MANAGER);
+        dragonVault.addRole(shutterDAOTreasury, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
+        dragonVault.addRole(shutterDAOTreasury, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
+        dragonVault.addRole(shutterDAOTreasury, IMultistrategyVault.Roles.QUEUE_MANAGER);
         dragonVault.addRole(keeper, IMultistrategyVault.Roles.DEBT_MANAGER);
 
         dragonVault.setDepositLimit(type(uint256).max, true);
@@ -121,7 +121,7 @@ contract ShutterDAOIntegrationTest is Test {
     function _deployStrategy() internal {
         strategy = new MockYieldStrategy(address(usdc), address(dragonVault));
 
-        vm.startPrank(octantGovernance);
+        vm.startPrank(shutterDAOTreasury);
         dragonVault.addStrategy(address(strategy), true);
         dragonVault.updateMaxDebtForStrategy(address(strategy), type(uint256).max);
         vm.stopPrank();
@@ -172,7 +172,7 @@ contract ShutterDAOIntegrationTest is Test {
     }
 
     function test_AutoAllocateDeploysToStrategy() public {
-        vm.prank(octantGovernance);
+        vm.prank(shutterDAOTreasury);
         dragonVault.setAutoAllocate(true);
 
         uint256 depositAmount = TREASURY_USDC_BALANCE;
@@ -223,7 +223,7 @@ contract ShutterDAOIntegrationTest is Test {
     }
 
     function test_TreasuryCanWithdrawFromStrategy() public {
-        vm.prank(octantGovernance);
+        vm.prank(shutterDAOTreasury);
         dragonVault.setAutoAllocate(true);
 
         uint256 depositAmount = TREASURY_USDC_BALANCE;
@@ -304,7 +304,7 @@ contract ShutterDAOIntegrationTest is Test {
     }
 
     function test_EndToEndScenario() public {
-        vm.prank(octantGovernance);
+        vm.prank(shutterDAOTreasury);
         dragonVault.setAutoAllocate(true);
 
         vm.startPrank(shutterDAOTreasury);
