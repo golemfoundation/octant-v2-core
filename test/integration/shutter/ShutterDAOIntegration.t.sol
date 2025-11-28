@@ -17,10 +17,12 @@ import { IAddressSet } from "src/utils/IAddressSet.sol";
 import { AccessMode } from "src/constants.sol";
 
 import { MorphoCompounderStrategy } from "src/strategies/yieldDonating/MorphoCompounderStrategy.sol";
+import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20Staking } from "staker/interfaces/IERC20Staking.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 /**
  * @title ShutterDAOIntegrationTest
@@ -48,7 +50,7 @@ contract ShutterDAOIntegrationTest is Test {
     MultistrategyVaultFactory vaultFactory;
     MultistrategyVault dragonVault;
     MorphoCompounderStrategy strategy;
-    TokenizedStrategy strategyImpl;
+    YieldDonatingTokenizedStrategy strategyImpl;
     PaymentSplitter paymentSplitter;
 
     RegenStaker regenStaker;
@@ -93,7 +95,7 @@ contract ShutterDAOIntegrationTest is Test {
 
     function _deployInfrastructure() internal {
         vaultImplementation = new MultistrategyVault();
-        strategyImpl = new TokenizedStrategy();
+        strategyImpl = new YieldDonatingTokenizedStrategy();
 
         vm.prank(octantGovernance);
         vaultFactory = new MultistrategyVaultFactory(
@@ -216,7 +218,7 @@ contract ShutterDAOIntegrationTest is Test {
         // Strategy itself should have 0 idle USDC
         assertEq(IERC20(USDC_TOKEN).balanceOf(address(strategy)), 0);
         // But should track assets
-        assertApproxEqAbs(strategy.totalAssets(), depositAmount, 1000);
+        assertApproxEqAbs(IERC4626(address(strategy)).totalAssets(), depositAmount, 1000);
 
         assertEq(dragonVault.totalDebt(), depositAmount);
         assertEq(dragonVault.totalIdle(), 0);
@@ -245,7 +247,7 @@ contract ShutterDAOIntegrationTest is Test {
 
         assertEq(dragonVault.totalDebt(), depositAmount);
         assertEq(dragonVault.totalIdle(), 0);
-        assertApproxEqAbs(strategy.totalAssets(), depositAmount, 1000);
+        assertApproxEqAbs(IERC4626(address(strategy)).totalAssets(), depositAmount, 1000);
     }
 
     function test_TreasuryCanWithdrawInstantly() public {
@@ -396,19 +398,22 @@ contract ShutterDAOGasProfilingTest is Test {
             octantGovernance
         );
 
-        TokenizedStrategy strategyImpl = new TokenizedStrategy();
-        // PaymentSplitter setup (proxy pattern)
-        address[] memory payees = new address[](2);
-        payees[0] = makeAddr("ESF");
-        payees[1] = makeAddr("DragonFundingPool");
-        uint256[] memory shares = new uint256[](2);
-        shares[0] = 0;
-        shares[1] = 100;
+        YieldDonatingTokenizedStrategy strategyImpl = new YieldDonatingTokenizedStrategy();
+        PaymentSplitter paymentSplitter;
+        {
+            // PaymentSplitter setup (proxy pattern)
+            address[] memory payees = new address[](2);
+            payees[0] = makeAddr("ESF");
+            payees[1] = makeAddr("DragonFundingPool");
+            uint256[] memory shares = new uint256[](2);
+            shares[0] = 0;
+            shares[1] = 100;
 
-        PaymentSplitter paymentSplitterImpl = new PaymentSplitter();
-        bytes memory initData = abi.encodeCall(PaymentSplitter.initialize, (payees, shares));
-        ERC1967Proxy proxy = new ERC1967Proxy(address(paymentSplitterImpl), initData);
-        PaymentSplitter paymentSplitter = PaymentSplitter(payable(address(proxy)));
+            PaymentSplitter paymentSplitterImpl = new PaymentSplitter();
+            bytes memory initData = abi.encodeCall(PaymentSplitter.initialize, (payees, shares));
+            ERC1967Proxy proxy = new ERC1967Proxy(address(paymentSplitterImpl), initData);
+            paymentSplitter = PaymentSplitter(payable(address(proxy)));
+        }
 
         uint256 gasAfterFactoryDeploy = gasleft();
 
@@ -474,6 +479,11 @@ contract ShutterDAOGasProfilingTest is Test {
 
         // Metrics
         uint256 daoProposalGas = totalGasUsed - (gasStart - gasAfterFactoryDeploy);
+
+        emit log_named_uint("Strategy Deploy Cost", gasAfterFactoryDeploy - gasAfterStrategyDeploy);
+        emit log_named_uint("Vault Deploy Cost", gasAfterStrategyDeploy - gasAfterVaultDeploy);
+        emit log_named_uint("Config Cost", gasAfterVaultDeploy - gasAfterConfig);
+        emit log_named_uint("Approve/Deposit Cost", gasAfterConfig - gasEnd);
 
         emit log_named_uint("=== TOTAL GAS USED (Fork) ===", totalGasUsed);
         emit log_named_uint("=== DAO PROPOSAL GAS (Fork) ===", daoProposalGas);
