@@ -104,7 +104,7 @@ contract ShutterDAOIntegrationTest is Test {
     }
 
     function _deployVaultAndStrategy() internal {
-        // Donation Splitter (5% ESF, 95% Dragon Pool)
+        // Donation Splitter (0% ESF, 100% Dragon Pool)
         address[] memory payees = new address[](2);
         payees[0] = makeAddr("ESF");
         payees[1] = makeAddr("DragonFundingPool");

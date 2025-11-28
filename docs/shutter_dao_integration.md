@@ -56,10 +56,10 @@ The Multistrategy Vault manages treasury capital with instant liquidity (no lock
 
 | Metric | Annual |
 |--------|--------|
-| Gross Yield | 75,000 USDC |
+| Gross Yield | 60,000 USDC |
 | To ESF | 0 USDC |
-| To Dragon Funding Pool | 75,000 USDC |
-| Epochs Supported | ~3 per year (~25,000 USDC each) |
+| To Dragon Funding Pool | 60,000 USDC |
+| Epochs Supported | ~3 per year (~20,000 USDC each) |
 
 ---
 
