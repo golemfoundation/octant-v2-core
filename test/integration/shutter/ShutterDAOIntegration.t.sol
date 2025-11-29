@@ -7,7 +7,6 @@ import { console2 } from "forge-std/console2.sol";
 import { MultistrategyVault } from "src/core/MultistrategyVault.sol";
 import { MultistrategyVaultFactory } from "src/factories/MultistrategyVaultFactory.sol";
 import { IMultistrategyVault } from "src/core/interfaces/IMultistrategyVault.sol";
-import { TokenizedStrategy } from "src/core/TokenizedStrategy.sol";
 import { PaymentSplitter } from "src/core/PaymentSplitter.sol";
 
 import { RegenStaker } from "src/regen/RegenStaker.sol";
