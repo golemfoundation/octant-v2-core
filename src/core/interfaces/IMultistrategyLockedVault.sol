@@ -19,12 +19,15 @@ interface IMultistrategyLockedVault is IMultistrategyVault {
     error TransferExceedsAvailableShares();
     error NoPendingRageQuitCooldownPeriodChange();
     error RageQuitCooldownPeriodChangeDelayNotElapsed();
+    error RageQuitCooldownPeriodChangeDelayElapsed();
+    error InvalidGovernanceAddress();
 
     // Events
     event RageQuitInitiated(address indexed user, uint256 shares, uint256 unlockTime);
     event RageQuitCooldownPeriodChanged(uint256 oldPeriod, uint256 newPeriod);
     event PendingRageQuitCooldownPeriodChange(uint256 newPeriod, uint256 effectiveTimestamp);
     event RageQuitCancelled(address indexed user, uint256 freedShares);
+    event RegenGovernanceChanged(address indexed previousGovernance, address indexed newGovernance);
 
     // Storage for lockup information per user
     struct LockupInfo {
@@ -44,7 +47,28 @@ interface IMultistrategyLockedVault is IMultistrategyVault {
     function cancelRageQuitCooldownPeriodChange() external;
     function getPendingRageQuitCooldownPeriod() external view returns (uint256);
     function getRageQuitCooldownPeriodChangeTimestamp() external view returns (uint256);
+    /**
+     * @notice Sets the regen governance address authorized to manage rage quit parameters.
+     * @param _regenGovernance The new regen governance address.
+     */
     function setRegenGovernance(address _regenGovernance) external;
+
+    /**
+     * @notice Cancels an active rage quit for the caller and frees any locked shares.
+     */
     function cancelRageQuit() external;
-    function getCustodyInfo(address user) external view returns (uint256 lockedShares, uint256 unlockTime);
+
+    /**
+     * @notice Get the amount of shares that can be transferred by a user
+     * @param user The address to check transferable shares for
+     * @return The amount of shares available for transfer (not locked in custody)
+     */
+    function getTransferableShares(address user) external view returns (uint256);
+
+    /**
+     * @notice Get the amount of shares available for rage quit initiation
+     * @param user The address to check rage quitable shares for
+     * @return The amount of shares available for initiating rage quit
+     */
+    function getRageQuitableShares(address user) external view returns (uint256);
 }

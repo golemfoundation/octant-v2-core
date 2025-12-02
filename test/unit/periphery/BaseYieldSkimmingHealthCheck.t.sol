@@ -55,13 +55,6 @@ contract YieldSkimmingHealthCheckLogic is BaseYieldSkimmingHealthCheck {
         return exchangeRateDecimalsStored;
     }
 
-    function getTotalUserDebtInAssetValue() external view returns (uint256) {
-        return totalUserDebtStored;
-    }
-
-    function getDragonRouterDebtInAssetValue() external view returns (uint256) {
-        return dragonRouterDebtStored;
-    }
 
     function getTotalValueDebtInAssetValue() external view returns (uint256) {
         return totalUserDebtStored + dragonRouterDebtStored;

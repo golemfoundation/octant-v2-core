@@ -83,8 +83,8 @@ contract TwoStepCooldownChangeInvariantTest is Test {
         vault.proposeRageQuitCooldownPeriodChange(newPeriod);
         vm.stopPrank();
 
-        assertEq(vault.getPendingRageQuitCooldownPeriod(), newPeriod, "Pending period should be set");
-        assertEq(vault.getRageQuitCooldownPeriodChangeTimestamp(), expectedTimestamp, "Timestamp should be set");
+        assertEq(vault.pendingRageQuitCooldownPeriod(), newPeriod, "Pending period should be set");
+        assertEq(vault.rageQuitCooldownPeriodChangeTimestamp(), expectedTimestamp, "Timestamp should be set");
         assertEq(vault.rageQuitCooldownPeriod(), INITIAL_COOLDOWN, "Current period should be unchanged");
     }
 
@@ -97,7 +97,7 @@ contract TwoStepCooldownChangeInvariantTest is Test {
         vault.proposeRageQuitCooldownPeriodChange(21 days);
         vm.stopPrank();
 
-        assertEq(vault.getPendingRageQuitCooldownPeriod(), 21 days, "Should replace pending change");
+        assertEq(vault.pendingRageQuitCooldownPeriod(), 21 days, "Should replace pending change");
     }
 
     // ===== GRACE PERIOD INVARIANTS =====
@@ -138,7 +138,7 @@ contract TwoStepCooldownChangeInvariantTest is Test {
         vault.initiateRageQuit(userShares);
         vm.stopPrank();
 
-        (uint256 lockedShares, uint256 unlockTime) = vault.getCustodyInfo(user1);
+        (uint256 lockedShares, uint256 unlockTime) = vault.custodyInfo(user1);
         assertGt(lockedShares, 0, "User should have locked shares");
         assertEq(unlockTime, block.timestamp + INITIAL_COOLDOWN, "Should use current cooldown period");
     }
@@ -153,7 +153,7 @@ contract TwoStepCooldownChangeInvariantTest is Test {
         // Fast forward but not past delay
         vm.warp(block.timestamp + CHANGE_DELAY - 1);
 
-        assertEq(vault.getPendingRageQuitCooldownPeriod(), newPeriod, "Pending change should persist");
+        assertEq(vault.pendingRageQuitCooldownPeriod(), newPeriod, "Pending change should persist");
     }
 
     // ===== FINALIZATION INVARIANTS =====
@@ -211,8 +211,8 @@ contract TwoStepCooldownChangeInvariantTest is Test {
         vm.stopPrank();
 
         assertEq(vault.rageQuitCooldownPeriod(), newPeriod, "Period should be updated");
-        assertEq(vault.getPendingRageQuitCooldownPeriod(), 0, "Pending period should be cleared");
-        assertEq(vault.getRageQuitCooldownPeriodChangeTimestamp(), 0, "Timestamp should be cleared");
+        assertEq(vault.pendingRageQuitCooldownPeriod(), 0, "Pending period should be cleared");
+        assertEq(vault.rageQuitCooldownPeriodChangeTimestamp(), 0, "Timestamp should be cleared");
     }
 
     function invariant_CannotFinalizeNonExistentChange() public {
@@ -257,8 +257,8 @@ contract TwoStepCooldownChangeInvariantTest is Test {
         vault.cancelRageQuitCooldownPeriodChange();
         vm.stopPrank();
 
-        assertEq(vault.getPendingRageQuitCooldownPeriod(), 0, "Pending period should be cleared");
-        assertEq(vault.getRageQuitCooldownPeriodChangeTimestamp(), 0, "Timestamp should be cleared");
+        assertEq(vault.pendingRageQuitCooldownPeriod(), 0, "Pending period should be cleared");
+        assertEq(vault.rageQuitCooldownPeriodChangeTimestamp(), 0, "Timestamp should be cleared");
     }
 
     function invariant_CannotCancelNonExistentChange() public {
@@ -311,8 +311,8 @@ contract TwoStepCooldownChangeInvariantTest is Test {
         vm.stopPrank();
 
         // Check cooldown periods
-        (, uint256 user1UnlockTime) = vault.getCustodyInfo(user1);
-        (, uint256 user2UnlockTime) = vault.getCustodyInfo(user2);
+        (, uint256 user1UnlockTime) = vault.custodyInfo(user1);
+        (, uint256 user2UnlockTime) = vault.custodyInfo(user2);
 
         // User1 should have used old period (7 days from their rage quit time)
         // User2 should have used new period (21 days from their rage quit time)
@@ -327,8 +327,8 @@ contract TwoStepCooldownChangeInvariantTest is Test {
 
     function invariant_StateConsistencyWhenNoPendingChange() public {
         // Initially, no pending change
-        assertEq(vault.getPendingRageQuitCooldownPeriod(), 0, "No pending period initially");
-        assertEq(vault.getRageQuitCooldownPeriodChangeTimestamp(), 0, "No timestamp initially");
+        assertEq(vault.pendingRageQuitCooldownPeriod(), 0, "No pending period initially");
+        assertEq(vault.rageQuitCooldownPeriodChangeTimestamp(), 0, "No timestamp initially");
 
         // After cancellation
         vm.startPrank(gov);
@@ -337,8 +337,8 @@ contract TwoStepCooldownChangeInvariantTest is Test {
         vault.cancelRageQuitCooldownPeriodChange();
         vm.stopPrank();
 
-        assertEq(vault.getPendingRageQuitCooldownPeriod(), 0, "No pending period after cancel");
-        assertEq(vault.getRageQuitCooldownPeriodChangeTimestamp(), 0, "No timestamp after cancel");
+        assertEq(vault.pendingRageQuitCooldownPeriod(), 0, "No pending period after cancel");
+        assertEq(vault.rageQuitCooldownPeriodChangeTimestamp(), 0, "No timestamp after cancel");
 
         // After finalization
         vm.startPrank(gov);
@@ -350,8 +350,8 @@ contract TwoStepCooldownChangeInvariantTest is Test {
         vault.finalizeRageQuitCooldownPeriodChange();
         vm.stopPrank();
 
-        assertEq(vault.getPendingRageQuitCooldownPeriod(), 0, "No pending period after finalize");
-        assertEq(vault.getRageQuitCooldownPeriodChangeTimestamp(), 0, "No timestamp after finalize");
+        assertEq(vault.pendingRageQuitCooldownPeriod(), 0, "No pending period after finalize");
+        assertEq(vault.rageQuitCooldownPeriodChangeTimestamp(), 0, "No timestamp after finalize");
     }
 
     function invariant_CurrentPeriodOnlyChangesOnFinalization() public {

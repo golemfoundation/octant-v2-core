@@ -1133,7 +1133,7 @@ contract MultistrategyVault is IMultistrategyVault {
         address owner_,
         uint256 maxLoss_,
         address[] calldata strategiesArray_
-    ) external view override returns (uint256) {
+    ) external view virtual override returns (uint256) {
         return _maxWithdraw(owner_, maxLoss_, strategiesArray_);
     }
 
@@ -1151,7 +1151,7 @@ contract MultistrategyVault is IMultistrategyVault {
         address owner_,
         uint256 maxLoss_,
         address[] calldata strategiesArray_
-    ) external view override returns (uint256) {
+    ) external view virtual override returns (uint256) {
         return
             Math.min(
                 // Min of the shares equivalent of max_withdraw or the full balance

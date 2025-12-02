@@ -27,9 +27,7 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
 
     /// @dev Storage for yield skimming strategy
     struct YieldSkimmingStorage {
-        uint256 totalUserDebtInAssetValue; // Track ETH value owed to users only
         uint256 lastReportedRate; // Track the last reported rate
-        uint256 dragonRouterDebtInAssetValue; // Track the ETH value owed to dragon router
     }
 
     // exchange rate storage slot
@@ -76,9 +74,6 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
         shares = assets.mulDiv(currentRate, WadRayMath.RAY);
         require(shares != 0, "ZERO_SHARES");
 
-        // Update value debt
-        YS.totalUserDebtInAssetValue += shares;
-
         // Call internal deposit to handle transfers and minting
         _deposit(S, receiver, assets, shares);
 
@@ -114,25 +109,10 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
         assets = shares.mulDiv(WadRayMath.RAY, currentRate, Math.Rounding.Ceil);
         require(assets != 0, "ZERO_ASSETS");
 
-        // Update value debt
-        YS.totalUserDebtInAssetValue += shares;
-
         // Call internal deposit to handle transfers and minting
         _deposit(S, receiver, assets, shares);
 
         return assets;
-    }
-
-    /**
-     * @notice Redeem shares from the strategy with default maxLoss
-     * @dev Wrapper that calls the full redeem function with MAX_BPS maxLoss
-     * @param shares The amount of shares to redeem
-     * @param receiver The address to receive the assets
-     * @param owner The address whose shares are being redeemed
-     * @return assets The amount of assets returned
-     */
-    function redeem(uint256 shares, address receiver, address owner) external override returns (uint256 assets) {
-        return redeem(shares, receiver, owner, MAX_BPS);
     }
 
     /**
@@ -151,38 +131,14 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
         uint256 maxLoss
     ) public override nonReentrant returns (uint256 assets) {
         StrategyData storage S = _strategyStorage();
-        YieldSkimmingStorage storage YS = _strategyYieldSkimmingStorage();
 
-        // Dragon cannot withdraw during insolvency - must protect users
-        _requireDragonSolvency(owner);
-
-        // Calculate actual value returned for debt tracking (before redemption)
-        uint256 valueToReturn = shares; // 1 share = 1 ETH value (regardless of actual assets received)
+        // Check if dragon redemption would compromise vault solvency
+        _requireDragonSolvencyAfterOperation(owner, address(0), shares);
 
         // Validate inputs and check limits (replaces super.redeem validation)
         require(shares <= _maxRedeem(S, owner), "ERC4626: redeem more than max");
         require((assets = _convertToAssets(S, shares, Math.Rounding.Floor)) != 0, "ZERO_ASSETS");
         assets = _withdraw(S, receiver, owner, assets, shares, maxLoss);
-
-        // Update value debt after successful redemption (only for users)
-        if (owner != S.dragonRouter) {
-            YS.totalUserDebtInAssetValue = YS.totalUserDebtInAssetValue > valueToReturn
-                ? YS.totalUserDebtInAssetValue - valueToReturn
-                : 0;
-        } else {
-            YS.dragonRouterDebtInAssetValue = YS.dragonRouterDebtInAssetValue > valueToReturn
-                ? YS.dragonRouterDebtInAssetValue - valueToReturn
-                : 0;
-        }
-
-        // if vault is empty, reset all debts to 0
-        if (_totalSupply(S) == 0) {
-            YS.totalUserDebtInAssetValue = 0;
-            YS.dragonRouterDebtInAssetValue = 0;
-        }
-
-        // Check solvency after withdrawal and debt update to prevent dragon from making vault insolvent
-        _requireDragonSolvency(owner);
 
         return assets;
     }
@@ -203,52 +159,17 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
         uint256 maxLoss
     ) public override nonReentrant returns (uint256 shares) {
         StrategyData storage S = _strategyStorage();
-        YieldSkimmingStorage storage YS = _strategyYieldSkimmingStorage();
-
-        // Dragon cannot withdraw during insolvency - must protect users
-        _requireDragonSolvency(owner);
 
         // Validate inputs and check limits (replaces super.withdraw validation)
         require(assets <= _maxWithdraw(S, owner), "ERC4626: withdraw more than max");
         require((shares = _convertToShares(S, assets, Math.Rounding.Ceil)) != 0, "ZERO_SHARES");
 
-        // Calculate actual value returned for debt tracking (before withdrawal)
-        uint256 valueToReturn = shares; // 1 share = 1 ETH value
+        // Check if dragon withdrawal would compromise vault solvency
+        _requireDragonSolvencyAfterOperation(owner, address(0), shares);
+
         _withdraw(S, receiver, owner, assets, shares, maxLoss);
 
-        // Update value debt after successful withdrawal (only for users)
-        if (owner != S.dragonRouter) {
-            YS.totalUserDebtInAssetValue = YS.totalUserDebtInAssetValue > valueToReturn
-                ? YS.totalUserDebtInAssetValue - valueToReturn
-                : 0;
-        } else {
-            YS.dragonRouterDebtInAssetValue = YS.dragonRouterDebtInAssetValue > valueToReturn
-                ? YS.dragonRouterDebtInAssetValue - valueToReturn
-                : 0;
-        }
-
-        // if vault is empty, reset all debts to 0
-        if (_totalSupply(S) == 0) {
-            YS.totalUserDebtInAssetValue = 0;
-            YS.dragonRouterDebtInAssetValue = 0;
-        }
-
-        // Check solvency after withdrawal and debt update to prevent dragon from making vault insolvent
-        _requireDragonSolvency(owner);
-
         return shares;
-    }
-
-    /**
-     * @notice Withdraw assets from the strategy with default maxLoss
-     * @dev Wrapper that calls the full withdraw function with 0 maxLoss
-     * @param assets The amount of assets to withdraw
-     * @param receiver The address to receive the assets
-     * @param owner The address whose shares are being redeemed
-     * @return shares The amount of shares burned
-     */
-    function withdraw(uint256 assets, address receiver, address owner) external override returns (uint256 shares) {
-        return withdraw(assets, receiver, owner, 0);
     }
 
     /**
@@ -287,10 +208,18 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
      */
     function maxWithdraw(address owner) public view override returns (uint256) {
         StrategyData storage S = _strategyStorage();
-        if (owner == S.dragonRouter && _isVaultInsolvent()) {
-            return 0;
+
+        uint256 baseMaxWithdraw = super.maxWithdraw(owner);
+
+        // Apply dragon-specific restrictions
+        if (owner == S.dragonRouter) {
+            uint256 dragonMaxRedeemShares = _maxDragonRedeemableShares();
+
+            uint256 dragonMaxWithdrawAssets = _convertToAssets(S, dragonMaxRedeemShares, Math.Rounding.Floor);
+            return Math.min(dragonMaxWithdrawAssets, baseMaxWithdraw);
         }
-        return super.maxWithdraw(owner);
+
+        return baseMaxWithdraw;
     }
 
     /**
@@ -301,35 +230,17 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
      */
     function maxRedeem(address owner) public view override returns (uint256) {
         StrategyData storage S = _strategyStorage();
-        if (owner == S.dragonRouter && _isVaultInsolvent()) {
-            return 0;
+
+        // Get base max redeem from parent
+        uint256 baseMaxRedeem = super.maxRedeem(owner);
+
+        // Apply dragon-specific restrictions
+        if (owner == S.dragonRouter) {
+            uint256 dragonMaxRedeem = _maxDragonRedeemableShares();
+            return Math.min(baseMaxRedeem, dragonMaxRedeem);
         }
-        return super.maxRedeem(owner);
-    }
 
-    /**
-     * @notice Get the total ETH value debt owed to users
-     * @return The total user debt in asset value
-     */
-    function getTotalUserDebtInAssetValue() external view returns (uint256) {
-        return _strategyYieldSkimmingStorage().totalUserDebtInAssetValue;
-    }
-
-    /**
-     * @notice Get the total ETH value debt owed to dragon router
-     * @return The total dragon router debt in asset value
-     */
-    function getDragonRouterDebtInAssetValue() external view returns (uint256) {
-        return _strategyYieldSkimmingStorage().dragonRouterDebtInAssetValue;
-    }
-
-    /**
-     * @notice Get the total ETH value debt owed to both users and dragon router combined
-     * @return The total debt in asset value (users + dragon router)
-     */
-    function getTotalValueDebtInAssetValue() external view returns (uint256) {
-        YieldSkimmingStorage storage YS = _strategyYieldSkimmingStorage();
-        return YS.totalUserDebtInAssetValue + YS.dragonRouterDebtInAssetValue;
+        return baseMaxRedeem;
     }
 
     /**
@@ -347,16 +258,11 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
             revert("Dragon cannot transfer to itself");
         }
 
-        // Dragon can only transfer when vault is solvent
-        _requireDragonSolvency(msg.sender);
-
-        // Handle debt rebalancing when dragon is involved
-        if (msg.sender == S.dragonRouter || to == S.dragonRouter) {
-            _rebalanceDebtOnDragonTransfer(msg.sender, to, amount);
-        }
+        _requireDragonSolvencyAfterOperation(msg.sender, to, amount);
 
         // Use base contract logic for actual transfer
         _transfer(S, msg.sender, to, amount);
+
         return true;
     }
 
@@ -376,17 +282,12 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
             revert("Dragon cannot transfer to itself");
         }
 
-        // Dragon can only transfer when vault is solvent
-        _requireDragonSolvency(from);
-
-        // Handle debt rebalancing when dragon is involved
-        if (from == S.dragonRouter || to == S.dragonRouter) {
-            _rebalanceDebtOnDragonTransfer(from, to, amount);
-        }
+        _requireDragonSolvencyAfterOperation(from, to, amount);
 
         // Use base contract logic for actual transfer
         _spendAllowance(S, from, msg.sender, amount);
         _transfer(S, from, to, amount);
+
         return true;
     }
 
@@ -426,13 +327,12 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
         }
 
         uint256 currentRate = _currentRateRay();
-        uint256 totalAssets = totalAssetsBalance;
-        uint256 currentValue = totalAssets.mulDiv(currentRate, WadRayMath.RAY);
-        // Compare current value to user debt only (dragon shares are pure profit buffer)
+        uint256 currentValue = totalAssetsBalance.mulDiv(currentRate, WadRayMath.RAY);
+        uint256 totalDebt = _totalSupply(S); // Total debt is total supply since 1 share = 1 ETH value
 
-        if (currentValue > YS.totalUserDebtInAssetValue + YS.dragonRouterDebtInAssetValue) {
+        if (currentValue > totalDebt) {
             // Yield captured! Mint profit shares to dragon
-            uint256 profitValue = currentValue - YS.totalUserDebtInAssetValue - YS.dragonRouterDebtInAssetValue;
+            uint256 profitValue = currentValue - totalDebt;
 
             uint256 profitShares = profitValue; // 1 share = 1 ETH value
 
@@ -441,16 +341,13 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
 
             _mint(S, S.dragonRouter, profitShares);
 
-            // update the dragon value debt
-            YS.dragonRouterDebtInAssetValue += profitValue;
-
             emit DonationMinted(S.dragonRouter, profitShares, currentRate.rayToWad());
-        } else if (currentValue < YS.totalUserDebtInAssetValue + YS.dragonRouterDebtInAssetValue) {
+        } else if (currentValue < totalDebt) {
             // Loss - burn dragon shares first
-            uint256 lossValue = YS.totalUserDebtInAssetValue + YS.dragonRouterDebtInAssetValue - currentValue;
+            uint256 lossValue = totalDebt - currentValue;
 
             // Handle loss protection through dragon burning
-            loss = _handleDragonLossProtection(S, YS, lossValue, currentRate);
+            loss = _handleDragonLossProtection(S, lossValue, currentRate);
         }
 
         // Update last report timestamp
@@ -478,30 +375,6 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
         return _isVaultInsolvent();
     }
 
-    /**
-     * @dev Internal deposit function that handles asset transfers and share minting
-     * @param S The strategy data storage
-     * @param receiver The address that will receive the minted shares
-     * @param assets The amount of assets being deposited
-     * @param shares The amount of shares to mint
-     */
-    function _deposit(StrategyData storage S, address receiver, uint256 assets, uint256 shares) internal override {
-        // Cache storage variables used more than once.
-        ERC20 _asset = S.asset;
-
-        _asset.safeTransferFrom(msg.sender, address(this), assets);
-
-        // We can deploy the full loose balance currently held.
-        IBaseStrategy(address(this)).deployFunds(_asset.balanceOf(address(this)));
-
-        // Adjust total Assets.
-        S.totalAssets += assets;
-
-        // mint shares
-        _mint(S, receiver, shares);
-
-        emit Deposit(msg.sender, receiver, assets, shares);
-    }
 
     /**
      * @dev Converts assets to shares using value debt approach with solvency awareness
@@ -563,34 +436,45 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
      */
     function _isVaultInsolvent() internal view returns (bool isInsolvent) {
         StrategyData storage S = _strategyStorage();
-        YieldSkimmingStorage storage YS = _strategyYieldSkimmingStorage();
         uint256 currentRate = _currentRateRay();
         uint256 currentVaultValue = S.totalAssets.mulDiv(currentRate, WadRayMath.RAY);
+        uint256 userDebt = _totalSupply(S) - _balanceOf(S, S.dragonRouter);
 
-        return
-            (YS.totalUserDebtInAssetValue > 0 || YS.dragonRouterDebtInAssetValue > 0) &&
-            currentVaultValue < YS.totalUserDebtInAssetValue + YS.dragonRouterDebtInAssetValue;
+        // Vault is only insolvent if it cannot cover user debt
+        // Dragon debt is excluded as dragon shares are designed to absorb losses
+        return userDebt > 0 && currentVaultValue < userDebt;
     }
 
     /**
-     * @dev Rebalances debt tracking when dragon transfers shares in or out
+     * @dev Calculates the maximum amount of shares the dragon can redeem without making the vault unable to cover user debt
+     * @return maxDragonRedeemable Maximum shares the dragon can redeem
      */
-    function _rebalanceDebtOnDragonTransfer(address from, address to, uint256 transferAmount) internal {
-        YieldSkimmingStorage storage YS = _strategyYieldSkimmingStorage();
+    function _maxDragonRedeemableShares() internal view returns (uint256 maxDragonRedeemable) {
         StrategyData storage S = _strategyStorage();
 
-        // Direct transfer: shares represent ETH value 1:1 in this system
-        if (from == S.dragonRouter) {
-            // Dragon sends shares: dragon loses debt obligation, users gain debt obligation
-            require(YS.dragonRouterDebtInAssetValue >= transferAmount, "Insufficient dragon debt");
-            YS.dragonRouterDebtInAssetValue -= transferAmount;
-            YS.totalUserDebtInAssetValue += transferAmount;
-        } else if (to == S.dragonRouter) {
-            // User sends shares to dragon: users lose debt obligation, dragon gains debt obligation
-            require(YS.totalUserDebtInAssetValue >= transferAmount, "Insufficient user debt");
-            YS.totalUserDebtInAssetValue -= transferAmount;
-            YS.dragonRouterDebtInAssetValue += transferAmount;
+        uint256 currentRate = _currentRateRay();
+        uint256 currentVaultValue = S.totalAssets.mulDiv(currentRate, WadRayMath.RAY);
+        uint256 userDebt = _totalSupply(S) - _balanceOf(S, S.dragonRouter);
+        uint256 dragonDebt = _balanceOf(S, S.dragonRouter);
+
+        // if enableBurning is false, dragon can redeem its full balance
+        if (!S.enableBurning) {
+            return dragonDebt;
         }
+
+        // If vault value is already below user debt, dragon cannot withdraw
+        if (currentVaultValue <= userDebt) {
+            return 0;
+        }
+
+        // Calculate excess value available for dragon (vault value - user debt)
+        uint256 excessValue = currentVaultValue - userDebt;
+
+        // Dragon can only redeem up to their debt or the excess value, whichever is lower
+        uint256 dragonWithdrawableValue = Math.min(dragonDebt, excessValue);
+
+        // Since dragon shares are 1:1 with value debt, return the value directly
+        return dragonWithdrawableValue;
     }
 
     /**
@@ -600,9 +484,53 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
     function _requireDragonSolvency(address account) internal view {
         StrategyData storage S = _strategyStorage();
 
+        // if enableBurning is false, dragon can withdraw its full balance
+        if (!S.enableBurning) {
+            return;
+        }
+
         // Only check if account is dragon router
         if (account == S.dragonRouter && _isVaultInsolvent()) {
             revert("Dragon cannot operate during insolvency");
+        }
+    }
+
+    /**
+     * @dev Checks vault solvency after a dragon operation (transfer, redeem, withdraw)
+     * @param from Address shares are coming from (dragon for withdrawals, use address(0) for redemptions)  
+     * @param to Address shares are going to (user for transfers, use address(0) for withdrawals)
+     * @param amount Amount of shares being moved
+     * @dev Prevents dragon from removing buffer shares that might be needed for solvency
+     */
+    function _requireDragonSolvencyAfterOperation(address from, address to, uint256 amount) internal view {
+        StrategyData storage S = _strategyStorage();
+
+        // if enableBurning is false, dragon can transfer freely (we still need to check for solvency if dragon is receiving shares)
+        if (!S.enableBurning && to != S.dragonRouter) {
+            return;
+        }
+
+        // Only check if dragon router is involved in transfer
+        if (from != S.dragonRouter && to != S.dragonRouter) {
+            return;
+        }
+
+        // Calculate current vault value
+        uint256 currentRate = _currentRateRay();
+        uint256 currentVaultValue = S.totalAssets.mulDiv(currentRate, WadRayMath.RAY);
+
+        if (from == S.dragonRouter) {
+            // Dragon is sending shares - check if vault can remain solvent without this buffer
+            if (currentVaultValue < (S.totalSupply - amount)) {
+                revert("Transfer would cause vault insolvency");
+            }
+        } else {
+            // Dragon is receiving shares - calculate user debt after dragon gains more buffer
+            uint256 currentUserDebt = S.totalSupply - _balanceOf(S, S.dragonRouter);
+            uint256 userDebtAfterTransfer = currentUserDebt - amount;
+            if (currentVaultValue < userDebtAfterTransfer) {
+                revert("Transfer would cause vault insolvency");
+            }
         }
     }
 
@@ -636,14 +564,12 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
     /**
      * @dev Internal function to handle loss protection by burning dragon shares
      * @param S Strategy storage pointer
-     * @param YS Yield skimming storage pointer
      * @param lossValue The loss amount in ETH value terms
      * @param currentRate The current exchange rate in RAY format
      * @return loss The loss amount in asset terms for reporting
      */
     function _handleDragonLossProtection(
         StrategyData storage S,
-        YieldSkimmingStorage storage YS,
         uint256 lossValue,
         uint256 currentRate
     ) internal returns (uint256 loss) {
@@ -662,9 +588,6 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
             uint256 dragonBurn = Math.min(lossValue, dragonBalance);
             _burn(S, S.dragonRouter, dragonBurn);
 
-            // update the dragon value debt
-            YS.dragonRouterDebtInAssetValue -= dragonBurn;
-
             emit DonationBurned(S.dragonRouter, dragonBurn, currentRate.rayToWad());
         }
     }
@@ -675,37 +598,16 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
      */
     function finalizeDragonRouterChange() external override {
         StrategyData storage S = _strategyStorage();
-        YieldSkimmingStorage storage YS = _strategyYieldSkimmingStorage();
 
         require(S.pendingDragonRouter != address(0), "no pending change");
         require(block.timestamp >= S.dragonRouterChangeTimestamp + DRAGON_ROUTER_COOLDOWN, "cooldown not elapsed");
 
         address oldDragonRouter = S.dragonRouter;
         address newDragonRouter = S.pendingDragonRouter;
-
-        // Get balances before changing the router
         uint256 oldDragonBalance = _balanceOf(S, oldDragonRouter);
-        uint256 newDragonBalance = _balanceOf(S, newDragonRouter);
 
-        // Migrate debt accounting:
-        // 1. Old dragon router's balance becomes user debt
         if (oldDragonBalance > 0) {
-            YS.totalUserDebtInAssetValue += oldDragonBalance;
-            if (YS.dragonRouterDebtInAssetValue >= oldDragonBalance) {
-                YS.dragonRouterDebtInAssetValue -= oldDragonBalance;
-            } else {
-                YS.dragonRouterDebtInAssetValue = 0;
-            }
-        }
-
-        // 2. New dragon router's balance (if any) becomes dragon debt
-        if (newDragonBalance > 0) {
-            YS.dragonRouterDebtInAssetValue += newDragonBalance;
-            if (YS.totalUserDebtInAssetValue >= newDragonBalance) {
-                YS.totalUserDebtInAssetValue -= newDragonBalance;
-            } else {
-                YS.totalUserDebtInAssetValue = 0;
-            }
+            _requireDragonSolvency(oldDragonRouter);
         }
 
         // Now call the parent implementation to actually change the router
