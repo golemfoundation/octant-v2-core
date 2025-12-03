@@ -346,7 +346,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param name_ New name for the vault token
      * @custom:security Only callable by roleManager
      */
-    function set_name(string memory name_) external override {
+    function setName(string memory name_) external override {
         require(msg.sender == roleManager, NotAllowed());
         name = name_;
     }
@@ -357,7 +357,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param symbol_ New symbol ticker for the vault token
      * @custom:security Only callable by roleManager
      */
-    function set_symbol(string memory symbol_) external override {
+    function setSymbol(string memory symbol_) external override {
         require(msg.sender == roleManager, NotAllowed());
         symbol = symbol_;
     }
@@ -471,6 +471,18 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
+     * @notice Sets a module contract to dynamically control deposit limits with default override behavior
+     * @dev Overload to match Vyper's default parameter behavior (shouldOverride = false by default)
+     *      See set_deposit_limit_module(address, bool) for full documentation
+     * @param depositLimitModule_ Address of IDepositLimitModule contract (or address(0) to disable)
+     * @custom:security Only callable by DEPOSIT_LIMIT_MANAGER role
+     * @custom:security Reverts if vault is shutdown
+     */
+    function set_deposit_limit_module(address depositLimitModule_) public {
+        set_deposit_limit_module(depositLimitModule_, false);
+    }
+
+    /**
      * @notice Sets a module contract to dynamically control deposit limits
      * @dev Module overrides static depositLimit. Requires depositLimit = type(uint256).max
      *      or shouldOverride_ = true. Reverts if vault is shutdown
@@ -479,7 +491,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @custom:security Only callable by DEPOSIT_LIMIT_MANAGER role
      * @custom:security Reverts if vault is shutdown
      */
-    function set_deposit_limit_module(address depositLimitModule_, bool shouldOverride_) external override {
+    function set_deposit_limit_module(address depositLimitModule_, bool shouldOverride_) public override {
         require(_shutdown == false, VaultShutdown());
         _enforceRole(msg.sender, Roles.DEPOSIT_LIMIT_MANAGER);
 
@@ -1680,15 +1692,6 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Returns the default withdrawal queue
-     * @dev Same as getDefaultQueue()
-     * @return queue Array of strategy addresses in withdrawal priority order
-     */
-    function defaultQueue() external view override returns (address[] memory) {
-        return _defaultQueue;
-    }
-
-    /**
      * @notice Returns maximum assets that can be deposited for a receiver
      * @dev Checks against depositLimit or depositLimitModule (if set)
      *      Returns 0 if receiver is vault address or zero address
@@ -1765,6 +1768,18 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
+     * @notice Returns maximum assets that owner can withdraw with custom loss tolerance
+     * @dev Uses default queue for withdrawal strategies
+     * @param owner_ Address that owns the shares
+     * @param maxLoss_ Maximum acceptable loss in basis points (0-10000)
+     * @return max Maximum withdrawable assets
+     */
+    function maxWithdraw(address owner_, uint256 maxLoss_) external view virtual returns (uint256) {
+        address[] memory emptyArray = new address[](0);
+        return _max_withdraw(owner_, maxLoss_, emptyArray);
+    }
+
+    /**
      * @notice Returns maximum assets that owner can withdraw with default parameters
      * @dev Overload to match Vyper's default parameters behavior (maxLoss = 0, default queue)
      * @param owner_ Address that owns the shares
@@ -1773,6 +1788,22 @@ contract MultistrategyVault is IMultistrategyVault {
     function maxWithdraw(address owner_) external view virtual returns (uint256) {
         address[] memory emptyArray = new address[](0);
         return _max_withdraw(owner_, 0, emptyArray);
+    }
+
+    /**
+     * @notice Returns maximum shares that owner can redeem with custom loss tolerance
+     * @dev Uses default queue for withdrawal strategies
+     * @param owner_ Address that owns the shares
+     * @param maxLoss_ Maximum acceptable loss in basis points (0-10000)
+     * @return max Maximum redeemable shares
+     */
+    function maxRedeem(address owner_, uint256 maxLoss_) external view virtual returns (uint256) {
+        address[] memory emptyArray = new address[](0);
+        return
+            Math.min(
+                _convertToShares(_max_withdraw(owner_, maxLoss_, emptyArray), Rounding.ROUND_DOWN),
+                _balanceOf[owner_]
+            );
     }
 
     /**
@@ -1831,31 +1862,6 @@ contract MultistrategyVault is IMultistrategyVault {
      */
     function apiVersion() external pure override returns (string memory) {
         return API_VERSION;
-    }
-
-    // ============================================
-    // VIEW FUNCTIONS - STRATEGY QUERIES
-    // ============================================
-
-    /**
-     * @notice Calculates the unrealized losses for a withdrawal from strategy
-     * @dev Compares strategy's actual asset value vs recorded debt
-     *      If strategy is underwater, user takes proportional share of loss
-     *
-     *      Formula: loss = assetsNeeded - (assetsNeeded * strategyAssets / currentDebt)
-     *
-     * @param strategy_ Address of the strategy
-     * @param assetsNeeded_ Amount of assets to withdraw from strategy
-     * @return loss User's share of unrealized losses
-     */
-    function assess_share_of_unrealised_losses(
-        address strategy_,
-        uint256 assetsNeeded_
-    ) external view returns (uint256) {
-        uint256 currentDebt = _strategies[strategy_].currentDebt;
-        require(currentDebt >= assetsNeeded_, NotEnoughDebt());
-
-        return _assess_share_of_unrealised_losses(strategy_, currentDebt, assetsNeeded_);
     }
 
     // ============================================

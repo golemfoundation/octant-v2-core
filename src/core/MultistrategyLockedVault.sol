@@ -609,10 +609,33 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
         return Math.min(parentMax, custodyAssets);
     }
 
+    /**
+     * @notice Returns maximum assets that owner can withdraw with custom loss tolerance
+     * @dev Uses default queue for withdrawal strategies
+     * @param owner_ Address that owns the shares
+     * @param maxLoss_ Maximum acceptable loss in basis points (0-10000)
+     * @return max Maximum withdrawable assets (constrained by custody)
+     */
+
+    function maxWithdraw(
+        address owner_,
+        uint256 maxLoss_
+    ) public view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
+        return maxWithdraw(owner_, maxLoss_, new address[](0));
+    }
+
+    /**
+     * @notice Returns maximum assets that owner can withdraw with default parameters
+     * @dev Overload to match Vyper's default parameters behavior (maxLoss = 0, default queue)
+     *      Enforces custody constraints - returns 0 if cooldown period not passed
+     * @param owner_ Address that owns the shares
+     * @return max Maximum withdrawable assets (constrained by custody)
+     */
+
     function maxWithdraw(
         address owner_
     ) external view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
-        return maxWithdraw(owner_, MAX_BPS, new address[](0));
+        return maxWithdraw(owner_, 0, new address[](0));
     }
 
     /**
@@ -647,6 +670,22 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
 
         // Return minimum of parent max and custody limit
         return Math.min(parentMax, lockedShares);
+    }
+
+    /**
+     * @notice Returns maximum shares that owner can redeem with default parameters
+     * @dev Overload to match Vyper's default parameters behavior (maxLoss = MAX_BPS, default queue)
+     *      Enforces custody constraints - returns 0 if cooldown period not passed
+     * @param owner_ Address that owns the shares
+     * @param maxLoss_ Maximum acceptable loss in basis points (0-10000)
+     * @return max Maximum redeemable shares (constrained by custody)
+     */
+
+    function maxRedeem(
+        address owner_,
+        uint256 maxLoss_
+    ) public view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
+        return maxRedeem(owner_, maxLoss_, new address[](0));
     }
 
     /**

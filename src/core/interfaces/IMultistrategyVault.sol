@@ -360,7 +360,6 @@ interface IMultistrategyVault {
     // NOTE: The following functions are declared for interface completeness where
     // some implementations may expose equivalent public state variables.
     function strategies(address strategy) external view returns (StrategyParams memory);
-    function defaultQueue() external view returns (address[] memory);
     function useDefaultQueue() external view returns (bool);
     function autoAllocate() external view returns (bool);
     function minimumTotalIdle() external view returns (uint256);
@@ -397,10 +396,12 @@ interface IMultistrategyVault {
 
     // MaxWithdraw functions with different parameter combinations to match Vyper
     function maxWithdraw(address owner) external view returns (uint256);
+    function maxWithdraw(address owner, uint256 maxLoss) external view returns (uint256);
     function maxWithdraw(address owner, uint256 maxLoss, address[] memory strategies) external view returns (uint256);
 
     // MaxRedeem functions with different parameter combinations to match Vyper
     function maxRedeem(address owner) external view returns (uint256);
+    function maxRedeem(address owner, uint256 maxLoss) external view returns (uint256);
     function maxRedeem(address owner, uint256 maxLoss, address[] memory strategies) external view returns (uint256);
 
     function FACTORY() external view returns (address);
@@ -467,8 +468,8 @@ interface IMultistrategyVault {
     ) external returns (bool);
 
     // Management Functions
-    function set_name(string memory name) external;
-    function set_symbol(string memory symbol) external;
+    function setName(string memory name) external;
+    function setSymbol(string memory symbol) external;
     function set_accountant(address newAccountant) external;
     function set_default_queue(address[] memory newDefaultQueue) external;
     function set_use_default_queue(bool useDefaultQueue) external;
