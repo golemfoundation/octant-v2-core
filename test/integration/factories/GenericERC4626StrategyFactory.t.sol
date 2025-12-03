@@ -82,7 +82,13 @@ contract GenericERC4626StrategyFactoryTest is Test {
         // Create a strategy and check events
         vm.startPrank(management);
         vm.expectEmit(true, true, true, false); // Check deployer, targetVault, and donationAddress; ignore strategy address
-        emit GenericERC4626StrategyFactory.StrategyDeploy(management, USDC_SPARK_VAULT, donationAddress, address(0), strategyName);
+        emit GenericERC4626StrategyFactory.StrategyDeploy(
+            management,
+            USDC_SPARK_VAULT,
+            donationAddress,
+            address(0),
+            strategyName
+        );
 
         address strategyAddress = factory.createStrategy(
             USDC_SPARK_VAULT,
@@ -119,7 +125,13 @@ contract GenericERC4626StrategyFactoryTest is Test {
         // Create a strategy and check events
         vm.startPrank(management);
         vm.expectEmit(true, true, true, false); // Check deployer, targetVault, and donationAddress; ignore strategy address
-        emit GenericERC4626StrategyFactory.StrategyDeploy(management, WETH_SPARK_VAULT, donationAddress, address(0), strategyName);
+        emit GenericERC4626StrategyFactory.StrategyDeploy(
+            management,
+            WETH_SPARK_VAULT,
+            donationAddress,
+            address(0),
+            strategyName
+        );
 
         address strategyAddress = factory.createStrategy(
             WETH_SPARK_VAULT,
@@ -331,8 +343,8 @@ contract GenericERC4626StrategyFactoryTest is Test {
             WETH_SPARK_VAULT,
             WETH,
             strategyName, // Same name
-            management,   // Same management
-            keeper,       // Same keeper
+            management, // Same management
+            keeper, // Same keeper
             emergencyAdmin, // Same emergency admin
             donationAddress, // Same donation address
             false, // Same enableBurning
@@ -341,7 +353,10 @@ contract GenericERC4626StrategyFactoryTest is Test {
         vm.stopPrank();
 
         // Should create different strategies since target vault is different
-        assertTrue(usdcStrategyAddress != wethStrategyAddress, "Different target vaults should create different strategies");
+        assertTrue(
+            usdcStrategyAddress != wethStrategyAddress,
+            "Different target vaults should create different strategies"
+        );
 
         // Verify both are tracked
         (address deployerAddress, , , ) = factory.strategies(management, 0);
@@ -407,7 +422,7 @@ contract GenericERC4626StrategyFactoryTest is Test {
 
         // Verify strategy was created successfully
         assertTrue(strategyAddress != address(0), "Strategy should be deployed");
-        
+
         // Verify it's tracked in factory
         (address deployerAddress, , string memory name, ) = factory.strategies(management, 0);
         assertEq(deployerAddress, management, "Deployer should be tracked");

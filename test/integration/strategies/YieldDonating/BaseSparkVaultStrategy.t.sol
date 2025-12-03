@@ -363,7 +363,7 @@ abstract contract BaseSparkVaultStrategyTest is Test {
 
         // Get maximum withdrawable amount from strategy's perspective
         uint256 maxWithdrawable = strategy.availableWithdrawLimit(address(this));
-        
+
         // Ensure emergency withdraw amount is within available limits
         vm.assume(emergencyWithdrawAmount <= maxWithdrawable);
 
@@ -384,8 +384,8 @@ abstract contract BaseSparkVaultStrategyTest is Test {
 
         // Strategy should have received exactly the requested amount
         assertEq(
-            finalStrategyBalance, 
-            initialStrategyBalance + emergencyWithdrawAmount, 
+            finalStrategyBalance,
+            initialStrategyBalance + emergencyWithdrawAmount,
             "Strategy should receive exact emergency withdraw amount"
         );
 
