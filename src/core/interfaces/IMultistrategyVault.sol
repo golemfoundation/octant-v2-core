@@ -8,6 +8,17 @@ pragma solidity ^0.8.25;
  * @custom:ported-from https://github.com/yearn/yearn-vaults-v3/blob/master/contracts/interfaces/IVault.sol
  * @notice Interface for MultistrategyVault ERC4626-compliant vault with multiple strategies
  * @dev Defines all external functions, events, errors, and types for the vault
+ *
+ * @custom:design-decisions
+ * 1. Function Naming Convention: All external functions use snake_case to maintain 1:1 compatibility
+ *    with the original Vyper implementation. This ensures seamless integration for existing consumers.
+ *
+ * 2. Withdraw/Redeem Functions: The interface includes multiple overloads for withdraw/redeem operations:
+ *    - 3-parameter versions: Basic ERC4626 compliant functions with default parameters
+ *    - 5-parameter versions: Advanced functions with maxLoss and custom strategies parameters
+ *    Note: Additional overloads with loss parameters exist in Vyper but were omitted due to Solidity
+ *    contract size constraints. The 3 and 5 parameter versions provide equivalent functionality
+ *    while maintaining ERC4626 compliance.
  */
 interface IMultistrategyVault {
     // ============================================

@@ -39,6 +39,18 @@ import { DebtManagementLib } from "src/core/libs/DebtManagementLib.sol";
  *   and it is the responsibility of those that hold the corresponding roles to choose
  *   and fund strategies that best fit their desired specifications.
  *
+ * @custom:design-decisions
+ * 1. Function Naming: External functions use snake_case (e.g., set_deposit_limit, process_report)
+ *    to maintain exact compatibility with the Vyper implementation, ensuring existing integrations
+ *    continue to work seamlessly.
+ *
+ * 2. Withdraw/Redeem Overloads: Due to Solidity contract size constraints, we implement only the
+ *    most essential function overloads:
+ *    - 3-parameter versions for ERC4626 compliance
+ *    - 5-parameter versions for advanced usage with maxLoss and custom strategies
+ *    The Vyper version includes additional 4-parameter overloads which were intentionally omitted
+ *    to keep the contract size manageable while maintaining full functionality.
+ *
  *   Those holding vault tokens are able to redeem the tokens for the corresponding
  *   amount of underlying asset based on any reported profits or losses since their
  *   initial deposit.
