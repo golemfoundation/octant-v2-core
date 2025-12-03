@@ -360,7 +360,6 @@ interface IMultistrategyVault {
     // NOTE: The following functions are declared for interface completeness where
     // some implementations may expose equivalent public state variables.
     function strategies(address strategy) external view returns (StrategyParams memory);
-    function defaultQueue() external view returns (address[] memory);
     function useDefaultQueue() external view returns (bool);
     function autoAllocate() external view returns (bool);
     function minimumTotalIdle() external view returns (uint256);
@@ -394,7 +393,15 @@ interface IMultistrategyVault {
 
     function maxDeposit(address receiver) external view returns (uint256);
     function maxMint(address receiver) external view returns (uint256);
+
+    // MaxWithdraw functions with different parameter combinations to match Vyper
+    function maxWithdraw(address owner) external view returns (uint256);
+    function maxWithdraw(address owner, uint256 maxLoss) external view returns (uint256);
     function maxWithdraw(address owner, uint256 maxLoss, address[] memory strategies) external view returns (uint256);
+
+    // MaxRedeem functions with different parameter combinations to match Vyper
+    function maxRedeem(address owner) external view returns (uint256);
+    function maxRedeem(address owner, uint256 maxLoss) external view returns (uint256);
     function maxRedeem(address owner, uint256 maxLoss, address[] memory strategies) external view returns (uint256);
 
     function FACTORY() external view returns (address);
@@ -425,7 +432,10 @@ interface IMultistrategyVault {
 
     // ERC20 & ERC4626 Functions
     function deposit(uint256 assets, address receiver) external returns (uint256);
-    // function mint(uint256 shares, address receiver) external returns (uint256);
+    function mint(uint256 shares, address receiver) external returns (uint256);
+
+    // Withdraw functions with different parameter combinations to match Vyper
+    function withdraw(uint256 assets, address receiver, address owner) external returns (uint256);
     function withdraw(
         uint256 assets,
         address receiver,
@@ -433,6 +443,9 @@ interface IMultistrategyVault {
         uint256 maxLoss,
         address[] memory strategies
     ) external returns (uint256);
+
+    // Redeem functions with different parameter combinations to match Vyper
+    function redeem(uint256 shares, address receiver, address owner) external returns (uint256);
     function redeem(
         uint256 shares,
         address receiver,
@@ -455,12 +468,13 @@ interface IMultistrategyVault {
     ) external returns (bool);
 
     // Management Functions
-    function set_name(string memory name) external;
-    function set_symbol(string memory symbol) external;
+    function setName(string memory name) external;
+    function setSymbol(string memory symbol) external;
     function set_accountant(address newAccountant) external;
     function set_default_queue(address[] memory newDefaultQueue) external;
     function set_use_default_queue(bool useDefaultQueue) external;
     function set_auto_allocate(bool autoAllocate) external;
+    function set_deposit_limit(uint256 depositLimit) external;
     function set_deposit_limit(uint256 depositLimit, bool shouldOverride) external;
     function set_deposit_limit_module(address depositLimitModule, bool shouldOverride) external;
     function set_withdraw_limit_module(address withdrawLimitModule) external;
@@ -479,12 +493,14 @@ interface IMultistrategyVault {
     function buy_debt(address strategy, uint256 amount) external;
 
     // Strategy Management
+    function add_strategy(address newStrategy) external;
     function add_strategy(address newStrategy, bool addToQueue) external;
     function revoke_strategy(address strategy) external;
     function force_revoke_strategy(address strategy) external;
 
     // Debt Management
     function update_max_debt_for_strategy(address strategy, uint256 newMaxDebt) external;
+    function update_debt(address strategy, uint256 targetDebt) external returns (uint256);
     function update_debt(address strategy, uint256 targetDebt, uint256 maxLoss) external returns (uint256);
 
     // Emergency Management

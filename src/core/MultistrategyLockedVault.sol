@@ -360,7 +360,58 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
     }
 
     /**
-     * @notice Override withdrawal functions to handle custodied shares
+     * @notice Withdraws assets with default parameters (maxLoss = 10000, default queue)
+     * @dev Overload to match Vyper's default parameters behavior
+     *      Enforces custody withdrawal rules - requires active rage quit with cooldown passed
+     * @param assets Amount of assets to withdraw
+     * @param receiver Address to receive the withdrawn assets
+     * @param owner Address whose shares will be burned
+     * @return shares Amount of shares actually burned from owner
+     * @custom:security Requires active custody and cooldown period passed
+     */
+    function withdraw(
+        uint256 assets,
+        address receiver,
+        address owner
+    ) external override(MultistrategyVault, IMultistrategyVault) nonReentrant returns (uint256) {
+        uint256 shares = _convertToShares(assets, Rounding.ROUND_UP);
+        _processCustodyWithdrawal(owner, shares);
+        _redeem(msg.sender, receiver, owner, assets, shares, 0, new address[](0));
+        return shares;
+    }
+
+    /**
+     * @notice Withdraws assets from the vault with custody enforcement
+     * @dev ERC4626-extended withdraw function with custody checks
+     *
+     *      CUSTODY REQUIREMENTS:
+     *      - Owner must have initiated rage quit (active custody)
+     *      - Cooldown period must have passed
+     *      - Withdrawal amount cannot exceed custodied shares
+     *      - Multiple partial withdrawals allowed from same custody
+     *
+     *      CONVERSION:
+     *      - Uses ROUND_UP when calculating shares (favors vault)
+     *      - shares = (assets * totalSupply + totalAssets - 1) / totalAssets
+     *
+     *      BEHAVIOR:
+     *      - Validates custody status before processing withdrawal
+     *      - Updates custody by reducing locked shares
+     *      - Clears custody when all locked shares withdrawn
+     *      - Follows standard withdrawal flow after custody checks
+     *
+     *      LOSS HANDLING:
+     *      - maxLoss_ = 0: Revert if any loss
+     *      - maxLoss_ = 10000: Accept any loss (100%)
+     *      - Users receive proportional share of unrealized losses
+     *
+     * @param assets Amount of assets to withdraw
+     * @param receiver Address to receive the withdrawn assets
+     * @param owner Address whose shares will be burned
+     * @param maxLoss Maximum acceptable loss in basis points (0-10000)
+     * @param strategiesArray Optional custom withdrawal queue (empty = use default)
+     * @return shares Amount of shares actually burned from owner
+     * @custom:security Reentrancy protected, requires active custody
      */
     function withdraw(
         uint256 assets,
@@ -376,7 +427,58 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
     }
 
     /**
-     * @notice Override redeem function to handle custodied shares
+     * @notice Redeems shares with default parameters (maxLoss = 10000, default queue)
+     * @dev Overload to match Vyper's default parameters behavior
+     *      Enforces custody withdrawal rules - requires active rage quit with cooldown passed
+     * @param shares Exact amount of shares to burn
+     * @param receiver Address to receive the withdrawn assets
+     * @param owner Address whose shares will be burned
+     * @return assets Amount of assets actually withdrawn and sent to receiver
+     * @custom:security Requires active custody and cooldown period passed
+     */
+    function redeem(
+        uint256 shares,
+        address receiver,
+        address owner
+    ) external override(MultistrategyVault, IMultistrategyVault) nonReentrant returns (uint256) {
+        _processCustodyWithdrawal(owner, shares);
+        uint256 assets = _convertToAssets(shares, Rounding.ROUND_DOWN);
+        return _redeem(msg.sender, receiver, owner, assets, shares, 10_000, new address[](0));
+    }
+
+    /**
+     * @notice Redeems exact amount of shares for assets with custody enforcement
+     * @dev ERC4626-extended redeem function with custody checks
+     *
+     *      CUSTODY REQUIREMENTS:
+     *      - Owner must have initiated rage quit (active custody)
+     *      - Cooldown period must have passed
+     *      - Redemption amount cannot exceed custodied shares
+     *      - Multiple partial redemptions allowed from same custody
+     *
+     *      CONVERSION:
+     *      - Uses ROUND_DOWN when calculating assets (favors vault)
+     *      - assets = (shares * totalAssets) / totalSupply
+     *
+     *      BEHAVIOR:
+     *      - Validates custody status before processing redemption
+     *      - Burns exact shares amount from owner
+     *      - Updates custody by reducing locked shares
+     *      - Clears custody when all locked shares redeemed
+     *      - May return less assets than expected if losses occur
+     *
+     *      DIFFERENCE FROM WITHDRAW:
+     *      - withdraw(): User specifies assets, function calculates shares
+     *      - redeem(): User specifies shares, function calculates assets
+     *      - redeem() may return less assets than preview if losses occur
+     *
+     * @param shares Exact amount of shares to burn
+     * @param receiver Address to receive the withdrawn assets
+     * @param owner Address whose shares will be burned
+     * @param maxLoss Maximum acceptable loss in basis points (0-10000)
+     * @param strategiesArray Optional custom withdrawal queue (empty = use default)
+     * @return assets Amount of assets actually withdrawn and sent to receiver
+     * @custom:security Reentrancy protected, requires active custody
      */
     function redeem(
         uint256 shares,
@@ -466,7 +568,7 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
      */
     function _transfer(address sender_, address receiver_, uint256 amount_) internal override {
         // Check if sender has locked shares that would prevent this transfer
-        CustodyInfo memory custody = custodyInfo[sender_];
+        CustodyInfo storage custody = custodyInfo[sender_];
 
         if (custody.lockedShares > 0) {
             uint256 senderBalance = balanceOf(sender_);
@@ -495,9 +597,9 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
     function maxWithdraw(
         address owner_,
         uint256 maxLoss_,
-        address[] calldata strategiesArray_
-    ) external view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
-        CustodyInfo memory custody = custodyInfo[owner_];
+        address[] memory strategiesArray_
+    ) public view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
+        CustodyInfo storage custody = custodyInfo[owner_];
         if (block.timestamp < custody.unlockTime) {
             return 0;
         }
@@ -513,6 +615,35 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
     }
 
     /**
+     * @notice Returns maximum assets that owner can withdraw with custom loss tolerance
+     * @dev Uses default queue for withdrawal strategies
+     * @param owner_ Address that owns the shares
+     * @param maxLoss_ Maximum acceptable loss in basis points (0-10000)
+     * @return max Maximum withdrawable assets (constrained by custody)
+     */
+
+    function maxWithdraw(
+        address owner_,
+        uint256 maxLoss_
+    ) public view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
+        return maxWithdraw(owner_, maxLoss_, new address[](0));
+    }
+
+    /**
+     * @notice Returns maximum assets that owner can withdraw with default parameters
+     * @dev Overload to match Vyper's default parameters behavior (maxLoss = 0, default queue)
+     *      Enforces custody constraints - returns 0 if cooldown period not passed
+     * @param owner_ Address that owns the shares
+     * @return max Maximum withdrawable assets (constrained by custody)
+     */
+
+    function maxWithdraw(
+        address owner_
+    ) external view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
+        return maxWithdraw(owner_, 0, new address[](0));
+    }
+
+    /**
      * @notice Get the maximum amount of shares that can be redeemed by an owner
      * @param owner_ Address owning shares to check redemption limits for
      * @param maxLoss_ Custom max_loss if any
@@ -525,9 +656,9 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
     function maxRedeem(
         address owner_,
         uint256 maxLoss_,
-        address[] calldata strategiesArray_
-    ) external view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
-        CustodyInfo memory custody = custodyInfo[owner_];
+        address[] memory strategiesArray_
+    ) public view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
+        CustodyInfo storage custody = custodyInfo[owner_];
 
         if (block.timestamp < custody.unlockTime) {
             return 0;
@@ -547,29 +678,29 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
     }
 
     /**
-     * @notice Get the amount of shares that can be transferred by a user
-     * @param user Address to check transferable shares for
-     * @return Amount of shares available for transfer (not locked in custody)
-     * @dev Returns total balance minus shares currently locked in custody
+     * @notice Returns maximum shares that owner can redeem with default parameters
+     * @dev Overload to match Vyper's default parameters behavior (maxLoss = MAX_BPS, default queue)
+     *      Enforces custody constraints - returns 0 if cooldown period not passed
+     * @param owner_ Address that owns the shares
+     * @param maxLoss_ Maximum acceptable loss in basis points (0-10000)
+     * @return max Maximum redeemable shares (constrained by custody)
      */
-    function getTransferableShares(address user) external view returns (uint256) {
-        uint256 totalShares = balanceOf(user);
-        uint256 lockedShares = custodyInfo[user].lockedShares;
-        return totalShares - lockedShares;
+
+    function maxRedeem(
+        address owner_,
+        uint256 maxLoss_
+    ) public view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
+        return maxRedeem(owner_, maxLoss_, new address[](0));
     }
 
     /**
-     * @notice Get the amount of shares available for rage quit initiation
-     * @param user Address to check rage quitable shares for
-     * @return Amount of shares available for initiating rage quit
-     * @dev Returns 0 if user already has active custody, otherwise returns full balance
+     * @notice Returns maximum shares that owner can redeem with default parameters
+     * @dev Overload to match Vyper's default parameters behavior (maxLoss = MAX_BPS, default queue)
+     *      Enforces custody constraints - returns 0 if cooldown period not passed
+     * @param owner_ Address that owns the shares
+     * @return max Maximum redeemable shares (constrained by custody)
      */
-    function getRageQuitableShares(address user) external view returns (uint256) {
-        // If user already has active custody, they cannot initiate new rage quit
-        if (custodyInfo[user].lockedShares > 0) {
-            return 0;
-        }
-        // Otherwise, they can rage quit all their shares
-        return balanceOf(user);
+    function maxRedeem(address owner_) public view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
+        return maxRedeem(owner_, MAX_BPS, new address[](0));
     }
 }
