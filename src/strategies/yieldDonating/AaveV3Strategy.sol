@@ -11,6 +11,10 @@ interface IPool {
     function withdraw(address asset, uint256 amount, address to) external returns (uint256);
 }
 
+interface IAToken {
+    function UNDERLYING_ASSET_ADDRESS() external view returns (address);
+}
+
 interface IPoolDataProvider {
     function getReserveCaps(address asset) external view returns (uint256 supplyCap, uint256 borrowCap);
 
@@ -97,6 +101,9 @@ contract AaveV3Strategy is BaseHealthCheck {
         pool = IPool(addressesProvider.getPool());
         dataProvider = IPoolDataProvider(addressesProvider.getPoolDataProvider());
         aToken = _aToken;
+
+        // verify asset that aToken is the correct one
+        require(IAToken(aToken).UNDERLYING_ASSET_ADDRESS() == _asset, "Asset mismatch with aToken");
 
         // Approve Aave pool to spend our asset
         IERC20(_asset).forceApprove(address(pool), type(uint256).max);
