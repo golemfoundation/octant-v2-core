@@ -9,47 +9,9 @@ import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/I
 interface IPool {
     function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
     function withdraw(address asset, uint256 amount, address to) external returns (uint256);
-    function getUserAccountData(
-        address user
-    )
-        external
-        view
-        returns (
-            uint256 totalCollateralBase,
-            uint256 totalDebtBase,
-            uint256 availableBorrowsBase,
-            uint256 currentLiquidationThreshold,
-            uint256 ltv,
-            uint256 healthFactor
-        );
-}
-
-interface IAToken is IERC20 {
-    function scaledBalanceOf(address user) external view returns (uint256);
-    function getScaledUserBalanceAndSupply(address user) external view returns (uint256, uint256);
 }
 
 interface IPoolDataProvider {
-    function getReserveData(
-        address asset
-    )
-        external
-        view
-        returns (
-            uint256 unbacked,
-            uint256 accruedToTreasuryScaled,
-            uint256 totalAToken,
-            uint256 totalStableDebt,
-            uint256 totalVariableDebt,
-            uint256 liquidityRate,
-            uint256 variableBorrowRate,
-            uint256 stableBorrowRate,
-            uint256 averageStableBorrowRate,
-            uint256 liquidityIndex,
-            uint256 variableBorrowIndex,
-            uint40 lastUpdateTimestamp
-        );
-
     function getReserveCaps(address asset) external view returns (uint256 supplyCap, uint256 borrowCap);
 
     function getATokenTotalSupply(address asset) external view returns (uint256);
