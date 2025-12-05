@@ -1,5 +1,18 @@
 
 
+## [0.9.0-develop.0](https://github.com/golemfoundation/octant-v2-core/compare/v0.8.0-develop.0...v0.9.0-develop.0) (2025-12-05)
+
+
+### Features
+
+* add centralized network-aware address registry ([3901fa4](https://github.com/golemfoundation/octant-v2-core/commit/3901fa4264fb32541ed9de14ff64d41a14c231de))
+* add deployment logic for all contracts ([401e1b8](https://github.com/golemfoundation/octant-v2-core/commit/401e1b817f858bc59b7b0b5adbfb358a00f7c130))
+
+
+### Bug Fixes
+
+* **scripts:** patch the multisend contract addres for safe tx batching ([e96904e](https://github.com/golemfoundation/octant-v2-core/commit/e96904e8d98bf56905d3b1b29a6976c82cceb85c))
+
 ## [0.8.0](https://github.com/golemfoundation/octant-v2-core/compare/v0.1.2...v0.8.0) (2025-11-20)
 
 
