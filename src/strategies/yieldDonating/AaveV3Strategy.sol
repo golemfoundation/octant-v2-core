@@ -7,22 +7,29 @@ import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 interface IPool {
+    /// @notice Supplies an asset to the Aave pool
     function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
+    /// @notice Withdraws an asset from the Aave pool
     function withdraw(address asset, uint256 amount, address to) external returns (uint256);
 }
 
 interface IAToken {
+    /// @notice Returns the address of the underlying asset
     function UNDERLYING_ASSET_ADDRESS() external view returns (address);
 }
 
 interface IPoolDataProvider {
+    /// @notice Returns the supply and borrow caps for a reserve
     function getReserveCaps(address asset) external view returns (uint256 supplyCap, uint256 borrowCap);
 
+    /// @notice Returns the total aToken supply for a specific asset
     function getATokenTotalSupply(address asset) external view returns (uint256);
 }
 
 interface IPoolAddressesProvider {
+    /// @notice Returns the address of the Pool contract
     function getPool() external view returns (address);
+    /// @notice Returns the address of the PoolDataProvider contract
     function getPoolDataProvider() external view returns (address);
 }
 
