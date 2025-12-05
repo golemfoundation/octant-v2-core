@@ -9,14 +9,19 @@ import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/I
 interface IPool {
     function supply(address asset, uint256 amount, address onBehalfOf, uint16 referralCode) external;
     function withdraw(address asset, uint256 amount, address to) external returns (uint256);
-    function getUserAccountData(address user) external view returns (
-        uint256 totalCollateralBase,
-        uint256 totalDebtBase,
-        uint256 availableBorrowsBase,
-        uint256 currentLiquidationThreshold,
-        uint256 ltv,
-        uint256 healthFactor
-    );
+    function getUserAccountData(
+        address user
+    )
+        external
+        view
+        returns (
+            uint256 totalCollateralBase,
+            uint256 totalDebtBase,
+            uint256 availableBorrowsBase,
+            uint256 currentLiquidationThreshold,
+            uint256 ltv,
+            uint256 healthFactor
+        );
 }
 
 interface IAToken is IERC20 {
@@ -25,23 +30,28 @@ interface IAToken is IERC20 {
 }
 
 interface IPoolDataProvider {
-    function getReserveData(address asset) external view returns (
-        uint256 unbacked,
-        uint256 accruedToTreasuryScaled,
-        uint256 totalAToken,
-        uint256 totalStableDebt,
-        uint256 totalVariableDebt,
-        uint256 liquidityRate,
-        uint256 variableBorrowRate,
-        uint256 stableBorrowRate,
-        uint256 averageStableBorrowRate,
-        uint256 liquidityIndex,
-        uint256 variableBorrowIndex,
-        uint40 lastUpdateTimestamp
-    );
-    
+    function getReserveData(
+        address asset
+    )
+        external
+        view
+        returns (
+            uint256 unbacked,
+            uint256 accruedToTreasuryScaled,
+            uint256 totalAToken,
+            uint256 totalStableDebt,
+            uint256 totalVariableDebt,
+            uint256 liquidityRate,
+            uint256 variableBorrowRate,
+            uint256 stableBorrowRate,
+            uint256 averageStableBorrowRate,
+            uint256 liquidityIndex,
+            uint256 variableBorrowIndex,
+            uint40 lastUpdateTimestamp
+        );
+
     function getReserveCaps(address asset) external view returns (uint256 supplyCap, uint256 borrowCap);
-    
+
     function getATokenTotalSupply(address asset) external view returns (uint256);
 }
 
@@ -74,13 +84,13 @@ contract AaveV3Strategy is BaseHealthCheck {
 
     /// @notice Address of the Aave V3 addresses provider
     IPoolAddressesProvider public immutable addressesProvider;
-    
+
     /// @notice Address of the Aave V3 pool
     IPool public immutable pool;
-    
+
     /// @notice Address of the pool data provider
     IPoolDataProvider public immutable dataProvider;
-    
+
     /// @notice Address of the aToken for the underlying asset
     address public immutable aToken;
 
@@ -125,7 +135,7 @@ contract AaveV3Strategy is BaseHealthCheck {
         pool = IPool(addressesProvider.getPool());
         dataProvider = IPoolDataProvider(addressesProvider.getPoolDataProvider());
         aToken = _aToken;
-        
+
         // Approve Aave pool to spend our asset
         IERC20(_asset).forceApprove(address(pool), type(uint256).max);
     }
@@ -136,23 +146,23 @@ contract AaveV3Strategy is BaseHealthCheck {
      * @return limit Maximum additional deposit amount in asset base units
      */
     function availableDepositLimit(address /*_owner*/) public view override returns (uint256) {
-        (uint256 supplyCap,) = dataProvider.getReserveCaps(address(asset));
-        
+        (uint256 supplyCap, ) = dataProvider.getReserveCaps(address(asset));
+
         // If supply cap is 0, it means unlimited
         if (supplyCap == 0) {
             return type(uint256).max;
         }
-        
+
         // Get current total supply in the pool
         uint256 totalSupply = dataProvider.getATokenTotalSupply(address(asset));
-        
+
         // Cap is in whole tokens, need to adjust for decimals
         uint256 supplyCapScaled = supplyCap * 10 ** IERC20Metadata(address(asset)).decimals();
-        
+
         if (supplyCapScaled > totalSupply) {
             uint256 availableCapacity = supplyCapScaled - totalSupply;
             uint256 idleBalance = IERC20(address(asset)).balanceOf(address(this));
-            
+
             // Safely subtract idle balance to avoid underflow
             if (availableCapacity <= idleBalance) {
                 return 0;
@@ -173,7 +183,7 @@ contract AaveV3Strategy is BaseHealthCheck {
         // Get our aToken balance which represents our deposited assets
         uint256 aTokenBalance = IERC20(aToken).balanceOf(address(this));
         uint256 idleBalance = IERC20(address(asset)).balanceOf(address(this));
-        
+
         return aTokenBalance + idleBalance;
     }
 
@@ -208,12 +218,12 @@ contract AaveV3Strategy is BaseHealthCheck {
     function _harvestAndReport() internal view override returns (uint256 _totalAssets) {
         // aTokens have 1:1 value with underlying asset
         uint256 aTokenBalance = IERC20(aToken).balanceOf(address(this));
-        
+
         // Include idle funds as per BaseStrategy specification
         uint256 idleAssets = IERC20(address(asset)).balanceOf(address(this));
-        
+
         _totalAssets = aTokenBalance + idleAssets;
-        
+
         return _totalAssets;
     }
 }
