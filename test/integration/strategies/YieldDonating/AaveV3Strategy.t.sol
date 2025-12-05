@@ -19,7 +19,7 @@ interface IPool {
 }
 
 interface IPoolDataProvider {
-    function getReserveCaps(address asset) external view returns (uint256 supplyCap, uint256 borrowCap);
+    function getReserveCaps(address asset) external view returns (uint256 borrowCap, uint256 supplyCap);
     function getATokenTotalSupply(address asset) external view returns (uint256);
 }
 
@@ -284,7 +284,7 @@ contract AaveV3DonatingStrategyTest is Test {
     function testAvailableDepositLimitWithSupplyCap() public view {
         // Get current supply cap from Aave
         IPoolDataProvider dataProvider = IPoolDataProvider(AAVE_DATA_PROVIDER);
-        (uint256 supplyCap, ) = dataProvider.getReserveCaps(USDC);
+        (, uint256 supplyCap) = dataProvider.getReserveCaps(USDC);
 
         // If supply cap is 0, it means unlimited
         if (supplyCap == 0) {
@@ -322,7 +322,7 @@ contract AaveV3DonatingStrategyTest is Test {
 
         // Get supply cap info
         IPoolDataProvider dataProvider = IPoolDataProvider(AAVE_DATA_PROVIDER);
-        (uint256 supplyCap, ) = dataProvider.getReserveCaps(USDC);
+        (, uint256 supplyCap) = dataProvider.getReserveCaps(USDC);
 
         if (supplyCap == 0) {
             assertEq(limit, type(uint256).max, "Should return max uint256 when no supply cap");

@@ -20,7 +20,7 @@ interface IAToken {
 
 interface IPoolDataProvider {
     /// @notice Returns the supply and borrow caps for a reserve
-    function getReserveCaps(address asset) external view returns (uint256 supplyCap, uint256 borrowCap);
+    function getReserveCaps(address asset) external view returns (uint256 borrowCap, uint256 supplyCap);
 
     /// @notice Returns the total aToken supply for a specific asset
     function getATokenTotalSupply(address asset) external view returns (uint256);
@@ -122,9 +122,9 @@ contract AaveV3Strategy is BaseHealthCheck {
      * @return limit Maximum additional deposit amount in asset base units
      */
     function availableDepositLimit(address /*_owner*/) public view override returns (uint256) {
-        (uint256 supplyCap, ) = dataProvider.getReserveCaps(address(asset));
+        (, uint256 supplyCap) = dataProvider.getReserveCaps(address(asset));
 
-        // If supply cap is 0, it means unlimited
+        // If supply cap is 0, it means unlimited (see https://github.com/aave/aave-v3-core/blob/782f51917056a53a2c228701058a6c3fb233684a/contracts/protocol/libraries/types/DataTypes.sol#L53)
         if (supplyCap == 0) {
             return type(uint256).max;
         }
@@ -132,7 +132,7 @@ contract AaveV3Strategy is BaseHealthCheck {
         // Get current total supply in the pool
         uint256 totalSupply = dataProvider.getATokenTotalSupply(address(asset));
 
-        // Cap is in whole tokens, need to adjust for decimals
+        // Cap is in whole tokens, need to adjust for decimals (see https://github.com/aave/aave-v3-core/blob/782f51917056a53a2c228701058a6c3fb233684a/contracts/protocol/libraries/types/DataTypes.sol#L53)
         uint256 supplyCapScaled = supplyCap * 10 ** IERC20Metadata(address(asset)).decimals();
 
         if (supplyCapScaled > totalSupply) {
