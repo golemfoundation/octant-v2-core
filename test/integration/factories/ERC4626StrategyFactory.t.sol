@@ -4,23 +4,23 @@ pragma solidity ^0.8.0;
 import { Test } from "forge-std/Test.sol";
 import { console } from "forge-std/console.sol";
 import { MockERC20 } from "test/mocks/MockERC20.sol";
-import { GenericERC4626Strategy } from "src/strategies/yieldDonating/GenericERC4626Strategy.sol";
-import { GenericERC4626StrategyFactory } from "src/factories/GenericERC4626StrategyFactory.sol";
+import { ERC4626Strategy } from "src/strategies/yieldDonating/ERC4626Strategy.sol";
+import { ERC4626StrategyFactory } from "src/factories/ERC4626StrategyFactory.sol";
 import { BaseStrategyFactory } from "src/factories/BaseStrategyFactory.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
-/// @title GenericERC4626StrategyFactory Test
+/// @title ERC4626StrategyFactory Test
 /// @author Octant
-/// @notice Integration tests for the GenericERC4626StrategyFactory using a mainnet fork
-contract GenericERC4626StrategyFactoryTest is Test {
+/// @notice Integration tests for the ERC4626StrategyFactory using a mainnet fork
+contract ERC4626StrategyFactoryTest is Test {
     using SafeERC20 for ERC20;
 
     // Factory for creating strategies
     YieldDonatingTokenizedStrategy public tokenizedStrategy;
-    GenericERC4626StrategyFactory public factory;
+    ERC4626StrategyFactory public factory;
 
     // Strategy parameters
     address public management;
@@ -60,10 +60,10 @@ contract GenericERC4626StrategyFactoryTest is Test {
         donationAddress = address(0x4);
 
         // Deploy factory
-        factory = new GenericERC4626StrategyFactory();
+        factory = new ERC4626StrategyFactory();
 
         // Label addresses for better trace outputs
-        vm.label(address(factory), "GenericERC4626StrategyFactory");
+        vm.label(address(factory), "ERC4626StrategyFactory");
         vm.label(USDC_SPARK_VAULT, "USDC Spark Vault");
         vm.label(WETH_SPARK_VAULT, "WETH Spark Vault");
         vm.label(USDC, "USDC");
@@ -82,7 +82,7 @@ contract GenericERC4626StrategyFactoryTest is Test {
         // Create a strategy and check events
         vm.startPrank(management);
         vm.expectEmit(true, true, true, false); // Check deployer, targetVault, and donationAddress; ignore strategy address
-        emit GenericERC4626StrategyFactory.StrategyDeploy(
+        emit ERC4626StrategyFactory.StrategyDeploy(
             management,
             USDC_SPARK_VAULT,
             donationAddress,
@@ -113,7 +113,7 @@ contract GenericERC4626StrategyFactoryTest is Test {
         assertTrue(timestamp > 0, "Timestamp should be set");
 
         // Verify strategy was initialized correctly
-        GenericERC4626Strategy strategy = GenericERC4626Strategy(strategyAddress);
+        ERC4626Strategy strategy = ERC4626Strategy(strategyAddress);
         assertEq(IERC4626(address(strategy)).asset(), USDC, "Asset should be USDC");
         assertEq(strategy.targetVault(), USDC_SPARK_VAULT, "Target vault should be USDC Spark vault");
     }
@@ -125,7 +125,7 @@ contract GenericERC4626StrategyFactoryTest is Test {
         // Create a strategy and check events
         vm.startPrank(management);
         vm.expectEmit(true, true, true, false); // Check deployer, targetVault, and donationAddress; ignore strategy address
-        emit GenericERC4626StrategyFactory.StrategyDeploy(
+        emit ERC4626StrategyFactory.StrategyDeploy(
             management,
             WETH_SPARK_VAULT,
             donationAddress,
@@ -156,7 +156,7 @@ contract GenericERC4626StrategyFactoryTest is Test {
         assertTrue(timestamp > 0, "Timestamp should be set");
 
         // Verify strategy was initialized correctly
-        GenericERC4626Strategy strategy = GenericERC4626Strategy(strategyAddress);
+        ERC4626Strategy strategy = ERC4626Strategy(strategyAddress);
         assertEq(IERC4626(address(strategy)).asset(), WETH, "Asset should be WETH");
         assertEq(strategy.targetVault(), WETH_SPARK_VAULT, "Target vault should be WETH Spark vault");
     }
@@ -208,8 +208,8 @@ contract GenericERC4626StrategyFactoryTest is Test {
         assertTrue(firstStrategyAddress != secondStrategyAddress, "Strategies should have different addresses");
 
         // Verify they target different vaults
-        GenericERC4626Strategy firstStrategy = GenericERC4626Strategy(firstStrategyAddress);
-        GenericERC4626Strategy secondStrategy = GenericERC4626Strategy(secondStrategyAddress);
+        ERC4626Strategy firstStrategy = ERC4626Strategy(firstStrategyAddress);
+        ERC4626Strategy secondStrategy = ERC4626Strategy(secondStrategyAddress);
         assertEq(firstStrategy.targetVault(), USDC_SPARK_VAULT, "First strategy should target USDC vault");
         assertEq(secondStrategy.targetVault(), WETH_SPARK_VAULT, "Second strategy should target WETH vault");
     }

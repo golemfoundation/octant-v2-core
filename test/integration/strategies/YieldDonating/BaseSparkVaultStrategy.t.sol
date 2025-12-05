@@ -3,18 +3,18 @@ pragma solidity ^0.8.25;
 
 import { Test } from "forge-std/Test.sol";
 import { MockERC20 } from "test/mocks/MockERC20.sol";
-import { GenericERC4626Strategy } from "src/strategies/yieldDonating/GenericERC4626Strategy.sol";
+import { ERC4626Strategy } from "src/strategies/yieldDonating/ERC4626Strategy.sol";
 import { BaseHealthCheck } from "src/strategies/periphery/BaseHealthCheck.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { IMockStrategy } from "test/mocks/zodiac-core/IMockStrategy.sol";
-import { GenericERC4626StrategyFactory } from "src/factories/GenericERC4626StrategyFactory.sol";
+import { ERC4626StrategyFactory } from "src/factories/ERC4626StrategyFactory.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 
 /// @title Base SparkVault Yield Donating Test
 /// @author Octant
-/// @notice Base contract for integration tests of GenericERC4626 strategy with SparkDAO vaults
+/// @notice Base contract for integration tests of ERC4626 strategy with SparkDAO vaults
 abstract contract BaseSparkVaultStrategyTest is Test {
     using SafeERC20 for ERC20;
 
@@ -30,14 +30,14 @@ abstract contract BaseSparkVaultStrategyTest is Test {
     }
 
     // Strategy instance
-    GenericERC4626Strategy public strategy;
+    ERC4626Strategy public strategy;
 
     // Strategy parameters
     address public management;
     address public keeper;
     address public emergencyAdmin;
     address public donationAddress;
-    GenericERC4626StrategyFactory public factory;
+    ERC4626StrategyFactory public factory;
     string public strategyName;
 
     // Test user
@@ -94,11 +94,11 @@ abstract contract BaseSparkVaultStrategyTest is Test {
             implementationAddress: address(implementation)
         });
 
-        // GenericERC4626StrategyFactory
-        factory = new GenericERC4626StrategyFactory{ salt: keccak256("OCT_GENERIC_ERC4626_STRATEGY_FACTORY_V1") }();
+        // ERC4626StrategyFactory
+        factory = new ERC4626StrategyFactory{ salt: keccak256("OCT_GENERIC_ERC4626_STRATEGY_FACTORY_V1") }();
 
         // Deploy strategy using virtual functions
-        strategy = GenericERC4626Strategy(
+        strategy = ERC4626Strategy(
             factory.createStrategy(
                 getSparkVault(),
                 getAsset(),
@@ -402,7 +402,7 @@ abstract contract BaseSparkVaultStrategyTest is Test {
     function testConstructorAssetValidation() public {
         // Try to deploy with wrong asset - should revert
         vm.expectRevert("Asset mismatch with target vault");
-        new GenericERC4626Strategy(
+        new ERC4626Strategy(
             getSparkVault(),
             getWrongAsset(), // Wrong asset
             strategyName,

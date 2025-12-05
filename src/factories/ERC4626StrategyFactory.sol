@@ -2,22 +2,22 @@
 pragma solidity >=0.8.25;
 
 import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
-import { GenericERC4626Strategy } from "src/strategies/yieldDonating/GenericERC4626Strategy.sol";
+import { ERC4626Strategy } from "src/strategies/yieldDonating/ERC4626Strategy.sol";
 import { BaseStrategyFactory } from "src/factories/BaseStrategyFactory.sol";
 
 /**
- * @title GenericERC4626StrategyFactory
+ * @title ERC4626StrategyFactory
  * @author [Golem Foundation](https://golem.foundation)
  * @custom:security-contact security@golem.foundation
- * @notice Factory for deploying Generic ERC4626 yield donating strategies
+ * @notice Factory for deploying ERC4626 yield donating strategies
  * @dev Uses CREATE2 for deterministic deployments; records deployments via BaseStrategyFactory
  *
- *      GENERIC ERC4626 INTEGRATION:
+ *      ERC4626 INTEGRATION:
  *      This factory deploys strategies that can deposit into any ERC4626-compliant vault,
  *      including SparkDAO vaults, Yearn v3 vaults, or any other standard ERC4626 implementation.
  *      The underlying vault must have manipulation-resistant accounting.
  */
-contract GenericERC4626StrategyFactory is BaseStrategyFactory {
+contract ERC4626StrategyFactory is BaseStrategyFactory {
     /// @notice Emitted on successful strategy deployment
     /// @param deployer Transaction sender performing deployment
     /// @param targetVault ERC4626 vault address the strategy will deposit into
@@ -33,7 +33,7 @@ contract GenericERC4626StrategyFactory is BaseStrategyFactory {
     );
 
     /**
-     * @notice Deploy a new GenericERC4626 strategy
+     * @notice Deploy a new ERC4626 strategy
      * @dev Deterministic salt derived from all parameters to avoid duplicates
      * @param _targetVault ERC4626 vault address to deposit into
      * @param _asset Underlying asset address (must match vault's asset)
@@ -44,7 +44,7 @@ contract GenericERC4626StrategyFactory is BaseStrategyFactory {
      * @param _donationAddress Dragon router address (receives profit shares)
      * @param _enableBurning True to enable burning shares during loss protection
      * @param _tokenizedStrategyAddress TokenizedStrategy implementation address
-     * @return strategyAddress Deployed GenericERC4626Strategy address
+     * @return strategyAddress Deployed ERC4626Strategy address
      */
     function createStrategy(
         address _targetVault,
@@ -72,7 +72,7 @@ contract GenericERC4626StrategyFactory is BaseStrategyFactory {
         );
 
         bytes memory bytecode = abi.encodePacked(
-            type(GenericERC4626Strategy).creationCode,
+            type(ERC4626Strategy).creationCode,
             abi.encode(
                 _targetVault,
                 _asset,

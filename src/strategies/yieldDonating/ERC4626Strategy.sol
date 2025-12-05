@@ -7,7 +7,7 @@ import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 /**
- * @title GenericERC4626Strategy
+ * @title ERC4626Strategy
  * @author [Golem Foundation](https://golem.foundation)
  * @custom:security-contact security@golem.foundation
  * @notice Yield-donating strategy that compounds rewards from any ERC4626-compliant vault
@@ -25,7 +25,7 @@ import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
  *
  * @custom:security ERC4626 vault convertToAssets must be manipulation-resistant
  */
-contract GenericERC4626Strategy is BaseHealthCheck {
+contract ERC4626Strategy is BaseHealthCheck {
     using SafeERC20 for IERC20;
 
     /// @notice Address of the ERC4626 vault this strategy deposits into
@@ -33,7 +33,7 @@ contract GenericERC4626Strategy is BaseHealthCheck {
     address public immutable targetVault;
 
     /**
-     * @notice Initializes the Generic ERC4626 strategy
+     * @notice Initializes the ERC4626 strategy
      * @dev Validates asset matches target vault's asset and approves max allowance
      * @param _targetVault Address of the ERC4626 vault this strategy deposits into
      * @param _asset Address of the underlying asset (must match target vault's asset)
