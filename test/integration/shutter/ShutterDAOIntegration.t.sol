@@ -363,7 +363,7 @@ contract ShutterDAOGasProfilingTest is Test {
 
     uint256 constant TREASURY_USDC_BALANCE = 1_200_000e6;
     uint256 constant PROFIT_MAX_UNLOCK_TIME = 7 days;
-    uint256 constant EIP_7825_BLOCK_GAS_LIMIT = 16_000_000;
+    uint256 constant EIP_7825_TX_GAS_LIMIT = 16_777_216;
 
     bool isForked;
 
@@ -453,6 +453,7 @@ contract ShutterDAOGasProfilingTest is Test {
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.QUEUE_MANAGER);
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.DEBT_MANAGER);
         dragonVault.addRole(keeper, IMultistrategyVault.Roles.DEBT_MANAGER);
 
@@ -485,6 +486,6 @@ contract ShutterDAOGasProfilingTest is Test {
         emit log_named_uint("=== TOTAL GAS USED (Fork) ===", totalGasUsed);
         emit log_named_uint("=== DAO PROPOSAL GAS (Fork) ===", daoProposalGas);
 
-        assertLt(daoProposalGas, EIP_7825_BLOCK_GAS_LIMIT, "Gas limit exceeded");
+        assertLt(daoProposalGas, EIP_7825_TX_GAS_LIMIT, "Gas limit exceeded");
     }
 }

@@ -49,7 +49,7 @@ The Multistrategy Vault manages treasury capital with instant liquidity (no lock
 
 | Destination | Allocation |
 |-------------|------------|
-| Ethereum Sustainability Fund (ESF) | 0% |
+| Ethereum Sustainability Fund (ESF) | 0% (Excluded from PaymentSplitter configuration to prevent revert) |
 | Dragon Funding Pool | 100% |
 
 ### Yield Projections (assuming 5% APY)
@@ -131,7 +131,7 @@ The entire deployment can be executed in a **single DAO proposal** with batched 
 - Deploys all contracts atomically
 - Sets up roles and permissions
 - Deposits treasury capital
-- Must fit within 16M gas (EIP-7825 block gas limit)
+- Must fit within 16.7M gas (EIP-7825 per-transaction gas limit)
 
 #### Step 1: Create Fractal Proposal (UI Walkthrough)
 
@@ -162,7 +162,7 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 | Function | `deployMorphoStrategy(...)` |
 | Parameters | See [Technical Calldata](#technical-calldata-for-verification) |
 
-> **Note**: The strategy deployment includes the donation address (Dragon Router) and payment splitter configuration for yield distribution.
+> **Note**: The strategy deployment includes the donation address (Dragon Router) and payment splitter configuration for yield distribution. The Ethereum Sustainability Fund (ESF) is excluded from the PaymentSplitter payees array because a 0 share allocation would cause the deployment to revert.
 
 **1.6 — Add Transaction 2: Deploy Dragon Vault**
 
@@ -176,15 +176,36 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 | `roleManager` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` (Treasury) |
 | `profitMaxUnlockTime` | `604800` (7 days) |
 
-**1.7 — Add Transaction 3: Add Strategy to Vault**
+**1.7 — Add Transactions: Assign Roles**
+
+The vault requires role assignments to function. Add these as separate transactions in the proposal (or batch them if supported).
 
 | Field | Value |
 |-------|-------|
 | Target Contract | `[DRAGON_VAULT_ADDRESS]` *(from Tx 2)* |
+| Function | `addRole(address account, uint8 role)` |
+
+Add the following role assignments:
+
+1. `ADD_STRATEGY_MANAGER` (0) → `0x36bD...32c4` (Treasury)
+2. `QUEUE_MANAGER` (4) → `0x36bD...32c4` (Treasury)
+3. `DEBT_MANAGER` (6) → `0x36bD...32c4` (Treasury)
+4. `MAX_DEBT_MANAGER` (7) → `0x36bD...32c4` (Treasury)
+5. `DEPOSIT_LIMIT_MANAGER` (8) → `0x36bD...32c4` (Treasury)
+6. `WITHDRAW_LIMIT_MANAGER` (9) → `0x36bD...32c4` (Treasury)
+7. `DEBT_MANAGER` (6) → `[KEEPER_ADDRESS]` (Dedicated EOA/Bot)
+
+> **Note**: These roles are critical for managing strategies, debt, and limits.
+
+**1.8 — Add Transaction: Add Strategy to Vault**
+
+| Field | Value |
+|-------|-------|
+| Target Contract | `[DRAGON_VAULT_ADDRESS]` |
 | Function | `addStrategy(address strategy)` |
 | `strategy` | `[STRATEGY_ADDRESS]` *(from Tx 1)* |
 
-**1.8 — Add Transaction 4: Set Strategy Max Debt**
+**1.9 — Add Transaction: Set Strategy Max Debt**
 
 | Field | Value |
 |-------|-------|
@@ -193,7 +214,7 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 | `strategy` | `[STRATEGY_ADDRESS]` |
 | `newMaxDebt` | `type(uint256).max` |
 
-**1.9 — Add Transaction 5: Set Default Queue**
+**1.10 — Add Transaction: Set Default Queue**
 
 | Field | Value |
 |-------|-------|
@@ -201,7 +222,17 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 | Function | `setDefaultQueue(address[] calldata newDefaultQueue)` |
 | `newDefaultQueue` | `[[STRATEGY_ADDRESS]]` |
 
-**1.10 — Add Transaction 6: Set Deposit Limit**
+**1.11 — Add Transaction: Set AutoAllocate Mode**
+
+| Field | Value |
+|-------|-------|
+| Target Contract | `[DRAGON_VAULT_ADDRESS]` |
+| Function | `setAutoAllocate(bool autoAllocate)` |
+| `autoAllocate` | `true` |
+
+> **Note**: Setting `autoAllocate` to `true` ensures that deposits are immediately deployed to the strategy (Morpho Steakhouse USDC) to start earning yield without requiring manual Keeper intervention.
+
+**1.12 — Add Transaction: Set Deposit Limit**
 
 | Field | Value |
 |-------|-------|
@@ -210,7 +241,7 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 | `depositLimit` | `type(uint256).max` |
 | `depositLimitActive` | `true` |
 
-**1.11 — Add Transaction 7: Approve USDC**
+**1.12 — Add Transaction: Approve USDC**
 
 | Field | Value |
 |-------|-------|
@@ -219,7 +250,7 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 | `spender` | `[DRAGON_VAULT_ADDRESS]` |
 | `amount` | `1200000000000` |
 
-**1.12 — Add Transaction 8: Deposit USDC**
+**1.13 — Add Transaction: Deposit USDC**
 
 | Field | Value |
 |-------|-------|
@@ -232,7 +263,20 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 
 Review all details and click "Submit Proposal". Sign the transaction with your wallet.
 
-> ✅ **Gas Verified**: The batched proposal uses ~3.2M gas, well under the 16M EIP-7825 block gas limit (~80% headroom). See `ShutterDAOGasProfilingTest` for details.
+> ✅ **Gas Verified**: The batched proposal uses ~2.22M gas for the DAO proposal portion, or ~11.5M total gas if everything (including factories) is deployed in one go. Both are well under the 16.7M per-transaction gas limit (EIP-7825). See `ShutterDAOGasProfilingTest` for details.
+
+### Gas Profile Breakdown
+
+| Component | Gas Cost |
+|-----------|----------|
+| **Strategy Deploy** | ~1,002,478 |
+| **Vault Deploy** | ~185,086 |
+| **Configuration** | ~249,102 |
+| **Approve/Deposit** | ~780,131 |
+| **Total (Fork)** | **~11,501,894** |
+| **DAO Proposal** | **~2,216,797** |
+
+*Note: "DAO Proposal" gas assumes factory deployments are separate or pre-existing, consistent with the batched proposal structure. Even in a worst-case scenario (full deployment in one tx), ~11.5M gas is comfortably within the 16.7M transaction limit (~69% usage).*
 
 #### Step 2: Vote
 
@@ -271,20 +315,22 @@ This proposal deploys the Octant Dragon Vault infrastructure and deposits
 Octant v2 enables DAOs to optimize treasury yield while funding public goods. 
 See: [Octant v2 Pilot Proposal](https://shutternetwork.discourse.group/t/octant-v2-pilot-to-optimize-treasury-strengthen-ecosystem/760)
 
-## Transactions (8 total)
+## Transactions (16 total)
 
 1. **Deploy Morpho Strategy**: Create yield strategy with donation configuration
 2. **Deploy Dragon Vault**: Create vault with Treasury as role manager
-3. **Add Strategy**: Register strategy with vault
-4. **Set Max Debt**: Allow full allocation to strategy
-5. **Set Default Queue**: Configure withdrawal order
-6. **Set Deposit Limit**: Enable deposits
-7. **Approve USDC**: Allow Dragon Vault to spend 1.2M USDC
-8. **Deposit USDC**: Deposit 1.2M USDC, receiving shares to Treasury
+3. **Assign Roles**: Add 7 operational roles to Treasury and Keeper
+4. **Add Strategy**: Register strategy with vault
+5. **Set Max Debt**: Allow full allocation to strategy
+6. **Set Default Queue**: Configure withdrawal order
+7. **Set AutoAllocate**: Enable automatic deployment of deposits to strategy
+8. **Set Deposit Limit**: Enable deposits
+9. **Approve USDC**: Allow Dragon Vault to spend 1.2M USDC
+10. **Deposit USDC**: Deposit 1.2M USDC, receiving shares to Treasury
 
 ## Yield Distribution
 
-- 0% → Ethereum Sustainability Fund
+- 0% → Ethereum Sustainability Fund (Excluded from configuration)
 - 100% → Dragon Funding Pool (Shutter ecosystem grants)
 
 ## Risk Considerations
@@ -302,7 +348,20 @@ See: [Octant v2 Pilot Proposal](https://shutternetwork.discourse.group/t/octant-
 
 Use this to verify transaction encoding matches the UI:
 
-**Transaction 1 — USDC Approve**
+**Transaction 12 — Set AutoAllocate**
+
+```
+Function: setAutoAllocate(bool)
+Selector: 0xc4456947
+Parameters:
+  autoAllocate: true (1)
+
+Encoded:
+0xc4456947
+  0000000000000000000000000000000000000000000000000000000000000001
+```
+
+**Transaction 15 — Approve USDC**
 
 ```
 Function: approve(address,uint256)
@@ -317,7 +376,7 @@ Encoded (with placeholder vault 0x1234...5678):
   000000000000000000000000000000000000000000000000000001176592e000 // amount
 ```
 
-**Transaction 2 — Deposit**
+**Transaction 16 — Deposit USDC**
 
 ```
 Function: deposit(uint256,address)
