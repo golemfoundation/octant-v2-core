@@ -103,8 +103,42 @@ Shutter DAO 0x36 uses **Fractal (Decent)** for on-chain governance, built on Saf
 | Component | Address / Value |
 |-----------|-----------------|
 | Safe (Treasury) | [`0x36bD3044ab68f600f6d3e081056F34f2a58432c4`](https://etherscan.io/address/0x36bD3044ab68f600f6d3e081056F34f2a58432c4) |
-| Azorius Module | `0xAA6BfA174d2f803b517026E93DBBEc1eBa26258e` |
+| Azorius Module | [`0xAA6BfA174d2f803b517026E93DBBEc1eBa26258e`](https://etherscan.io/address/0xAA6BfA174d2f803b517026E93DBBEc1eBa26258e) |
 | Voting Token | SHU ([`0xe485E2f1bab389C08721B291f6b59780feC83Fd7`](https://etherscan.io/token/0xe485E2f1bab389C08721B291f6b59780feC83Fd7)) |
+
+### Execution Call Chain
+
+When a proposal passes and is executed, the call flow is:
+
+```
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Step 1: Any EOA calls Azorius to execute passed proposal                │
+│          executeProposal(proposalId)                                     │
+│                           │                                              │
+│                           ▼                                              │
+│  ┌────────────────────────────────────────────────────────────────────┐  │
+│  │  Azorius Module (0xAA6BfA174d2f803b517026E93DBBEc1eBa26258e)       │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│                           │                                              │
+│  Step 2: Azorius calls Safe via module interface                         │
+│          execTransactionFromModule(to, value, data, operation)           │
+│                           │                                              │
+│                           ▼                                              │
+│  ┌────────────────────────────────────────────────────────────────────┐  │
+│  │  DAO Safe / Treasury (0x36bD3044ab68f600f6d3e081056F34f2a58432c4)  │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+│                           │                                              │
+│  Step 3: Safe executes transaction to target contract                    │
+│          msg.sender = Safe (0x36bD...)                                   │
+│                           │                                              │
+│                           ▼                                              │
+│  ┌────────────────────────────────────────────────────────────────────┐  │
+│  │  Target Contract (Factory / USDC / Strategy)                       │  │
+│  └────────────────────────────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────────────────────────────┘
+```
+
+> **Critical**: From the target contract's perspective, `msg.sender` is the **Safe address** (`0x36bD...`), NOT the Azorius module. This is why all roles (`management`, `keeper`, `emergencyAdmin`) are assigned to the Treasury Safe address.
 
 ### Governance Parameters
 
