@@ -355,52 +355,155 @@ See: [Octant v2 Pilot Proposal](https://shutternetwork.discourse.group/t/octant-
 - [Yearn Strategy USDC](https://etherscan.io/address/0x074134A2784F4F66b6ceD6f68849382990Ff3215)
 ```
 
-### Technical Calldata (for verification)
+### Prepared Calldata
 
-Use this to verify transaction encoding matches the UI:
+Complete transaction calldata for all operations.
 
-**Transaction 12 — Set AutoAllocate**
+---
+
+#### Normal Operation
+
+**Transaction 1 — Create Strategy**
 
 ```
-Function: setAutoAllocate(bool)
-Selector: 0xc4456947
+Target: 0x052d20B0e0b141988bD32772C735085e45F357c1 (Morpho Strategy Factory)
+Function: createStrategy(string,address,address,address,address,bool,address)
+Selector: 0x31d89943
+
 Parameters:
-  autoAllocate: true (1)
+  _name:                    "SHUGrantPool"
+  _management:              0x36bD3044ab68f600f6d3e081056F34f2a58432c4
+  _keeper:                  0x36bD3044ab68f600f6d3e081056F34f2a58432c4
+  _emergencyAdmin:          0x36bD3044ab68f600f6d3e081056F34f2a58432c4
+  _donationAddress:         [DONATION_ADDRESS] (TBD)
+  _enableBurning:           false
+  _tokenizedStrategyAddress: 0xb27064a2c51b8c5b39a5bb911ad34db039c3ab9c
 
-Encoded:
-0xc4456947
-  0000000000000000000000000000000000000000000000000000000000000001
+Calldata (with placeholder donation address 0x0000...0000):
+0x31d89943
+00000000000000000000000000000000000000000000000000000000000000e0
+00000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c4
+00000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c4
+00000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c4
+0000000000000000000000000000000000000000000000000000000000000000  <-- REPLACE with donation address
+0000000000000000000000000000000000000000000000000000000000000000
+000000000000000000000000b27064a2c51b8c5b39a5bb911ad34db039c3ab9c
+000000000000000000000000000000000000000000000000000000000000000c
+5348554772616e74506f6f6c0000000000000000000000000000000000000000
+
+Full hex (single line):
+0x31d8994300000000000000000000000000000000000000000000000000000000000000e000000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c400000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c400000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b27064a2c51b8c5b39a5bb911ad34db039c3ab9c000000000000000000000000000000000000000000000000000000000000000c5348554772616e74506f6f6c0000000000000000000000000000000000000000
 ```
 
-**Transaction 15 — Approve USDC**
+**Transaction 2 — Approve USDC**
 
 ```
+Target: 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 (USDC)
 Function: approve(address,uint256)
 Selector: 0x095ea7b3
+
 Parameters:
-  spender: [DRAGON_VAULT_ADDRESS]
-  amount:  1200000000000 (0x1176592e000)
+  spender: [STRATEGY_ADDRESS] (from Transaction 1)
+  amount:  1200000000000 (1.2M USDC, 6 decimals)
 
-Encoded (with placeholder vault 0x1234...5678):
+Calldata (replace spender with actual strategy address):
 0x095ea7b3
-  0000000000000000000000001234567890123456789012345678901234567890  // spender
-  000000000000000000000000000000000000000000000000000001176592e000 // amount
+000000000000000000000000[STRATEGY_ADDRESS_20_BYTES_HERE]
+000000000000000000000000000000000000000000000000000001176592e000
 ```
 
-**Transaction 16 — Deposit USDC**
+**Transaction 3 — Deposit USDC**
 
 ```
+Target: [STRATEGY_ADDRESS] (from Transaction 1)
 Function: deposit(uint256,address)
 Selector: 0x6e553f65
-Parameters:
-  assets:   1200000000000 (0x1176592e000)
-  receiver: 0x36bD3044ab68f600f6d3e081056F34f2a58432c4
 
-Encoded:
+Parameters:
+  assets:   1200000000000 (1.2M USDC)
+  receiver: 0x36bD3044ab68f600f6d3e081056F34f2a58432c4 (Treasury)
+
+Calldata:
 0x6e553f65
-  000000000000000000000000000000000000000000000000000001176592e000 // assets
-  00000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c4  // receiver
+000000000000000000000000000000000000000000000000000001176592e000
+00000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c4
+
+Full hex (single line):
+0x6e553f65000000000000000000000000000000000000000000000000000001176592e00000000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c4
 ```
+
+---
+
+#### Harvest Operation
+
+**Transaction — Report (Harvest Yield)**
+
+```
+Target: [STRATEGY_ADDRESS]
+Function: report()
+Selector: 0x2606a10b
+
+Parameters: (none)
+
+Calldata:
+0x2606a10b
+
+Note: Can only be called by management or keeper (Treasury in DAO-centric setup).
+Returns: (uint256 profit, uint256 loss)
+```
+
+---
+
+#### Emergency Operations
+
+**Transaction — Shutdown Strategy**
+
+```
+Target: [STRATEGY_ADDRESS]
+Function: shutdownStrategy()
+Selector: 0xbe8f1668
+
+Parameters: (none)
+
+Calldata:
+0xbe8f1668
+
+Note: Can only be called by management or emergencyAdmin (Treasury).
+Effect: Stops new deposits/mints, allows withdrawals, still allows tend/report.
+```
+
+**Transaction — Emergency Withdraw**
+
+```
+Target: [STRATEGY_ADDRESS]
+Function: emergencyWithdraw(uint256)
+Selector: 0x5312ea8e
+
+Parameters:
+  _amount: Amount to withdraw from yield source (in USDC, 6 decimals)
+
+Calldata (example: withdraw all 1.2M USDC):
+0x5312ea8e
+000000000000000000000000000000000000000000000000000001176592e000
+
+Full hex (single line):
+0x5312ea8e000000000000000000000000000000000000000000000000000001176592e000
+
+Note: Strategy must be shutdown first. Can only be called by management or emergencyAdmin.
+```
+
+---
+
+#### Quick Reference: Function Selectors
+
+| Function | Selector | Target |
+|----------|----------|--------|
+| `createStrategy(...)` | `0x31d89943` | Factory |
+| `approve(address,uint256)` | `0x095ea7b3` | USDC |
+| `deposit(uint256,address)` | `0x6e553f65` | Strategy |
+| `report()` | `0x2606a10b` | Strategy |
+| `shutdownStrategy()` | `0xbe8f1668` | Strategy |
+| `emergencyWithdraw(uint256)` | `0x5312ea8e` | Strategy |
 
 ---
 
