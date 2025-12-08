@@ -16,6 +16,7 @@ import { IAddressSet } from "src/utils/IAddressSet.sol";
 import { AccessMode } from "src/constants.sol";
 
 import { MorphoCompounderStrategy } from "src/strategies/yieldDonating/MorphoCompounderStrategy.sol";
+import { MorphoCompounderStrategyFactory } from "src/factories/MorphoCompounderStrategyFactory.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -36,7 +37,13 @@ contract ShutterDAOIntegrationTest is Test {
     address constant SHUTTER_TREASURY = 0x36bD3044ab68f600f6d3e081056F34f2a58432c4;
     address constant SHU_TOKEN = 0xe485E2f1bab389C08721B291f6b59780feC83Fd7;
     address constant USDC_TOKEN = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address constant MORPHO_STEAKHOUSE_VAULT = 0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB;
+
+    // Factory and Strategy Addresses (per Quentin's source of truth)
+    address constant MORPHO_STRATEGY_FACTORY = 0x052d20B0e0b141988bD32772C735085e45F357c1;
+    address constant TOKENIZED_STRATEGY_ADDRESS = 0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c;
+
+    // Strategy Name (per Quentin's source of truth)
+    string constant STRATEGY_NAME = "SHUGrantPool";
 
     // === Constants ===
     uint256 constant TREASURY_USDC_BALANCE = 1_200_000e6;
@@ -49,7 +56,6 @@ contract ShutterDAOIntegrationTest is Test {
     MultistrategyVaultFactory vaultFactory;
     MultistrategyVault dragonVault;
     MorphoCompounderStrategy strategy;
-    YieldDonatingTokenizedStrategy strategyImpl;
     PaymentSplitter paymentSplitter;
 
     RegenStaker regenStaker;
@@ -58,7 +64,6 @@ contract ShutterDAOIntegrationTest is Test {
 
     // === Roles ===
     address octantGovernance;
-    address keeper;
     address shuHolder1;
     address shuHolder2;
     address shuHolder3;
@@ -76,7 +81,6 @@ contract ShutterDAOIntegrationTest is Test {
         }
 
         octantGovernance = makeAddr("OctantGovernance");
-        keeper = makeAddr("Keeper");
         shuHolder1 = makeAddr("SHUHolder1");
         shuHolder2 = makeAddr("SHUHolder2");
         shuHolder3 = makeAddr("SHUHolder3");
@@ -94,7 +98,6 @@ contract ShutterDAOIntegrationTest is Test {
 
     function _deployInfrastructure() internal {
         vaultImplementation = new MultistrategyVault();
-        strategyImpl = new YieldDonatingTokenizedStrategy();
 
         vm.prank(octantGovernance);
         vaultFactory = new MultistrategyVaultFactory(
@@ -117,19 +120,20 @@ contract ShutterDAOIntegrationTest is Test {
         ERC1967Proxy proxy = new ERC1967Proxy(address(paymentSplitterImpl), initData);
         paymentSplitter = PaymentSplitter(payable(address(proxy)));
 
-        // Deploy Morpho Strategy
+        // Deploy Morpho Strategy via Factory (per Quentin's source of truth)
+        // Uses "Simple DAO-centric roles": all roles → SHUTTER_TREASURY
+        MorphoCompounderStrategyFactory factory = MorphoCompounderStrategyFactory(MORPHO_STRATEGY_FACTORY);
         vm.prank(SHUTTER_TREASURY);
-        strategy = new MorphoCompounderStrategy(
-            MORPHO_STEAKHOUSE_VAULT,
-            USDC_TOKEN,
-            "Octant Morpho USDC",
+        address strategyAddress = factory.createStrategy(
+            STRATEGY_NAME,
             SHUTTER_TREASURY,
-            keeper,
+            SHUTTER_TREASURY,
             SHUTTER_TREASURY,
             address(paymentSplitter),
             false,
-            address(strategyImpl)
+            TOKENIZED_STRATEGY_ADDRESS
         );
+        strategy = MorphoCompounderStrategy(strategyAddress);
 
         // Deploy Vault
         vm.startPrank(SHUTTER_TREASURY);
@@ -143,20 +147,19 @@ contract ShutterDAOIntegrationTest is Test {
             )
         );
 
-        // Configure Roles
+        // Configure Roles (Simple DAO-centric: all roles → Treasury)
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.DEBT_MANAGER);
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.QUEUE_MANAGER);
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
-        dragonVault.addRole(keeper, IMultistrategyVault.Roles.DEBT_MANAGER);
 
         // Setup Strategy
         dragonVault.addStrategy(address(strategy), true);
         dragonVault.updateMaxDebtForStrategy(address(strategy), type(uint256).max);
         dragonVault.setDepositLimit(type(uint256).max, true);
-        dragonVault.setAutoAllocate(true); // Default to true for most tests
+        dragonVault.setAutoAllocate(true);
 
         vm.stopPrank();
     }
@@ -239,8 +242,8 @@ contract ShutterDAOIntegrationTest is Test {
         assertEq(dragonVault.totalIdle(), depositAmount);
         assertEq(dragonVault.totalDebt(), 0);
 
-        // Keeper triggers allocation
-        vm.prank(keeper);
+        // Treasury (as keeper in DAO-centric model) triggers allocation
+        vm.prank(SHUTTER_TREASURY);
         dragonVault.updateDebt(address(strategy), type(uint256).max, 0);
 
         assertEq(dragonVault.totalDebt(), depositAmount);
@@ -258,11 +261,18 @@ contract ShutterDAOIntegrationTest is Test {
         dragonVault.deposit(depositAmount, SHUTTER_TREASURY);
         vm.stopPrank();
 
-        vm.prank(SHUTTER_TREASURY);
-        dragonVault.withdraw(depositAmount, SHUTTER_TREASURY, SHUTTER_TREASURY, 0, new address[](0));
+        // Use maxWithdraw to account for precision in underlying vault
+        address[] memory strategies = new address[](1);
+        strategies[0] = address(strategy);
+        uint256 maxWithdrawable = dragonVault.maxWithdraw(SHUTTER_TREASURY, 0, strategies);
 
-        assertEq(IERC20(USDC_TOKEN).balanceOf(SHUTTER_TREASURY), depositAmount);
-        assertEq(dragonVault.balanceOf(SHUTTER_TREASURY), 0);
+        vm.prank(SHUTTER_TREASURY);
+        dragonVault.withdraw(maxWithdrawable, SHUTTER_TREASURY, SHUTTER_TREASURY, 0, strategies);
+
+        // Verify withdrawal succeeds with minimal precision loss (< 0.01%)
+        assertApproxEqRel(IERC20(USDC_TOKEN).balanceOf(SHUTTER_TREASURY), depositAmount, 0.0001e18);
+        // Allow dust shares due to underlying vault rounding
+        assertApproxEqAbs(dragonVault.balanceOf(SHUTTER_TREASURY), 0, 10);
     }
 
     function test_TreasuryCanWithdrawFromStrategy() public {
@@ -278,12 +288,19 @@ contract ShutterDAOIntegrationTest is Test {
 
         assertEq(dragonVault.totalDebt(), depositAmount);
 
-        vm.prank(SHUTTER_TREASURY);
-        dragonVault.withdraw(depositAmount, SHUTTER_TREASURY, SHUTTER_TREASURY, 0, new address[](0));
+        // Use maxWithdraw to account for precision in underlying vault
+        address[] memory strategies = new address[](1);
+        strategies[0] = address(strategy);
+        uint256 maxWithdrawable = dragonVault.maxWithdraw(SHUTTER_TREASURY, 0, strategies);
 
-        assertEq(IERC20(USDC_TOKEN).balanceOf(SHUTTER_TREASURY), depositAmount);
-        assertEq(dragonVault.balanceOf(SHUTTER_TREASURY), 0);
-        assertEq(dragonVault.totalDebt(), 0);
+        vm.prank(SHUTTER_TREASURY);
+        dragonVault.withdraw(maxWithdrawable, SHUTTER_TREASURY, SHUTTER_TREASURY, 0, strategies);
+
+        // Verify withdrawal succeeds with minimal precision loss (< 0.01%)
+        assertApproxEqRel(IERC20(USDC_TOKEN).balanceOf(SHUTTER_TREASURY), depositAmount, 0.0001e18);
+        // Allow dust shares due to underlying vault rounding
+        assertApproxEqAbs(dragonVault.balanceOf(SHUTTER_TREASURY), 0, 10);
+        assertApproxEqAbs(dragonVault.totalDebt(), 0, 1000);
     }
 
     function test_SHUHoldersCanDelegateVotingPower() public {
@@ -359,7 +376,11 @@ contract ShutterDAOGasProfilingTest is Test {
 
     address constant SHUTTER_TREASURY = 0x36bD3044ab68f600f6d3e081056F34f2a58432c4;
     address constant USDC_TOKEN = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-    address constant MORPHO_STEAKHOUSE_VAULT = 0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB;
+
+    // Factory and Strategy Addresses (per Quentin's source of truth)
+    address constant MORPHO_STRATEGY_FACTORY = 0x052d20B0e0b141988bD32772C735085e45F357c1;
+    address constant TOKENIZED_STRATEGY_ADDRESS = 0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c;
+    string constant STRATEGY_NAME = "SHUGrantPool";
 
     uint256 constant TREASURY_USDC_BALANCE = 1_200_000e6;
     uint256 constant PROFIT_MAX_UNLOCK_TIME = 7 days;
@@ -381,7 +402,6 @@ contract ShutterDAOGasProfilingTest is Test {
         if (!isForked) return;
 
         address octantGovernance = makeAddr("OctantGovernance");
-        address keeper = makeAddr("Keeper");
 
         uint256 gasStart = gasleft();
 
@@ -396,7 +416,6 @@ contract ShutterDAOGasProfilingTest is Test {
             octantGovernance
         );
 
-        YieldDonatingTokenizedStrategy strategyImpl = new YieldDonatingTokenizedStrategy();
         PaymentSplitter paymentSplitter;
         {
             // PaymentSplitter setup (proxy pattern)
@@ -414,19 +433,20 @@ contract ShutterDAOGasProfilingTest is Test {
 
         uint256 gasAfterFactoryDeploy = gasleft();
 
-        // TX 1: Deploy Strategy
+        // TX 1: Deploy Strategy via Factory (per Quentin's source of truth)
+        // Uses "Simple DAO-centric roles": all roles → SHUTTER_TREASURY
+        MorphoCompounderStrategyFactory factory = MorphoCompounderStrategyFactory(MORPHO_STRATEGY_FACTORY);
         vm.prank(SHUTTER_TREASURY);
-        MorphoCompounderStrategy strategy = new MorphoCompounderStrategy(
-            MORPHO_STEAKHOUSE_VAULT,
-            USDC_TOKEN,
-            "Octant Morpho USDC",
+        address strategyAddress = factory.createStrategy(
+            STRATEGY_NAME,
             SHUTTER_TREASURY,
-            keeper,
+            SHUTTER_TREASURY,
             SHUTTER_TREASURY,
             address(paymentSplitter),
             false,
-            address(strategyImpl)
+            TOKENIZED_STRATEGY_ADDRESS
         );
+        MorphoCompounderStrategy strategy = MorphoCompounderStrategy(strategyAddress);
 
         uint256 gasAfterStrategyDeploy = gasleft();
 
@@ -444,9 +464,7 @@ contract ShutterDAOGasProfilingTest is Test {
 
         uint256 gasAfterVaultDeploy = gasleft();
 
-        // Since strategy logic is immutable in MorphoCompounderStrategy, we don't need to recreate it.
-
-        // TX 3-6: Configure
+        // TX 3-6: Configure (Simple DAO-centric: all roles → Treasury)
         vm.startPrank(SHUTTER_TREASURY);
 
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
@@ -455,7 +473,6 @@ contract ShutterDAOGasProfilingTest is Test {
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.DEBT_MANAGER);
-        dragonVault.addRole(keeper, IMultistrategyVault.Roles.DEBT_MANAGER);
 
         dragonVault.addStrategy(address(strategy), true);
         dragonVault.updateMaxDebtForStrategy(address(strategy), type(uint256).max);

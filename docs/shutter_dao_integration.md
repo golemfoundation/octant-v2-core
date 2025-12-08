@@ -21,8 +21,10 @@ Shutter DAO 0x36 will integrate with Octant v2 through **two distinct components
 |--------|---------|---------|
 | Shutter DAO Treasury | [`0x36bD3044ab68f600f6d3e081056F34f2a58432c4`](https://etherscan.io/address/0x36bD3044ab68f600f6d3e081056F34f2a58432c4) | Ethereum |
 | SHU Token | [`0xe485E2f1bab389C08721B291f6b59780feC83Fd7`](https://etherscan.io/token/0xe485E2f1bab389C08721B291f6b59780feC83Fd7) | Ethereum |
-| Morpho Steakhouse USDC | [`0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB`](https://app.morpho.org/ethereum/vault/0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB/steakhouse-usdc) | Ethereum |
 | USDC | [`0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48`](https://etherscan.io/token/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48) | Ethereum |
+| Morpho Strategy Factory | [`0x052d20B0e0b141988bD32772C735085e45F357c1`](https://etherscan.io/address/0x052d20B0e0b141988bD32772C735085e45F357c1) | Ethereum |
+| Tokenized Strategy | [`0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c`](https://etherscan.io/address/0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c) | Ethereum |
+| Yearn Strategy USDC | [`0x074134A2784F4F66b6ceD6f68849382990Ff3215`](https://etherscan.io/address/0x074134A2784F4F66b6ceD6f68849382990Ff3215) | Ethereum |
 
 ---
 
@@ -32,8 +34,9 @@ The Multistrategy Vault manages treasury capital with instant liquidity (no lock
 
 ### Underlying Strategy
 
-[**Morpho Steakhouse USDC Vault**](https://app.morpho.org/ethereum/vault/0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB/steakhouse-usdc)
-- Credora Rating: A+
+[**Yearn Strategy USDC**](https://etherscan.io/address/0x074134A2784F4F66b6ceD6f68849382990Ff3215) — Deposits into Morpho lending markets via Yearn's aggregator vault.
+
+The `MorphoCompounderStrategyFactory` at `0x052d20B...` deploys strategies that target the Yearn Strategy USDC vault, which optimizes across Morpho lending markets.
 
 
 ### Role Assignments
@@ -41,9 +44,11 @@ The Multistrategy Vault manages treasury capital with instant liquidity (no lock
 | Role | Assigned To | Description |
 |------|-------------|-------------|
 | **Operator** | Shutter DAO Treasury (`0x36bD...32c4`) | Only entity that can deposit/mint shares into the vault |
-| **Management** | Shutter DAO Treasury (`0x36bD...32c4`) | Administrative role (add strategies, set keeper, set emergency admin). Can delegate to a sub-DAO/multisig later if needed. |
-| **Keeper** | Dedicated Bot/EOA *(Recommended)* | Authorized to call `report()`/`tend()` to harvest yields. See [Operational Considerations](#operational-considerations). |
-| **Emergency Admin** | Shutter DAO Treasury | Can shutdown the vault and perform emergency withdrawals. Note: Emergency actions follow standard DAO voting timeline. |
+| **Management** | Shutter DAO Treasury (`0x36bD...32c4`) | Administrative role (add strategies, set keeper, set emergency admin). |
+| **Keeper** | Shutter DAO Treasury (`0x36bD...32c4`) | Authorized to call `report()`/`tend()` to harvest yields. Can be delegated to a dedicated bot later. |
+| **Emergency Admin** | Shutter DAO Treasury (`0x36bD...32c4`) | Can shutdown the vault and perform emergency withdrawals. |
+
+> **Note**: The "Simple DAO-centric" role assignment is used here, where the DAO Safe holds all roles. These can be delegated to specialized sub-DAOs or multisigs later via governance proposals.
 
 ### Yield Distribution
 
@@ -98,7 +103,7 @@ Shutter DAO 0x36 uses **Fractal (Decent)** for on-chain governance, built on Saf
 | Component | Address / Value |
 |-----------|-----------------|
 | Safe (Treasury) | [`0x36bD3044ab68f600f6d3e081056F34f2a58432c4`](https://etherscan.io/address/0x36bD3044ab68f600f6d3e081056F34f2a58432c4) |
-| Governance Module | Azorius + LinearERC20Voting |
+| Azorius Module | `0xAA6BfA174d2f803b517026E93DBBEc1eBa26258e` |
 | Voting Token | SHU ([`0xe485E2f1bab389C08721B291f6b59780feC83Fd7`](https://etherscan.io/token/0xe485E2f1bab389C08721B291f6b59780feC83Fd7)) |
 
 ### Governance Parameters
@@ -158,11 +163,17 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 
 | Field | Value |
 |-------|-------|
-| Target Contract | `[STRATEGY_FACTORY_ADDRESS]` *(TBD by Octant)* |
-| Function | `deployMorphoStrategy(...)` |
-| Parameters | See [Technical Calldata](#technical-calldata-for-verification) |
+| Target Contract | `0x052d20B0e0b141988bD32772C735085e45F357c1` (Morpho Strategy Factory) |
+| Function | `createStrategy(string,address,address,address,address,bool,address)` |
+| `_name` | `SHUGrantPool` |
+| `_management` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` |
+| `_keeper` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` |
+| `_emergencyAdmin` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` |
+| `_donationAddress` | `[PAYMENT_SPLITTER_ADDRESS]` *(See note below)* |
+| `_enableBurning` | `false` |
+| `_tokenizedStrategyAddress` | `0xb27064a2c51b8c5b39a5bb911ad34db039c3ab9c` |
 
-> **Note**: The strategy deployment includes the donation address (Dragon Router) and payment splitter configuration for yield distribution. The Ethereum Sustainability Fund (ESF) is excluded from the PaymentSplitter payees array because a 0 share allocation would cause the deployment to revert.
+> **Note**: The `_donationAddress` should ideally point to a PaymentSplitter to manage yield distribution. If deploying in a single proposal, this address must be pre-calculated using CREATE2. Alternatively, if 100% of yield goes to a single destination (e.g., Dragon Funding Pool), that address can be used directly. Ensure the ESF is excluded if using a PaymentSplitter to avoid reverts (0% share issue).
 
 **1.6 — Add Transaction 2: Deploy Dragon Vault**
 
@@ -230,7 +241,7 @@ Add the following role assignments:
 | Function | `setAutoAllocate(bool autoAllocate)` |
 | `autoAllocate` | `true` |
 
-> **Note**: Setting `autoAllocate` to `true` ensures that deposits are immediately deployed to the strategy (Morpho Steakhouse USDC) to start earning yield without requiring manual Keeper intervention.
+> **Note**: Setting `autoAllocate` to `true` ensures that deposits are immediately deployed to the strategy (Yearn Strategy USDC → Morpho) to start earning yield without requiring manual Keeper intervention.
 
 **1.12 — Add Transaction: Set Deposit Limit**
 
@@ -241,7 +252,7 @@ Add the following role assignments:
 | `depositLimit` | `type(uint256).max` |
 | `depositLimitActive` | `true` |
 
-**1.12 — Add Transaction: Approve USDC**
+**1.13 — Add Transaction: Approve USDC**
 
 | Field | Value |
 |-------|-------|
@@ -250,7 +261,7 @@ Add the following role assignments:
 | `spender` | `[DRAGON_VAULT_ADDRESS]` |
 | `amount` | `1200000000000` |
 
-**1.13 — Add Transaction: Deposit USDC**
+**1.14 — Add Transaction: Deposit USDC**
 
 | Field | Value |
 |-------|-------|
@@ -259,24 +270,24 @@ Add the following role assignments:
 | `assets` | `1200000000000` |
 | `receiver` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` |
 
-**1.13 — Submit Proposal**
+**1.15 — Submit Proposal**
 
 Review all details and click "Submit Proposal". Sign the transaction with your wallet.
 
-> ✅ **Gas Verified**: The batched proposal uses ~2.22M gas for the DAO proposal portion, or ~11.5M total gas if everything (including factories) is deployed in one go. Both are well under the 16.7M per-transaction gas limit (EIP-7825). See `ShutterDAOGasProfilingTest` for details.
+> ✅ **Gas Verified**: The batched proposal uses ~2.4M gas for the DAO proposal portion, or ~8.7M total gas if everything (including factories) is deployed in one go. Both are well under the 16.7M per-transaction gas limit (EIP-7825). See `ShutterDAOGasProfilingTest` for details.
 
 ### Gas Profile Breakdown
 
 | Component | Gas Cost |
 |-----------|----------|
-| **Strategy Deploy** | ~1,002,478 |
+| **Strategy Deploy** | ~1,137,332 |
 | **Vault Deploy** | ~185,086 |
-| **Configuration** | ~249,102 |
-| **Approve/Deposit** | ~780,131 |
-| **Total (Fork)** | **~11,501,894** |
-| **DAO Proposal** | **~2,216,797** |
+| **Configuration** | ~223,601 |
+| **Approve/Deposit** | ~860,806 |
+| **Total (Fork)** | **~8,709,033** |
+| **DAO Proposal** | **~2,406,825** |
 
-*Note: "DAO Proposal" gas assumes factory deployments are separate or pre-existing, consistent with the batched proposal structure. Even in a worst-case scenario (full deployment in one tx), ~11.5M gas is comfortably within the 16.7M transaction limit (~69% usage).*
+*Note: "DAO Proposal" gas assumes factory deployments are separate or pre-existing, consistent with the batched proposal structure. Even in a worst-case scenario (full deployment in one tx), ~8.7M gas is comfortably within the 16.7M transaction limit (~52% usage).*
 
 #### Step 2: Vote
 
@@ -335,13 +346,13 @@ See: [Octant v2 Pilot Proposal](https://shutternetwork.discourse.group/t/octant-
 
 ## Risk Considerations
 
-- Strategy: Morpho Steakhouse USDC (Credora A+ rated)
+- Strategy: Yearn Strategy USDC (deposits into Morpho lending markets)
 - Custody: Treasury retains full share ownership
 - Liquidity: Instant withdrawals (no lockup period)
 
 ## Links
 
-- [Morpho Strategy](https://app.morpho.org/ethereum/vault/0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB/steakhouse-usdc)
+- [Yearn Strategy USDC](https://etherscan.io/address/0x074134A2784F4F66b6ceD6f68849382990Ff3215)
 ```
 
 ### Technical Calldata (for verification)
@@ -452,7 +463,7 @@ If funds are deployed to strategies, the vault automatically withdraws from the 
 
 - [Shutter DAO Blueprint](https://blog.shutter.network/a-proposed-blueprint-for-launching-a-shutter-dao/)
 - [Octant v2 Pilot Proposal (Forum)](https://shutternetwork.discourse.group/t/octant-v2-pilot-to-optimize-treasury-strengthen-ecosystem/760)
-- [Morpho Steakhouse USDC Vault](https://app.morpho.org/ethereum/vault/0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB/steakhouse-usdc)
+- [Yearn Strategy USDC (Etherscan)](https://etherscan.io/address/0x074134A2784F4F66b6ceD6f68849382990Ff3215)
 - [Shutter DAO Governance (Fractal/Decent)](https://app.decentdao.org/home?dao=eth%3A0x36bD3044ab68f600f6d3e081056F34f2a58432c4)
 - [Shutter DAO Treasury (Etherscan)](https://etherscan.io/address/0x36bD3044ab68f600f6d3e081056F34f2a58432c4)
 

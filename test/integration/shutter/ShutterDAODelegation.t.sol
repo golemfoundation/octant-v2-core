@@ -13,7 +13,6 @@ import { Staker } from "staker/Staker.sol";
  * @dev Inherits from ShutterDAOIntegrationTest to reuse setup and infrastructure.
  */
 contract ShutterDAODelegationTest is ShutterDAOIntegrationTest {
-    
     function test_DelegationPersistsAfterAdditionalStake() public {
         if (!isForked) return;
 
@@ -69,10 +68,10 @@ contract ShutterDAODelegationTest is ShutterDAOIntegrationTest {
         vm.startPrank(shuHolder1);
         IERC20(SHU_TOKEN).approve(address(regenStaker), stakeAmount);
         Staker.DepositIdentifier depositId = regenStaker.stake(stakeAmount, delegatee1);
-        
+
         // Verify initial state
         assertEq(_getDelegatee(surrogate1), delegatee1);
-        
+
         // 2. Change Delegatee to Delegatee 2
         // To change delegatee, we withdraw and restake or use alterDelegatee if supported.
         // RegenStakerBase supports alterDelegatee.
@@ -81,7 +80,7 @@ contract ShutterDAODelegationTest is ShutterDAOIntegrationTest {
 
         // Verify new state
         assertEq(_getDelegatee(surrogate2), delegatee2);
-        
+
         // Verify tokens moved
         assertEq(IERC20(SHU_TOKEN).balanceOf(surrogate1), 0);
         assertEq(IERC20(SHU_TOKEN).balanceOf(surrogate2), stakeAmount);
@@ -97,7 +96,7 @@ contract ShutterDAODelegationTest is ShutterDAOIntegrationTest {
         vm.startPrank(shuHolder1);
         IERC20(SHU_TOKEN).approve(address(regenStaker), stakeAmount);
         Staker.DepositIdentifier depositId = regenStaker.stake(stakeAmount, delegatee);
-        
+
         // Verify staked
         assertEq(IERC20(SHU_TOKEN).balanceOf(surrogate), stakeAmount);
 
@@ -141,11 +140,11 @@ contract ShutterDAODelegationTest is ShutterDAOIntegrationTest {
         vm.startPrank(shuHolder2);
         IERC20(SHU_TOKEN).approve(address(regenStaker), stake2);
         Staker.DepositIdentifier depositId2 = regenStaker.stake(stake2, delegatee);
-        
+
         // Try to withdraw more than staked (attack)
         vm.expectRevert(); // Should revert with over/underflow or insufficient balance error
         regenStaker.withdraw(depositId2, stake2 + 1);
-        
+
         // Withdraw correct amount
         regenStaker.withdraw(depositId2, stake2);
         vm.stopPrank();
@@ -163,4 +162,3 @@ contract ShutterDAODelegationTest is ShutterDAOIntegrationTest {
         return abi.decode(data, (address));
     }
 }
-
