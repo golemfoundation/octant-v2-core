@@ -24,6 +24,7 @@ import { IERC20Staking } from "staker/interfaces/IERC20Staking.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { ISafe } from "src/zodiac-core/interfaces/Safe.sol";
 import { PaymentSplitterFactory } from "src/factories/PaymentSplitterFactory.sol";
+import { MultiSendCallOnly } from "src/utils/libs/Safe/MultiSendCallOnly.sol";
 import { USDC_MAINNET, MORPHO_STRATEGY_FACTORY_MAINNET, YEARN_TOKENIZED_STRATEGY_MAINNET, EIP_7825_TX_GAS_LIMIT } from "src/constants.sol";
 
 /**
@@ -57,6 +58,7 @@ contract ShutterDAOIntegrationTest is Test {
     MultistrategyVault vaultImplementation;
     MultistrategyVaultFactory vaultFactory;
     PaymentSplitterFactory paymentSplitterFactory;
+    MultiSendCallOnly multiSend;
     MultistrategyVault dragonVault;
     MorphoCompounderStrategy strategy;
     PaymentSplitter paymentSplitter;
@@ -113,6 +115,8 @@ contract ShutterDAOIntegrationTest is Test {
 
         vm.prank(octantGovernance);
         paymentSplitterFactory = new PaymentSplitterFactory();
+
+        multiSend = new MultiSendCallOnly();
     }
 
     /// @notice Simulates Azorius module executing a transaction through the Safe
@@ -137,9 +141,21 @@ contract ShutterDAOIntegrationTest is Test {
         return result;
     }
 
+    /// @notice Encode a single transaction for MultiSend
+    /// @dev Format: operation (1 byte) + to (20 bytes) + value (32 bytes) + dataLength (32 bytes) + data
+    function _encodeMultiSendTx(address to, bytes memory data) internal pure returns (bytes memory) {
+        return abi.encodePacked(uint8(0), to, uint256(0), data.length, data);
+    }
+
+    /// @notice Execute batched transactions via MultiSend through Azorius → Safe
+    function _executeBatchFromModule(bytes memory packedTransactions) internal {
+        bytes memory multiSendData = abi.encodeCall(MultiSendCallOnly.multiSend, (packedTransactions));
+        _executeFromModule(address(multiSend), multiSendData);
+    }
+
     function _deployVaultAndStrategy() internal {
         // ══════════════════════════════════════════════════════════════════════
-        // TX 0: Deploy PaymentSplitter via Factory (through Azorius → Safe)
+        // TX 0: Deploy PaymentSplitter via Factory (needs return value)
         // ══════════════════════════════════════════════════════════════════════
         address[] memory payees = new address[](1);
         payees[0] = makeAddr("DragonFundingPool");
@@ -148,96 +164,141 @@ contract ShutterDAOIntegrationTest is Test {
         uint256[] memory shares = new uint256[](1);
         shares[0] = 100;
 
-        bytes memory createSplitterData = abi.encodeCall(
-            PaymentSplitterFactory.createPaymentSplitter,
-            (payees, payeeNames, shares)
+        bytes memory returnData = _executeFromModuleReturnData(
+            address(paymentSplitterFactory),
+            abi.encodeCall(PaymentSplitterFactory.createPaymentSplitter, (payees, payeeNames, shares))
         );
-        bytes memory returnData = _executeFromModuleReturnData(address(paymentSplitterFactory), createSplitterData);
         paymentSplitter = PaymentSplitter(payable(abi.decode(returnData, (address))));
 
         // ══════════════════════════════════════════════════════════════════════
-        // TX 1: Deploy Morpho Strategy via Factory (through Azorius → Safe)
+        // TX 1: Deploy Morpho Strategy via Factory (needs return value)
         // ══════════════════════════════════════════════════════════════════════
-        bytes memory createStrategyData = abi.encodeCall(
-            MorphoCompounderStrategyFactory.createStrategy,
-            (
-                STRATEGY_NAME,
-                SHUTTER_TREASURY,
-                keeperBot,
-                SHUTTER_TREASURY,
-                address(paymentSplitter),
-                false,
-                TOKENIZED_STRATEGY_ADDRESS
+        returnData = _executeFromModuleReturnData(
+            MORPHO_STRATEGY_FACTORY,
+            abi.encodeCall(
+                MorphoCompounderStrategyFactory.createStrategy,
+                (
+                    STRATEGY_NAME,
+                    SHUTTER_TREASURY,
+                    keeperBot,
+                    SHUTTER_TREASURY,
+                    address(paymentSplitter),
+                    false,
+                    TOKENIZED_STRATEGY_ADDRESS
+                )
             )
         );
-        returnData = _executeFromModuleReturnData(MORPHO_STRATEGY_FACTORY, createStrategyData);
         address strategyAddress = abi.decode(returnData, (address));
         strategy = MorphoCompounderStrategy(strategyAddress);
 
         // ══════════════════════════════════════════════════════════════════════
-        // TX 2: Deploy Vault (through Azorius → Safe)
+        // TX 2: Deploy Vault via Factory (needs return value)
         // ══════════════════════════════════════════════════════════════════════
-        bytes memory deployVaultData = abi.encodeCall(
-            MultistrategyVaultFactory.deployNewVault,
-            (USDC_TOKEN, "Shutter Dragon Vault", "sdUSDC", SHUTTER_TREASURY, PROFIT_MAX_UNLOCK_TIME)
+        returnData = _executeFromModuleReturnData(
+            address(vaultFactory),
+            abi.encodeCall(
+                MultistrategyVaultFactory.deployNewVault,
+                (USDC_TOKEN, "Shutter Dragon Vault", "sdUSDC", SHUTTER_TREASURY, PROFIT_MAX_UNLOCK_TIME)
+            )
         );
-        returnData = _executeFromModuleReturnData(address(vaultFactory), deployVaultData);
         address vaultAddress = abi.decode(returnData, (address));
         dragonVault = MultistrategyVault(vaultAddress);
 
         // ══════════════════════════════════════════════════════════════════════
-        // TX 3-9: Configure Vault Roles (through Azorius → Safe)
+        // TX 3: BATCHED via MultiSend - Role assignments + Strategy setup + Config
         // ══════════════════════════════════════════════════════════════════════
-        _executeFromModule(
-            vaultAddress,
-            abi.encodeCall(
-                MultistrategyVault.addRole,
-                (SHUTTER_TREASURY, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER)
+        bytes memory batchedTxs = _buildConfigBatch(vaultAddress, strategyAddress);
+        _executeBatchFromModule(batchedTxs);
+    }
+
+    function _buildConfigBatch(address vaultAddress, address strategyAddress) internal view returns (bytes memory) {
+        bytes memory batch;
+
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(
+                    MultistrategyVault.addRole,
+                    (SHUTTER_TREASURY, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER)
+                )
             )
         );
-        _executeFromModule(
-            vaultAddress,
-            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.MAX_DEBT_MANAGER))
-        );
-        _executeFromModule(
-            vaultAddress,
-            abi.encodeCall(
-                MultistrategyVault.addRole,
-                (SHUTTER_TREASURY, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER)
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(
+                    MultistrategyVault.addRole,
+                    (SHUTTER_TREASURY, IMultistrategyVault.Roles.MAX_DEBT_MANAGER)
+                )
             )
         );
-        _executeFromModule(
-            vaultAddress,
-            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.QUEUE_MANAGER))
-        );
-        _executeFromModule(
-            vaultAddress,
-            abi.encodeCall(
-                MultistrategyVault.addRole,
-                (SHUTTER_TREASURY, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER)
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(
+                    MultistrategyVault.addRole,
+                    (SHUTTER_TREASURY, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER)
+                )
             )
         );
-        // DEBT_MANAGER needed for setAutoAllocate
-        _executeFromModule(
-            vaultAddress,
-            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.DEBT_MANAGER))
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.QUEUE_MANAGER))
+            )
         );
-        // Also give keeper DEBT_MANAGER for autonomous debt rebalancing
-        _executeFromModule(
-            vaultAddress,
-            abi.encodeCall(MultistrategyVault.addRole, (keeperBot, IMultistrategyVault.Roles.DEBT_MANAGER))
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(
+                    MultistrategyVault.addRole,
+                    (SHUTTER_TREASURY, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER)
+                )
+            )
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.DEBT_MANAGER))
+            )
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(MultistrategyVault.addRole, (keeperBot, IMultistrategyVault.Roles.DEBT_MANAGER))
+            )
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(vaultAddress, abi.encodeCall(MultistrategyVault.addStrategy, (strategyAddress, true)))
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(MultistrategyVault.updateMaxDebtForStrategy, (strategyAddress, type(uint256).max))
+            )
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(MultistrategyVault.setDepositLimit, (type(uint256).max, true))
+            )
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(vaultAddress, abi.encodeCall(MultistrategyVault.setAutoAllocate, (true)))
         );
 
-        // ══════════════════════════════════════════════════════════════════════
-        // TX 9-12: Setup Strategy (through Azorius → Safe)
-        // ══════════════════════════════════════════════════════════════════════
-        _executeFromModule(vaultAddress, abi.encodeCall(MultistrategyVault.addStrategy, (strategyAddress, true)));
-        _executeFromModule(
-            vaultAddress,
-            abi.encodeCall(MultistrategyVault.updateMaxDebtForStrategy, (strategyAddress, type(uint256).max))
-        );
-        _executeFromModule(vaultAddress, abi.encodeCall(MultistrategyVault.setDepositLimit, (type(uint256).max, true)));
-        _executeFromModule(vaultAddress, abi.encodeCall(MultistrategyVault.setAutoAllocate, (true)));
+        return batch;
     }
 
     function _deployRegenStaker() internal {
@@ -519,6 +580,122 @@ contract ShutterDAOGasProfilingTest is Test {
         return result;
     }
 
+    /// @notice Encode a single transaction for MultiSend
+    function _encodeMultiSendTx(address to, bytes memory data) internal pure returns (bytes memory) {
+        return abi.encodePacked(uint8(0), to, uint256(0), data.length, data);
+    }
+
+    /// @notice Execute batched transactions via MultiSend through Azorius → Safe
+    function _executeBatchFromModule(MultiSendCallOnly multiSendContract, bytes memory packedTransactions) internal {
+        bytes memory multiSendData = abi.encodeCall(MultiSendCallOnly.multiSend, (packedTransactions));
+        _executeFromModule(address(multiSendContract), multiSendData);
+    }
+
+    function _buildFullProposalBatch(
+        address vaultAddress,
+        address strategyAddress,
+        address keeper
+    ) internal pure returns (bytes memory) {
+        bytes memory batch;
+
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(
+                    MultistrategyVault.addRole,
+                    (SHUTTER_TREASURY, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER)
+                )
+            )
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(
+                    MultistrategyVault.addRole,
+                    (SHUTTER_TREASURY, IMultistrategyVault.Roles.MAX_DEBT_MANAGER)
+                )
+            )
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.QUEUE_MANAGER))
+            )
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(
+                    MultistrategyVault.addRole,
+                    (SHUTTER_TREASURY, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER)
+                )
+            )
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(
+                    MultistrategyVault.addRole,
+                    (SHUTTER_TREASURY, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER)
+                )
+            )
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.DEBT_MANAGER))
+            )
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(MultistrategyVault.addRole, (keeper, IMultistrategyVault.Roles.DEBT_MANAGER))
+            )
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(vaultAddress, abi.encodeCall(MultistrategyVault.addStrategy, (strategyAddress, true)))
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(MultistrategyVault.updateMaxDebtForStrategy, (strategyAddress, type(uint256).max))
+            )
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(MultistrategyVault.setDepositLimit, (type(uint256).max, true))
+            )
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(vaultAddress, abi.encodeCall(MultistrategyVault.setAutoAllocate, (true)))
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(USDC_TOKEN, abi.encodeCall(IERC20.approve, (vaultAddress, TREASURY_USDC_BALANCE)))
+        );
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                vaultAddress,
+                abi.encodeCall(MultistrategyVault.deposit, (TREASURY_USDC_BALANCE, SHUTTER_TREASURY))
+            )
+        );
+
+        return batch;
+    }
+
     function test_BatchedProposalGasProfile() public {
         if (!isForked) return;
 
@@ -527,6 +704,7 @@ contract ShutterDAOGasProfilingTest is Test {
         // === PRE-DEPLOYED BY OCTANT (not part of DAO proposal) ===
         MultistrategyVaultFactory vaultFactory;
         PaymentSplitterFactory splitterFactory;
+        MultiSendCallOnly multiSendContract;
         {
             MultistrategyVault vaultImpl = new MultistrategyVault();
             vaultFactory = new MultistrategyVaultFactory(
@@ -535,15 +713,16 @@ contract ShutterDAOGasProfilingTest is Test {
                 makeAddr("OctantGovernance")
             );
             splitterFactory = new PaymentSplitterFactory();
+            multiSendContract = new MultiSendCallOnly();
         }
 
         uint256 gasStart = gasleft();
 
         // ══════════════════════════════════════════════════════════════════════
-        // DAO PROPOSAL TRANSACTIONS START HERE (via Azorius → Safe → Target)
+        // DAO PROPOSAL: 4 module calls total (3 factory deploys + 1 MultiSend batch)
         // ══════════════════════════════════════════════════════════════════════
 
-        // TX 0: Deploy PaymentSplitter via Factory
+        // TX 0: Deploy PaymentSplitter via Factory (needs return value)
         address paymentSplitterAddr;
         {
             address[] memory payees = new address[](1);
@@ -553,101 +732,54 @@ contract ShutterDAOGasProfilingTest is Test {
             uint256[] memory shares = new uint256[](1);
             shares[0] = 100;
 
-            bytes memory data = abi.encodeCall(
-                PaymentSplitterFactory.createPaymentSplitter,
-                (payees, payeeNames, shares)
+            paymentSplitterAddr = abi.decode(
+                _executeFromModuleReturnData(
+                    address(splitterFactory),
+                    abi.encodeCall(PaymentSplitterFactory.createPaymentSplitter, (payees, payeeNames, shares))
+                ),
+                (address)
             );
-            paymentSplitterAddr = abi.decode(_executeFromModuleReturnData(address(splitterFactory), data), (address));
         }
 
-        // TX 1: Deploy Strategy via Factory
-        address strategyAddress;
-        {
-            bytes memory data = abi.encodeCall(
-                MorphoCompounderStrategyFactory.createStrategy,
-                (
-                    STRATEGY_NAME,
-                    SHUTTER_TREASURY,
-                    keeperBot,
-                    SHUTTER_TREASURY,
-                    paymentSplitterAddr,
-                    false,
-                    TOKENIZED_STRATEGY_ADDRESS
+        // TX 1: Deploy Strategy via Factory (needs return value)
+        address strategyAddress = abi.decode(
+            _executeFromModuleReturnData(
+                MORPHO_STRATEGY_FACTORY,
+                abi.encodeCall(
+                    MorphoCompounderStrategyFactory.createStrategy,
+                    (
+                        STRATEGY_NAME,
+                        SHUTTER_TREASURY,
+                        keeperBot,
+                        SHUTTER_TREASURY,
+                        paymentSplitterAddr,
+                        false,
+                        TOKENIZED_STRATEGY_ADDRESS
+                    )
                 )
-            );
-            strategyAddress = abi.decode(_executeFromModuleReturnData(MORPHO_STRATEGY_FACTORY, data), (address));
-        }
-
-        // TX 2: Deploy Vault
-        address vaultAddress;
-        {
-            bytes memory data = abi.encodeCall(
-                MultistrategyVaultFactory.deployNewVault,
-                (USDC_TOKEN, "Shutter Dragon Vault", "sdUSDC", SHUTTER_TREASURY, PROFIT_MAX_UNLOCK_TIME)
-            );
-            vaultAddress = abi.decode(_executeFromModuleReturnData(address(vaultFactory), data), (address));
-        }
-
-        // TX 3-9: Configure Vault Roles
-        _executeFromModule(
-            vaultAddress,
-            abi.encodeCall(
-                MultistrategyVault.addRole,
-                (SHUTTER_TREASURY, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER)
-            )
-        );
-        _executeFromModule(
-            vaultAddress,
-            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.MAX_DEBT_MANAGER))
-        );
-        _executeFromModule(
-            vaultAddress,
-            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.QUEUE_MANAGER))
-        );
-        _executeFromModule(
-            vaultAddress,
-            abi.encodeCall(
-                MultistrategyVault.addRole,
-                (SHUTTER_TREASURY, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER)
-            )
-        );
-        _executeFromModule(
-            vaultAddress,
-            abi.encodeCall(
-                MultistrategyVault.addRole,
-                (SHUTTER_TREASURY, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER)
-            )
-        );
-        _executeFromModule(
-            vaultAddress,
-            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.DEBT_MANAGER))
-        );
-        _executeFromModule(
-            vaultAddress,
-            abi.encodeCall(MultistrategyVault.addRole, (keeperBot, IMultistrategyVault.Roles.DEBT_MANAGER))
+            ),
+            (address)
         );
 
-        // TX 10-13: Strategy Configuration
-        _executeFromModule(vaultAddress, abi.encodeCall(MultistrategyVault.addStrategy, (strategyAddress, true)));
-        _executeFromModule(
-            vaultAddress,
-            abi.encodeCall(MultistrategyVault.updateMaxDebtForStrategy, (strategyAddress, type(uint256).max))
+        // TX 2: Deploy Vault via Factory (needs return value)
+        address vaultAddress = abi.decode(
+            _executeFromModuleReturnData(
+                address(vaultFactory),
+                abi.encodeCall(
+                    MultistrategyVaultFactory.deployNewVault,
+                    (USDC_TOKEN, "Shutter Dragon Vault", "sdUSDC", SHUTTER_TREASURY, PROFIT_MAX_UNLOCK_TIME)
+                )
+            ),
+            (address)
         );
-        _executeFromModule(vaultAddress, abi.encodeCall(MultistrategyVault.setDepositLimit, (type(uint256).max, true)));
-        _executeFromModule(vaultAddress, abi.encodeCall(MultistrategyVault.setAutoAllocate, (true)));
 
-        // TX 14: Approve USDC
-        _executeFromModule(USDC_TOKEN, abi.encodeCall(IERC20.approve, (vaultAddress, TREASURY_USDC_BALANCE)));
-
-        // TX 15: Deposit USDC
-        _executeFromModule(
-            vaultAddress,
-            abi.encodeCall(MultistrategyVault.deposit, (TREASURY_USDC_BALANCE, SHUTTER_TREASURY))
-        );
+        // TX 3: BATCHED via MultiSend - All config + approve + deposit in one call
+        bytes memory batchedTxs = _buildFullProposalBatch(vaultAddress, strategyAddress, keeperBot);
+        _executeBatchFromModule(multiSendContract, batchedTxs);
 
         uint256 daoProposalGas = gasStart - gasleft();
 
-        emit log_named_uint("=== DAO PROPOSAL GAS (via Azorius) ===", daoProposalGas);
+        emit log_named_uint("=== DAO PROPOSAL GAS (4 module calls) ===", daoProposalGas);
         assertLt(daoProposalGas, EIP_7825_TX_GAS_LIMIT, "Gas exceeds 16.7M per-tx limit");
     }
 }
