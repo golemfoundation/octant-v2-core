@@ -482,68 +482,6 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
         super._transfer(sender_, receiver_, amount_);
     }
 
-
-    /**
-     * @notice Get the maximum amount of shares that can be redeemed by an owner
-     * @param owner_ Address owning shares to check redemption limits for
-     * @param maxLoss_ Custom max_loss if any
-     * @param strategiesArray_ Custom strategies queue if any
-     * @return Maximum amount of shares redeemable
-     * @dev This override accounts for custody constraints - returns 0 if:
-     *      - Custody is still in cooldown period
-     *      - Otherwise returns min of balance and custodied shares
-     */
-    function maxRedeem(
-        address owner_,
-        uint256 maxLoss_,
-        address[] calldata strategiesArray_
-    ) external view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
-        CustodyInfo memory custody = custodyInfo[owner_];
-
-        if (block.timestamp < custody.unlockTime) {
-            return 0;
-        }
-
-        // Get max shares from parent calculation
-        uint256 parentMax = Math.min(
-            _convertToShares(_maxWithdraw(owner_, maxLoss_, strategiesArray_), Rounding.ROUND_DOWN),
-            balanceOf(owner_)
-        );
-
-        // Get custody info to determine locked shares
-        uint256 lockedShares = custody.lockedShares;
-
-        // Return minimum of parent max and custody limit
-        return Math.min(parentMax, lockedShares);
-    }
-
-    /**
-     * @notice Get the amount of shares that can be transferred by a user
-     * @param user Address to check transferable shares for
-     * @return Amount of shares available for transfer (not locked in custody)
-     * @dev Returns total balance minus shares currently locked in custody
-     */
-    function getTransferableShares(address user) external view returns (uint256) {
-        uint256 totalShares = balanceOf(user);
-        uint256 lockedShares = custodyInfo[user].lockedShares;
-        return totalShares - lockedShares;
-    }
-
-    /**
-     * @notice Get the amount of shares available for rage quit initiation
-     * @param user Address to check rage quitable shares for
-     * @return Amount of shares available for initiating rage quit
-     * @dev Returns 0 if user already has active custody, otherwise returns full balance
-     */
-    function getRageQuitableShares(address user) external view returns (uint256) {
-        // If user already has active custody, they cannot initiate new rage quit
-        if (custodyInfo[user].lockedShares > 0) {
-            return 0;
-        }
-        // Otherwise, they can rage quit all their shares
-        return balanceOf(user);
-    }
-
     /**
      * @notice Get the maximum amount of assets that can be withdrawn by an owner
      * @param owner_ The address that owns the shares

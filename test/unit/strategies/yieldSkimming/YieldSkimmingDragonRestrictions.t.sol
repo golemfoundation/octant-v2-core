@@ -253,9 +253,14 @@ contract YieldSkimmingDragonRestrictionsTest is Test {
         uint256 maxRedeemBeforeReport = strategy.maxRedeem(dragonRouter);
         assertLt(maxRedeemBeforeReport, dragonBalance, "Dragon should be restricted before report()");
 
+        // enable burning
+        vm.startPrank(management);
+        strategy.setEnableBurning(true);
+        vm.stopPrank();
+
         // Dragon cannot withdraw their full balance due to restrictions
         vm.prank(dragonRouter);
-        vm.expectRevert("Dragon cannot operate during insolvency");
+        vm.expectRevert("Transfer would cause vault insolvency");
         strategy.redeem(dragonBalance, dragonRouter, dragonRouter);
 
         // But dragon can still withdraw the allowed amount
@@ -282,7 +287,7 @@ contract YieldSkimmingDragonRestrictionsTest is Test {
 
         // Try to redeem more than max should fail
         vm.prank(dragonRouter);
-        vm.expectRevert("ERC4626: redeem more than max");
+        vm.expectRevert("Transfer would cause vault insolvency");
         strategy.redeem(maxRedeem + 1, dragonRouter, dragonRouter);
     }
 
@@ -336,7 +341,7 @@ contract YieldSkimmingDragonRestrictionsTest is Test {
         uint256 remainingBalance = strategy.balanceOf(dragonRouter);
         if (remainingBalance > 0) {
             vm.prank(dragonRouter);
-            vm.expectRevert("Dragon cannot operate during insolvency");
+            vm.expectRevert("Transfer would cause vault insolvency");
             strategy.transfer(user2, 1);
         }
     }
@@ -371,7 +376,7 @@ contract YieldSkimmingDragonRestrictionsTest is Test {
         uint256 remainingBalance = strategy.balanceOf(dragonRouter);
         if (remainingBalance > 0) {
             vm.prank(user2);
-            vm.expectRevert("Dragon cannot operate during insolvency");
+            vm.expectRevert("Transfer would cause vault insolvency");
             strategy.transferFrom(dragonRouter, user2, 1);
         }
     }
