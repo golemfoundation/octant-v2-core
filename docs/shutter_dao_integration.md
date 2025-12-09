@@ -236,11 +236,12 @@ Add the following role assignments:
 3. `QUEUE_MANAGER` (4) → `0x36bD...32c4` (Treasury)
 4. `DEPOSIT_LIMIT_MANAGER` (8) → `0x36bD...32c4` (Treasury)
 5. `WITHDRAW_LIMIT_MANAGER` (9) → `0x36bD...32c4` (Treasury)
+6. `DEBT_MANAGER` (6) → `0x36bD...32c4` (Treasury) — *Required for `setAutoAllocate()`*
 
 **Operational Role (Autonomous):**
-6. `DEBT_MANAGER` (6) → `[KEEPER_BOT_ADDRESS]` (Dedicated EOA/Bot)
+7. `DEBT_MANAGER` (6) → `[KEEPER_BOT_ADDRESS]` (Dedicated EOA/Bot)
 
-> **Note**: The DEBT_MANAGER role assigned to the Keeper enables autonomous debt rebalancing without requiring governance votes. This is critical for operational efficiency.
+> **Note**: DEBT_MANAGER is assigned to **both** Treasury and Keeper. Treasury needs it to call `setAutoAllocate()`, while Keeper needs it for autonomous `updateDebt()` operations without governance votes.
 
 **1.8 — Add Transaction: Add Strategy to Vault**
 
@@ -308,20 +309,18 @@ Add the following role assignments:
 
 Review all details and click "Submit Proposal". Sign the transaction with your wallet.
 
-> ✅ **Gas Verified**: The batched proposal uses ~2.4M gas for the DAO proposal portion, or ~8.7M total gas if everything (including factories) is deployed in one go. Both are well under the 16.7M per-transaction gas limit (EIP-7825). See `ShutterDAOGasProfilingTest` for details.
+> ✅ **Gas Verified**: The batched proposal uses ~2.5M gas for the DAO proposal portion (via realistic Azorius module execution), or ~8.7M total gas if everything (including factories) is deployed in one go. Both are well under the 16.7M per-transaction gas limit (EIP-7825). See `ShutterDAOGasProfilingTest` for details.
 
 ### Gas Profile Breakdown
 
 | Component | Gas Cost |
 |-----------|----------|
-| **Strategy Deploy** | ~1,137,332 |
-| **Vault Deploy** | ~185,086 |
-| **Configuration** | ~223,601 |
-| **Approve/Deposit** | ~860,806 |
-| **Total (Fork)** | **~8,709,033** |
-| **DAO Proposal** | **~2,406,825** |
+| **DAO Proposal (via Azorius)** | **~2,525,882** |
+| **Total (incl. factories)** | **~8,689,070** |
+| **EIP-7825 Limit** | 16,777,216 |
+| **Headroom** | ~85% |
 
-*Note: "DAO Proposal" gas assumes factory deployments are separate or pre-existing, consistent with the batched proposal structure. Even in a worst-case scenario (full deployment in one tx), ~8.7M gas is comfortably within the 16.7M transaction limit (~52% usage).*
+*Note: Gas measured using realistic Azorius → Safe → Target execution path. The module execution overhead (~32k gas) is included in these estimates.*
 
 #### Step 2: Vote
 
@@ -364,14 +363,14 @@ See: [Octant v2 Pilot Proposal](https://shutternetwork.discourse.group/t/octant-
 
 1. **Deploy Morpho Strategy**: Create yield strategy with 100% yield to Dragon Funding Pool
 2. **Deploy Dragon Vault**: Create vault with Treasury as role manager
-3. **Assign Roles**: Add 6 operational roles (5 to Treasury, 1 to Keeper)
-4. **Add Strategy**: Register strategy with vault
-5. **Set Max Debt**: Allow full allocation to strategy
-6. **Set Default Queue**: Configure withdrawal order
-7. **Set AutoAllocate**: Enable automatic deployment of deposits to strategy
-8. **Set Deposit Limit**: Enable deposits
-9. **Approve USDC**: Allow Dragon Vault to spend 1.2M USDC
-10. **Deposit USDC**: Deposit 1.2M USDC, receiving shares to Treasury
+3-9. **Assign Roles**: Add 7 operational roles (6 to Treasury, 1 to Keeper)
+10. **Add Strategy**: Register strategy with vault
+11. **Set Max Debt**: Allow full allocation to strategy
+12. **Set Default Queue**: Configure withdrawal order
+13. **Set AutoAllocate**: Enable automatic deployment of deposits to strategy
+14. **Set Deposit Limit**: Enable deposits
+15. **Approve USDC**: Allow Dragon Vault to spend 1.2M USDC
+16. **Deposit USDC**: Deposit 1.2M USDC, receiving shares to Treasury
 
 ## Yield Distribution
 
@@ -549,11 +548,27 @@ Calldata:
 0x44deb6f300000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c40000000000000000000000000000000000000000000000000000000000000009
 ```
 
+**TX 9 — Add Role: DEBT_MANAGER → Keeper**
+
+```
+Target:   [VAULT_ADDRESS]
+Function: addRole(address,uint8)
+Selector: 0x44deb6f3
+Value:    0
+
+Parameters:
+  account: [KEEPER_BOT_ADDRESS]
+  role:    6 (DEBT_MANAGER)
+
+Calldata (replace keeper address):
+0x44deb6f3000000000000000000000000[KEEPER_ADDRESS_20_BYTES]0000000000000000000000000000000000000000000000000000000000000006
+```
+
 ---
 
 ### Section C: Strategy Configuration
 
-**TX 9 — Add Strategy to Vault**
+**TX 10 — Add Strategy to Vault**
 
 ```
 Target:   [VAULT_ADDRESS]
@@ -571,7 +586,7 @@ Calldata (replace strategy address):
 0000000000000000000000000000000000000000000000000000000000000001
 ```
 
-**TX 10 — Set Max Debt for Strategy**
+**TX 11 — Set Max Debt for Strategy**
 
 ```
 Target:   [VAULT_ADDRESS]
@@ -589,7 +604,7 @@ Calldata (replace strategy address):
 ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
 ```
 
-**TX 11 — Set Default Queue**
+**TX 12 — Set Default Queue**
 
 ```
 Target:   [VAULT_ADDRESS]
@@ -607,7 +622,7 @@ Calldata (replace strategy address):
 000000000000000000000000[STRATEGY_ADDRESS_20_BYTES]
 ```
 
-**TX 12 — Enable AutoAllocate**
+**TX 13 — Enable AutoAllocate**
 
 ```
 Target:   [VAULT_ADDRESS]
@@ -622,7 +637,7 @@ Calldata:
 0x63d56c9a0000000000000000000000000000000000000000000000000000000000000001
 ```
 
-**TX 13 — Set Deposit Limit**
+**TX 14 — Set Deposit Limit**
 
 ```
 Target:   [VAULT_ADDRESS]
@@ -642,7 +657,7 @@ Calldata:
 
 ### Section D: Capital Deployment
 
-**TX 14 — Approve USDC for Vault**
+**TX 15 — Approve USDC for Vault**
 
 ```
 Target:   0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 (USDC)
@@ -660,7 +675,7 @@ Calldata (replace vault address):
 000000000000000000000000000000000000000000000000000001176592e000
 ```
 
-**TX 15 — Deposit USDC into Vault**
+**TX 16 — Deposit USDC into Vault**
 
 ```
 Target:   [VAULT_ADDRESS]
