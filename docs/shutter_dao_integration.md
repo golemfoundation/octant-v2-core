@@ -252,7 +252,7 @@ Review all details and click "Submit Proposal". Sign the transaction with your w
 | **EIP-7825 Limit** | 16,777,216 |
 | **Headroom** | >90% |
 
-*Note: Simplified architecture (no vault wrapper) significantly reduces gas costs compared to previous MultistrategyVault approach.*
+*Note: Direct strategy deposits (no vault wrapper) minimize gas costs.*
 
 #### Step 2: Vote
 
