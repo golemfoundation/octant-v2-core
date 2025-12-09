@@ -457,14 +457,15 @@ contract ShutterDAOIntegrationTest is Test {
 
 /**
  * @title ShutterDAOGasProfilingTest
- * @notice Gas profiling test (also adapted for Fork if possible, but using mocks for speed/isolation is usually fine too.
- *         Here we simulate on Fork for realism).
+ * @notice Gas profiling test using realistic Azorius → Safe → Target execution path.
+ * @dev Measures actual gas costs that will be incurred during DAO proposal execution.
  */
 contract ShutterDAOGasProfilingTest is Test {
     using SafeERC20 for IERC20;
 
     // === Shutter DAO Specific ===
     address constant SHUTTER_TREASURY = 0x36bD3044ab68f600f6d3e081056F34f2a58432c4;
+    address constant AZORIUS_MODULE = 0xAA6BfA174d2f803b517026E93DBBEc1eBa26258e;
     string constant STRATEGY_NAME = "SHUGrantPool";
 
     // === From src/constants.sol ===
@@ -488,117 +489,149 @@ contract ShutterDAOGasProfilingTest is Test {
         deal(USDC_TOKEN, SHUTTER_TREASURY, TREASURY_USDC_BALANCE);
     }
 
+    /// @notice Execute transaction through Azorius → Safe (production path)
+    function _executeFromModule(address to, bytes memory data) internal {
+        vm.prank(AZORIUS_MODULE);
+        bool success = ISafe(SHUTTER_TREASURY).execTransactionFromModule(to, 0, data, 0);
+        require(success, "Module execution failed");
+    }
+
+    /// @notice Execute and return data (for factory deployments)
+    function _executeFromModuleReturnData(address to, bytes memory data) internal returns (bytes memory) {
+        vm.prank(AZORIUS_MODULE);
+        (bool success, bytes memory result) = ISafe(SHUTTER_TREASURY).execTransactionFromModuleReturnData(
+            to,
+            0,
+            data,
+            0
+        );
+        require(success, "Module execution failed");
+        return result;
+    }
+
     function test_BatchedProposalGasProfile() public {
         if (!isForked) return;
 
-        address octantGovernance = makeAddr("OctantGovernance");
         address keeperBot = makeAddr("KeeperBot");
 
-        uint256 gasStart = gasleft();
-
-        // === BATCHED PROPOSAL STARTS HERE ===
-        // Simulating deployment of REAL contracts on the fork
-
-        // Pre-deployed by Octant
-        MultistrategyVault vaultImplementation = new MultistrategyVault();
-        MultistrategyVaultFactory vaultFactory = new MultistrategyVaultFactory(
-            "Shutter Dragon Vault Factory",
-            address(vaultImplementation),
-            octantGovernance
-        );
-
-        PaymentSplitter paymentSplitter;
+        // === PRE-DEPLOYED BY OCTANT (not part of DAO proposal) ===
+        MultistrategyVaultFactory vaultFactory;
+        address paymentSplitterAddr;
         {
-            // PaymentSplitter configuration: 100% to Dragon Funding Pool
+            MultistrategyVault vaultImpl = new MultistrategyVault();
+            vaultFactory = new MultistrategyVaultFactory(
+                "Shutter Dragon Vault Factory",
+                address(vaultImpl),
+                makeAddr("OctantGovernance")
+            );
+
             address[] memory payees = new address[](1);
             payees[0] = makeAddr("DragonFundingPool");
             uint256[] memory shares = new uint256[](1);
             shares[0] = 100;
 
-            PaymentSplitter paymentSplitterImpl = new PaymentSplitter();
-            bytes memory initData = abi.encodeCall(PaymentSplitter.initialize, (payees, shares));
-            ERC1967Proxy proxy = new ERC1967Proxy(address(paymentSplitterImpl), initData);
-            paymentSplitter = PaymentSplitter(payable(address(proxy)));
+            PaymentSplitter impl = new PaymentSplitter();
+            ERC1967Proxy proxy = new ERC1967Proxy(
+                address(impl),
+                abi.encodeCall(PaymentSplitter.initialize, (payees, shares))
+            );
+            paymentSplitterAddr = address(proxy);
         }
 
-        uint256 gasAfterFactoryDeploy = gasleft();
+        uint256 gasStart = gasleft();
+
+        // ══════════════════════════════════════════════════════════════════════
+        // DAO PROPOSAL TRANSACTIONS START HERE (via Azorius → Safe → Target)
+        // ══════════════════════════════════════════════════════════════════════
 
         // TX 1: Deploy Strategy via Factory
-        // Role assignment: management + emergencyAdmin → Treasury (governance-controlled)
-        //                  keeper → Dedicated bot (operational, no governance votes required)
-        MorphoCompounderStrategyFactory factory = MorphoCompounderStrategyFactory(MORPHO_STRATEGY_FACTORY);
-        vm.prank(SHUTTER_TREASURY);
-        address strategyAddress = factory.createStrategy(
-            STRATEGY_NAME,
-            SHUTTER_TREASURY, // management
-            keeperBot, // keeper (CRITICAL: enables autonomous harvesting)
-            SHUTTER_TREASURY, // emergencyAdmin
-            address(paymentSplitter),
-            false,
-            TOKENIZED_STRATEGY_ADDRESS
-        );
-        MorphoCompounderStrategy strategy = MorphoCompounderStrategy(strategyAddress);
-
-        uint256 gasAfterStrategyDeploy = gasleft();
+        address strategyAddress;
+        {
+            bytes memory data = abi.encodeCall(
+                MorphoCompounderStrategyFactory.createStrategy,
+                (
+                    STRATEGY_NAME,
+                    SHUTTER_TREASURY,
+                    keeperBot,
+                    SHUTTER_TREASURY,
+                    paymentSplitterAddr,
+                    false,
+                    TOKENIZED_STRATEGY_ADDRESS
+                )
+            );
+            strategyAddress = abi.decode(_executeFromModuleReturnData(MORPHO_STRATEGY_FACTORY, data), (address));
+        }
 
         // TX 2: Deploy Vault
-        vm.prank(SHUTTER_TREASURY);
-        MultistrategyVault dragonVault = MultistrategyVault(
-            vaultFactory.deployNewVault(
-                USDC_TOKEN,
-                "Shutter Dragon Vault",
-                "sdUSDC",
-                SHUTTER_TREASURY,
-                PROFIT_MAX_UNLOCK_TIME
+        address vaultAddress;
+        {
+            bytes memory data = abi.encodeCall(
+                MultistrategyVaultFactory.deployNewVault,
+                (USDC_TOKEN, "Shutter Dragon Vault", "sdUSDC", SHUTTER_TREASURY, PROFIT_MAX_UNLOCK_TIME)
+            );
+            vaultAddress = abi.decode(_executeFromModuleReturnData(address(vaultFactory), data), (address));
+        }
+
+        // TX 3-9: Configure Vault Roles
+        _executeFromModule(
+            vaultAddress,
+            abi.encodeCall(
+                MultistrategyVault.addRole,
+                (SHUTTER_TREASURY, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER)
             )
         );
+        _executeFromModule(
+            vaultAddress,
+            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.MAX_DEBT_MANAGER))
+        );
+        _executeFromModule(
+            vaultAddress,
+            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.QUEUE_MANAGER))
+        );
+        _executeFromModule(
+            vaultAddress,
+            abi.encodeCall(
+                MultistrategyVault.addRole,
+                (SHUTTER_TREASURY, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER)
+            )
+        );
+        _executeFromModule(
+            vaultAddress,
+            abi.encodeCall(
+                MultistrategyVault.addRole,
+                (SHUTTER_TREASURY, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER)
+            )
+        );
+        _executeFromModule(
+            vaultAddress,
+            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.DEBT_MANAGER))
+        );
+        _executeFromModule(
+            vaultAddress,
+            abi.encodeCall(MultistrategyVault.addRole, (keeperBot, IMultistrategyVault.Roles.DEBT_MANAGER))
+        );
 
-        uint256 gasAfterVaultDeploy = gasleft();
+        // TX 10-13: Strategy Configuration
+        _executeFromModule(vaultAddress, abi.encodeCall(MultistrategyVault.addStrategy, (strategyAddress, true)));
+        _executeFromModule(
+            vaultAddress,
+            abi.encodeCall(MultistrategyVault.updateMaxDebtForStrategy, (strategyAddress, type(uint256).max))
+        );
+        _executeFromModule(vaultAddress, abi.encodeCall(MultistrategyVault.setDepositLimit, (type(uint256).max, true)));
+        _executeFromModule(vaultAddress, abi.encodeCall(MultistrategyVault.setAutoAllocate, (true)));
 
-        // TX 3-6: Configure Vault Roles
-        vm.startPrank(SHUTTER_TREASURY);
+        // TX 14: Approve USDC
+        _executeFromModule(USDC_TOKEN, abi.encodeCall(IERC20.approve, (vaultAddress, TREASURY_USDC_BALANCE)));
 
-        // Strategic roles → Treasury (governance-controlled)
-        dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
-        dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.QUEUE_MANAGER);
-        dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
-        dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
-        // DEBT_MANAGER needed for setAutoAllocate
-        dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.DEBT_MANAGER);
+        // TX 15: Deposit USDC
+        _executeFromModule(
+            vaultAddress,
+            abi.encodeCall(MultistrategyVault.deposit, (TREASURY_USDC_BALANCE, SHUTTER_TREASURY))
+        );
 
-        // Also give keeper DEBT_MANAGER for autonomous debt rebalancing
-        dragonVault.addRole(keeperBot, IMultistrategyVault.Roles.DEBT_MANAGER);
+        uint256 daoProposalGas = gasStart - gasleft();
 
-        dragonVault.addStrategy(address(strategy), true);
-        dragonVault.updateMaxDebtForStrategy(address(strategy), type(uint256).max);
-        dragonVault.setDepositLimit(type(uint256).max, true);
-        dragonVault.setAutoAllocate(true);
-
-        uint256 gasAfterConfig = gasleft();
-
-        // TX 7: Approve
-        IERC20(USDC_TOKEN).approve(address(dragonVault), TREASURY_USDC_BALANCE);
-
-        // TX 8: Deposit
-        dragonVault.deposit(TREASURY_USDC_BALANCE, SHUTTER_TREASURY);
-
-        vm.stopPrank();
-
-        uint256 gasEnd = gasleft();
-        uint256 totalGasUsed = gasStart - gasEnd;
-
-        // Metrics
-        uint256 daoProposalGas = totalGasUsed - (gasStart - gasAfterFactoryDeploy);
-
-        emit log_named_uint("Strategy Deploy Cost", gasAfterFactoryDeploy - gasAfterStrategyDeploy);
-        emit log_named_uint("Vault Deploy Cost", gasAfterStrategyDeploy - gasAfterVaultDeploy);
-        emit log_named_uint("Config Cost", gasAfterVaultDeploy - gasAfterConfig);
-        emit log_named_uint("Approve/Deposit Cost", gasAfterConfig - gasEnd);
-
-        emit log_named_uint("=== TOTAL GAS USED (Fork) ===", totalGasUsed);
-        emit log_named_uint("=== DAO PROPOSAL GAS (Fork) ===", daoProposalGas);
-
-        assertLt(daoProposalGas, EIP_7825_TX_GAS_LIMIT, "Gas limit exceeded");
+        emit log_named_uint("=== DAO PROPOSAL GAS (via Azorius) ===", daoProposalGas);
+        assertLt(daoProposalGas, EIP_7825_TX_GAS_LIMIT, "Gas exceeds 16.7M per-tx limit");
     }
 }
