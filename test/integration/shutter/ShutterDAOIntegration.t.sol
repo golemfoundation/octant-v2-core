@@ -28,9 +28,9 @@ import { USDC_MAINNET, MORPHO_STRATEGY_FACTORY_MAINNET, YEARN_TOKENIZED_STRATEGY
 
 /**
  * @title ShutterDAOIntegrationTest
- * @notice Comprehensive integration test using Mainnet Forking.
- * @dev Replaces previous mock-based tests with fully realistic mainnet fork tests.
- *      Run with: forge test --match-contract ShutterDAOIntegrationTest --fork-url $ETH_RPC_URL
+ * @notice Integration tests for Shutter DAO 0x36 deployment using mainnet fork.
+ * @dev Tests use real mainnet state (Treasury Safe, SHU token, Morpho strategies).
+ *      Run with: ETH_RPC_URL=<rpc> forge test --match-contract ShutterDAOIntegrationTest
  */
 contract ShutterDAOIntegrationTest is Test {
     using SafeERC20 for IERC20;
