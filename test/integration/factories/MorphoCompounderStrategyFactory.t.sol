@@ -4,8 +4,9 @@ pragma solidity ^0.8.0;
 import { Test } from "forge-std/Test.sol";
 import { console } from "forge-std/console.sol";
 import { MockERC20 } from "test/mocks/MockERC20.sol";
-import { MorphoCompounderStrategy } from "src/strategies/yieldSkimming/MorphoCompounderStrategy.sol";
 import { MorphoCompounderStrategyFactory } from "src/factories/MorphoCompounderStrategyFactory.sol";
+import { MorphoCompounderStrategy } from "src/strategies/yieldDonating/MorphoCompounderStrategy.sol";
+import { BaseStrategyFactory } from "src/factories/BaseStrategyFactory.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { YieldSkimmingTokenizedStrategy } from "src/strategies/yieldSkimming/YieldSkimmingTokenizedStrategy.sol";
@@ -100,7 +101,11 @@ contract MorphoCompounderStrategyFactoryTest is Test {
 
         // Verify strategy was initialized correctly
         MorphoCompounderStrategy strategy = MorphoCompounderStrategy(strategyAddress);
-        assertEq(IERC4626(address(strategy)).asset(), YIELD_VAULT, "Yield vault address incorrect");
+        assertEq(
+            IERC4626(address(strategy)).asset(),
+            0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48,
+            "USDC asset address incorrect"
+        );
     }
 
     /// @notice Test creating multiple strategies for the same user
@@ -213,9 +218,7 @@ contract MorphoCompounderStrategyFactoryTest is Test {
 
         // Try to deploy the exact same strategy again - should revert
         vm.startPrank(management);
-        vm.expectRevert(
-            abi.encodeWithSelector(MorphoCompounderStrategyFactory.StrategyAlreadyExists.selector, firstAddress)
-        );
+        vm.expectRevert(abi.encodeWithSelector(BaseStrategyFactory.StrategyAlreadyExists.selector, firstAddress));
         factory.createStrategy(
             vaultSharesName,
             management,

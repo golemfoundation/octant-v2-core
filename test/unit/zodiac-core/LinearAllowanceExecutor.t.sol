@@ -7,16 +7,17 @@ import { LinearAllowanceSingletonForGnosisSafe } from "src/zodiac-core/modules/L
 import { LinearAllowanceExecutor } from "src/zodiac-core/LinearAllowanceExecutor.sol";
 import { MockERC20 } from "test/mocks/MockERC20.sol";
 import { MockSafe } from "test/mocks/zodiac-core/MockSafe.sol";
-import { NATIVE_TOKEN } from "src/constants.sol";
-import { Whitelist } from "src/utils/Whitelist.sol";
-import { IWhitelist } from "src/utils/IWhitelist.sol";
+import { NATIVE_TOKEN, AccessMode } from "src/constants.sol";
+import { AddressSet } from "src/utils/AddressSet.sol";
+import { IAddressSet } from "src/utils/IAddressSet.sol";
+import { NotInAllowset, InBlockset } from "src/errors.sol";
 
 contract LinearAllowanceExecutorTest is Test {
     LinearAllowanceExecutorTestHarness public executor;
     LinearAllowanceSingletonForGnosisSafe public allowanceModule;
     MockSafe public mockSafe;
     MockERC20 public mockToken;
-    Whitelist public moduleWhitelist;
+    AddressSet public moduleAllowset;
 
     uint192 constant DRIP_RATE = 1 ether; // 1 token per day
 
@@ -26,13 +27,14 @@ contract LinearAllowanceExecutorTest is Test {
         allowanceModule = new LinearAllowanceSingletonForGnosisSafe();
         mockSafe = new MockSafe();
         mockToken = new MockERC20(18);
-        moduleWhitelist = new Whitelist();
+        moduleAllowset = new AddressSet();
 
-        // Set the whitelist on the executor
-        executor.setModuleWhitelist(IWhitelist(address(moduleWhitelist)));
+        // Set the allowset on the executor
+        executor.assignModuleAddressSet(IAddressSet(address(moduleAllowset)));
+        executor.setModuleAccessMode(AccessMode.ALLOWSET);
 
-        // Whitelist the allowance module
-        moduleWhitelist.addToWhitelist(address(allowanceModule));
+        // AddressSet the allowance module
+        moduleAllowset.add(address(allowanceModule));
 
         // Enable module on mock Safe
         mockSafe.enableModule(address(allowanceModule));
@@ -139,31 +141,108 @@ contract LinearAllowanceExecutorTest is Test {
         assertEq(transferredAmount, safeBalance, "Should transfer only the available balance");
     }
 
-    function testModuleWhitelistValidation() public {
-        // Deploy a new module that is not whitelisted
-        LinearAllowanceSingletonForGnosisSafe nonWhitelistedModule = new LinearAllowanceSingletonForGnosisSafe();
+    function testModuleAllowsetValidation() public {
+        // Deploy a new module that is not inAllowset
+        LinearAllowanceSingletonForGnosisSafe nonAllowsetedModule = new LinearAllowanceSingletonForGnosisSafe();
 
-        // Try to use non-whitelisted module - should revert
-        vm.expectRevert(
-            abi.encodeWithSelector(LinearAllowanceExecutor.ModuleNotWhitelisted.selector, address(nonWhitelistedModule))
-        );
-        executor.executeAllowanceTransfer(nonWhitelistedModule, address(mockSafe), NATIVE_TOKEN);
+        // Try to use non-inAllowset module - should revert
+        vm.expectRevert(abi.encodeWithSelector(NotInAllowset.selector, address(nonAllowsetedModule)));
+        executor.executeAllowanceTransfer(nonAllowsetedModule, address(mockSafe), NATIVE_TOKEN);
 
-        // Whitelist the module
-        moduleWhitelist.addToWhitelist(address(nonWhitelistedModule));
+        // AddressSet the module
+        moduleAllowset.add(address(nonAllowsetedModule));
 
         // Now it should work (will revert for different reason - no allowance set)
         vm.expectRevert(); // Different revert reason
-        executor.executeAllowanceTransfer(nonWhitelistedModule, address(mockSafe), NATIVE_TOKEN);
+        executor.executeAllowanceTransfer(nonAllowsetedModule, address(mockSafe), NATIVE_TOKEN);
 
-        // Remove from whitelist
-        moduleWhitelist.removeFromWhitelist(address(nonWhitelistedModule));
+        // Remove from allowset
+        moduleAllowset.remove(address(nonAllowsetedModule));
 
-        // Should revert again with whitelist error
-        vm.expectRevert(
-            abi.encodeWithSelector(LinearAllowanceExecutor.ModuleNotWhitelisted.selector, address(nonWhitelistedModule))
-        );
-        executor.executeAllowanceTransfer(nonWhitelistedModule, address(mockSafe), NATIVE_TOKEN);
+        // Should revert again with allowset error
+        vm.expectRevert(abi.encodeWithSelector(NotInAllowset.selector, address(nonAllowsetedModule)));
+        executor.executeAllowanceTransfer(nonAllowsetedModule, address(mockSafe), NATIVE_TOKEN);
+    }
+
+    function testModuleAccessModeNone() public {
+        // Deploy a new module that is not in allowset
+        LinearAllowanceSingletonForGnosisSafe newModule = new LinearAllowanceSingletonForGnosisSafe();
+
+        // Set mode to NONE
+        executor.setModuleAccessMode(AccessMode.NONE);
+
+        // Set up allowance for executor
+        vm.prank(address(mockSafe));
+        newModule.setAllowance(address(executor), NATIVE_TOKEN, DRIP_RATE);
+
+        // Enable module on mock Safe
+        mockSafe.enableModule(address(newModule));
+
+        // Advance time to accrue allowance
+        vm.warp(block.timestamp + 1 days);
+
+        // Should work even though module is not in allowset
+        uint256 transferredAmount = executor.executeAllowanceTransfer(newModule, address(mockSafe), NATIVE_TOKEN);
+        assertEq(transferredAmount, DRIP_RATE, "Should transfer even with module not in allowset");
+    }
+
+    function testModuleAccessModeBlockset() public {
+        // Deploy a new module
+        LinearAllowanceSingletonForGnosisSafe blockedModule = new LinearAllowanceSingletonForGnosisSafe();
+
+        // Add it to the address set
+        moduleAllowset.add(address(blockedModule));
+
+        // Set mode to BLOCKSET
+        executor.setModuleAccessMode(AccessMode.BLOCKSET);
+
+        // Try to use blocked module - should revert
+        vm.expectRevert(abi.encodeWithSelector(InBlockset.selector, address(blockedModule)));
+        executor.executeAllowanceTransfer(blockedModule, address(mockSafe), NATIVE_TOKEN);
+
+        // Remove from blockset
+        moduleAllowset.remove(address(blockedModule));
+
+        // Set up allowance for executor
+        vm.prank(address(mockSafe));
+        blockedModule.setAllowance(address(executor), NATIVE_TOKEN, DRIP_RATE);
+
+        // Enable module on mock Safe
+        mockSafe.enableModule(address(blockedModule));
+
+        // Advance time to accrue allowance
+        vm.warp(block.timestamp + 1 days);
+
+        // Should work now that it's not in the blockset
+        uint256 transferredAmount = executor.executeAllowanceTransfer(blockedModule, address(mockSafe), NATIVE_TOKEN);
+        assertEq(transferredAmount, DRIP_RATE, "Should transfer when module not in blockset");
+    }
+
+    function testModuleAccessModeSwitching() public {
+        // Start with ALLOWSET mode (from setUp)
+        assertEq(uint(executor.moduleAccessMode()), uint(AccessMode.ALLOWSET), "Should start in ALLOWSET mode");
+
+        // allowanceModule is in the allowset, so it should work
+        vm.prank(address(mockSafe));
+        allowanceModule.setAllowance(address(executor), NATIVE_TOKEN, DRIP_RATE);
+        vm.warp(block.timestamp + 1 days);
+        uint256 transferredAmount = executor.executeAllowanceTransfer(allowanceModule, address(mockSafe), NATIVE_TOKEN);
+        assertEq(transferredAmount, DRIP_RATE, "Should work in ALLOWSET mode");
+
+        // Switch to BLOCKSET mode
+        executor.setModuleAccessMode(AccessMode.BLOCKSET);
+
+        // Now it should fail because allowanceModule is in the set
+        vm.warp(block.timestamp + 1 days);
+        vm.expectRevert(abi.encodeWithSelector(InBlockset.selector, address(allowanceModule)));
+        executor.executeAllowanceTransfer(allowanceModule, address(mockSafe), NATIVE_TOKEN);
+
+        // Switch to NONE mode
+        executor.setModuleAccessMode(AccessMode.NONE);
+
+        // Now it should work again - allowance accumulated during BLOCKSET period (1 day)
+        transferredAmount = executor.executeAllowanceTransfer(allowanceModule, address(mockSafe), NATIVE_TOKEN);
+        assertEq(transferredAmount, DRIP_RATE, "Should work in NONE mode");
     }
 
     function testExecuteMultipleTransfersWithChangingAllowance() public {

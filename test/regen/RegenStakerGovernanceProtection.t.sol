@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
+import { AccessMode } from "src/constants.sol";
 import "forge-std/Test.sol";
 import { RegenStaker } from "src/regen/RegenStaker.sol";
 import { RegenStakerBase } from "src/regen/RegenStakerBase.sol";
 import { RegenEarningPowerCalculator } from "src/regen/RegenEarningPowerCalculator.sol";
 import { MockERC20 } from "test/mocks/MockERC20.sol";
 import { MockERC20Staking } from "test/mocks/MockERC20Staking.sol";
-import { Whitelist } from "src/utils/Whitelist.sol";
+import { AddressSet } from "src/utils/AddressSet.sol";
+import { IAddressSet } from "src/utils/IAddressSet.sol";
 import { Staker } from "staker/Staker.sol";
 
 /// @title RegenStakerGovernanceProtectionTest
@@ -17,8 +19,8 @@ contract RegenStakerGovernanceProtectionTest is Test {
     RegenEarningPowerCalculator public earningPowerCalculator;
     MockERC20 public rewardToken;
     MockERC20Staking public stakeToken;
-    Whitelist public whitelist;
-    Whitelist public allocationWhitelist;
+    AddressSet public allowset;
+    AddressSet public allocationAllowset;
 
     address public admin = makeAddr("admin");
     address public rewardNotifier = makeAddr("rewardNotifier");
@@ -32,11 +34,16 @@ contract RegenStakerGovernanceProtectionTest is Test {
         rewardToken = new MockERC20(18);
         stakeToken = new MockERC20Staking(18);
 
-        // Deploy whitelist and calculator
+        // Deploy allowset and calculator
         vm.startPrank(admin);
-        whitelist = new Whitelist();
-        allocationWhitelist = new Whitelist();
-        earningPowerCalculator = new RegenEarningPowerCalculator(admin, whitelist);
+        allowset = new AddressSet();
+        allocationAllowset = new AddressSet();
+        earningPowerCalculator = new RegenEarningPowerCalculator(
+            admin,
+            allowset,
+            IAddressSet(address(0)),
+            AccessMode.ALLOWSET
+        );
 
         // Deploy RegenStaker
         regenStaker = new RegenStaker(
@@ -53,7 +60,7 @@ contract RegenStakerGovernanceProtectionTest is Test {
             allocationWhitelist
         );
         regenStaker.setRewardNotifier(rewardNotifier, true);
-        whitelist.addToWhitelist(user);
+        allowset.add(user);
         vm.stopPrank();
 
         rewardToken.mint(rewardNotifier, INITIAL_REWARD_AMOUNT);

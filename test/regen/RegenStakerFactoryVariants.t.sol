@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import { AccessMode } from "src/constants.sol";
 import "forge-std/Test.sol";
 import { RegenStakerFactory } from "src/factories/RegenStakerFactory.sol";
 import { RegenStaker } from "src/regen/RegenStaker.sol";
+import { RegenStakerBase } from "src/regen/RegenStakerBase.sol";
 import { RegenStakerWithoutDelegateSurrogateVotes } from "src/regen/RegenStakerWithoutDelegateSurrogateVotes.sol";
+import { RegenStakerBase } from "src/regen/RegenStakerBase.sol";
 import { RegenEarningPowerCalculator } from "src/regen/RegenEarningPowerCalculator.sol";
-import { Whitelist } from "src/utils/Whitelist.sol";
+import { AddressSet } from "src/utils/AddressSet.sol";
+import { IAddressSet } from "src/utils/IAddressSet.sol";
 import { MockERC20 } from "test/mocks/MockERC20.sol";
 import { MockERC20Staking } from "test/mocks/MockERC20Staking.sol";
 import { MockERC20Permit } from "test/mocks/MockERC20Permit.sol";
@@ -19,9 +23,9 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 contract RegenStakerFactoryVariantsTest is Test {
     RegenStakerFactory factory;
     RegenEarningPowerCalculator calculator;
-    Whitelist stakerWhitelist;
-    Whitelist contributionWhitelist;
-    Whitelist allocationMechanismWhitelist;
+    AddressSet stakerAllowset;
+    AddressSet contributionAllowset;
+    AddressSet allocationMechanismAllowset;
 
     MockERC20 basicToken;
     MockERC20Permit permitToken;
@@ -43,11 +47,16 @@ contract RegenStakerFactoryVariantsTest is Test {
         permitToken = new MockERC20Permit(18);
         stakingToken = new MockERC20Staking(18);
 
-        stakerWhitelist = new Whitelist();
-        contributionWhitelist = new Whitelist();
-        allocationMechanismWhitelist = new Whitelist();
+        stakerAllowset = new AddressSet();
+        contributionAllowset = new AddressSet();
+        allocationMechanismAllowset = new AddressSet();
 
-        calculator = new RegenEarningPowerCalculator(ADMIN, stakerWhitelist);
+        calculator = new RegenEarningPowerCalculator(
+            ADMIN,
+            stakerAllowset,
+            IAddressSet(address(0)),
+            AccessMode.ALLOWSET
+        );
 
         vm.stopPrank();
     }
@@ -57,12 +66,12 @@ contract RegenStakerFactoryVariantsTest is Test {
             rewardsToken: IERC20(address(basicToken)),
             stakeToken: IERC20(address(basicToken)),
             admin: ADMIN,
-            stakerWhitelist: stakerWhitelist,
-            contributionWhitelist: contributionWhitelist,
-            allocationMechanismWhitelist: allocationMechanismWhitelist,
+            stakerAllowset: stakerAllowset,
+            stakerBlockset: IAddressSet(address(0)),
+            stakerAccessMode: AccessMode.NONE,
+            allocationMechanismAllowset: allocationMechanismAllowset,
             earningPowerCalculator: calculator,
             maxBumpTip: MAX_BUMP_TIP,
-            maxClaimFee: MAX_CLAIM_FEE,
             minimumStakeAmount: 0,
             rewardDuration: MIN_REWARD_DURATION
         });
@@ -80,12 +89,12 @@ contract RegenStakerFactoryVariantsTest is Test {
             rewardsToken: IERC20(address(permitToken)),
             stakeToken: IERC20(address(permitToken)),
             admin: ADMIN,
-            stakerWhitelist: stakerWhitelist,
-            contributionWhitelist: contributionWhitelist,
-            allocationMechanismWhitelist: allocationMechanismWhitelist,
+            stakerAllowset: stakerAllowset,
+            stakerBlockset: IAddressSet(address(0)),
+            stakerAccessMode: AccessMode.NONE,
+            allocationMechanismAllowset: allocationMechanismAllowset,
             earningPowerCalculator: calculator,
             maxBumpTip: MAX_BUMP_TIP,
-            maxClaimFee: MAX_CLAIM_FEE,
             minimumStakeAmount: 0,
             rewardDuration: MIN_REWARD_DURATION
         });
@@ -103,12 +112,12 @@ contract RegenStakerFactoryVariantsTest is Test {
             rewardsToken: IERC20(address(stakingToken)),
             stakeToken: IERC20(address(stakingToken)),
             admin: ADMIN,
-            stakerWhitelist: stakerWhitelist,
-            contributionWhitelist: contributionWhitelist,
-            allocationMechanismWhitelist: allocationMechanismWhitelist,
+            stakerAllowset: stakerAllowset,
+            stakerBlockset: IAddressSet(address(0)),
+            stakerAccessMode: AccessMode.NONE,
+            allocationMechanismAllowset: allocationMechanismAllowset,
             earningPowerCalculator: calculator,
             maxBumpTip: MAX_BUMP_TIP,
-            maxClaimFee: MAX_CLAIM_FEE,
             minimumStakeAmount: 0,
             rewardDuration: MIN_REWARD_DURATION
         });
@@ -126,12 +135,12 @@ contract RegenStakerFactoryVariantsTest is Test {
             rewardsToken: IERC20(address(basicToken)),
             stakeToken: IERC20(address(basicToken)),
             admin: ADMIN,
-            stakerWhitelist: stakerWhitelist,
-            contributionWhitelist: contributionWhitelist,
-            allocationMechanismWhitelist: allocationMechanismWhitelist,
+            stakerAllowset: stakerAllowset,
+            stakerBlockset: IAddressSet(address(0)),
+            stakerAccessMode: AccessMode.NONE,
+            allocationMechanismAllowset: allocationMechanismAllowset,
             earningPowerCalculator: calculator,
             maxBumpTip: MAX_BUMP_TIP,
-            maxClaimFee: MAX_CLAIM_FEE,
             minimumStakeAmount: 0,
             rewardDuration: MIN_REWARD_DURATION
         });
@@ -149,12 +158,12 @@ contract RegenStakerFactoryVariantsTest is Test {
             rewardsToken: IERC20(address(basicToken)),
             stakeToken: IERC20(address(basicToken)),
             admin: ADMIN,
-            stakerWhitelist: stakerWhitelist,
-            contributionWhitelist: contributionWhitelist,
-            allocationMechanismWhitelist: allocationMechanismWhitelist,
+            stakerAllowset: stakerAllowset,
+            stakerBlockset: IAddressSet(address(0)),
+            stakerAccessMode: AccessMode.NONE,
+            allocationMechanismAllowset: allocationMechanismAllowset,
             earningPowerCalculator: calculator,
             maxBumpTip: MAX_BUMP_TIP,
-            maxClaimFee: MAX_CLAIM_FEE,
             minimumStakeAmount: 0,
             rewardDuration: MIN_REWARD_DURATION
         });
@@ -178,12 +187,12 @@ contract RegenStakerFactoryVariantsTest is Test {
             rewardsToken: IERC20(address(stakingToken)),
             stakeToken: IERC20(address(stakingToken)),
             admin: ADMIN,
-            stakerWhitelist: stakerWhitelist,
-            contributionWhitelist: contributionWhitelist,
-            allocationMechanismWhitelist: allocationMechanismWhitelist,
+            stakerAllowset: stakerAllowset,
+            stakerBlockset: IAddressSet(address(0)),
+            stakerAccessMode: AccessMode.NONE,
+            allocationMechanismAllowset: allocationMechanismAllowset,
             earningPowerCalculator: calculator,
             maxBumpTip: MAX_BUMP_TIP,
-            maxClaimFee: MAX_CLAIM_FEE,
             minimumStakeAmount: 0,
             rewardDuration: MIN_REWARD_DURATION
         });
@@ -207,12 +216,12 @@ contract RegenStakerFactoryVariantsTest is Test {
             rewardsToken: IERC20(address(basicToken)),
             stakeToken: IERC20(address(basicToken)),
             admin: ADMIN,
-            stakerWhitelist: stakerWhitelist,
-            contributionWhitelist: contributionWhitelist,
-            allocationMechanismWhitelist: allocationMechanismWhitelist,
+            stakerAllowset: stakerAllowset,
+            stakerBlockset: IAddressSet(address(0)),
+            stakerAccessMode: AccessMode.NONE,
+            allocationMechanismAllowset: allocationMechanismAllowset,
             earningPowerCalculator: calculator,
             maxBumpTip: MAX_BUMP_TIP,
-            maxClaimFee: MAX_CLAIM_FEE,
             minimumStakeAmount: 0,
             rewardDuration: MIN_REWARD_DURATION
         });
@@ -247,11 +256,10 @@ contract RegenStakerFactoryVariantsTest is Test {
             MAX_BUMP_TIP,
             ADMIN,
             MIN_REWARD_DURATION,
-            MAX_CLAIM_FEE,
             0, // minimumStakeAmount
-            stakerWhitelist,
-            contributionWhitelist,
-            allocationMechanismWhitelist
+            stakerAllowset,
+            contributionAllowset,
+            allocationMechanismAllowset
         );
 
         // Build bytecode with constructor params (using WITH_DELEGATION variant)

@@ -13,10 +13,9 @@ import { WETH } from "solady/tokens/WETH.sol";
 
 import { Trader } from "src/utils/routers-transformers/Trader.sol";
 import { HelperConfig } from "script/helpers/HelperConfig.s.sol";
+import { NATIVE_TOKEN } from "src/constants.sol";
 
 contract DeployTrader is Script {
-    address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-
     address public owner;
     Trader public trader;
     address public glmAddress;
@@ -148,12 +147,12 @@ contract DeployTrader is Script {
     }
 
     function uniEthWrapper(address _token) internal view returns (address result) {
-        if (_token == ETH) result = wethAddress;
+        if (_token == NATIVE_TOKEN) result = wethAddress;
         else result = _token;
     }
 
     function splitsEthWrapper(address _token) internal pure returns (address) {
-        if (_token == ETH) return address(0x0);
+        if (_token == NATIVE_TOKEN) return address(0x0);
         else return _token;
     }
 }

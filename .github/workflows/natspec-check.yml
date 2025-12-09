@@ -1,0 +1,35 @@
+name: NatSpec Documentation Check
+
+on:
+  push:
+    paths:
+      - 'src/**/*.sol'
+      - 'CONTRIBUTING.md'
+
+jobs:
+  check-natspec:
+    runs-on: general
+    container:
+      image: ${{ vars.GCP_DOCKER_IMAGE_REGISTRY }}/node-extended:f4f41461
+      credentials:
+        username: _json_key_base64
+        password: ${{ secrets.GCP_DOCKER_IMAGES_REGISTRY_SERVICE_ACCOUNT }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Init env
+        run: |
+          yarn install
+          forge soldeer install
+
+      - name: Generate documentation
+        run: forge doc
+
+      - name: Upload documentation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: natspec-documentation
+          path: docs/
+
+      - name: Check NatSpec coverage
+        run: bash scripts/check-natspec.sh

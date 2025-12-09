@@ -9,7 +9,7 @@ import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { IMockStrategy } from "test/mocks/zodiac-core/IMockStrategy.sol";
-import { MorphoCompounderStrategyFactory } from "src/factories/yieldDonating/MorphoCompounderStrategyFactory.sol";
+import { MorphoCompounderStrategyFactory } from "src/factories/MorphoCompounderStrategyFactory.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 
 /// @title MorphoCompounder Yield Donating Test
@@ -100,7 +100,6 @@ contract MorphoCompounderDonatingStrategyTest is Test {
         // Deploy strategy
         strategy = MorphoCompounderStrategy(
             factory.createStrategy(
-                MORPHO_VAULT,
                 params.strategyName,
                 params.management,
                 params.keeper,
@@ -597,5 +596,67 @@ contract MorphoCompounderDonatingStrategyTest is Test {
                 "Strategy should be nearly empty after all withdrawals"
             );
         }
+    }
+
+    /// @notice Test that triggers "too much loss" by removing idle funds and mocking withdraw
+    /// @dev This test demonstrates the vulnerability where maxLoss defaults to 0 in MorphoCompounderStrategy._freeFunds
+    function testLossDoesNotTriggerTooMuchLossError() public {
+        uint256 depositAmount = 100000e6;
+
+        address morphoBlueVault = 0xBEEF01735c132Ada46AA9aA4c54623cAA92A64CB;
+
+        // User deposits into our strategy
+        vm.startPrank(user);
+        uint256 vaultShares = IERC4626(address(strategy)).deposit(depositAmount, user);
+
+        vm.stopPrank();
+
+        // user usdc balance should be 0
+        assertEq(ERC20(USDC).balanceOf(user), 0, "User should have no USDC");
+
+        // Step 1: Remove all idle funds from the Yearn vault (YS_USDC)
+        // Check current idle balance in YS_USDC vault
+        uint256 yearnIdleBalance = ERC20(USDC).balanceOf(MORPHO_VAULT);
+
+        if (yearnIdleBalance > 0) {
+            // Transfer idle funds out of Yearn vault with Yearn vault as caller
+            vm.startPrank(MORPHO_VAULT);
+            ERC20(USDC).transfer(address(0xdead), yearnIdleBalance);
+            vm.stopPrank();
+        }
+
+        // Verify idle balance is now 0
+        assertEq(ERC20(USDC).balanceOf(MORPHO_VAULT), 0, "Yearn vault should have no idle funds");
+
+        // remove the the idle funds from morpho blue vault
+        vm.startPrank(morphoBlueVault);
+        ERC20(USDC).transfer(address(0xdead), ERC20(USDC).balanceOf(morphoBlueVault));
+        vm.stopPrank();
+
+        // verify morpho blue vault has no idle funds
+        assertEq(ERC20(USDC).balanceOf(morphoBlueVault), 0, "Morpho blue vault should have no idle funds");
+
+        // Airdrop some USDC back to YS_USDC so it has enough for the strategy-level maxWithdraw check
+        // but we'll mock freeFunds to fail when actually trying to get funds
+        airdrop(ERC20(USDC), MORPHO_VAULT, depositAmount / 10); // Give it 10% for the check to pass
+
+        // Mock the freeFunds call on YS_USDC to do nothing
+        // This simulates the scenario where freeFunds cannot recover enough assets
+        // Since maxLoss=0 in our strategy, any loss will trigger "too much loss"
+        vm.mockCall(
+            MORPHO_VAULT,
+            abi.encodeWithSignature("freeFunds(uint256)"),
+            "" // Empty response - freeFunds does nothing, recovering 0 assets
+        );
+
+        vm.startPrank(user);
+        // if max loss is 10 000, call should not revert
+        YieldDonatingTokenizedStrategy(address(strategy)).redeem(vaultShares - 2, user, user, 10_000);
+        vm.stopPrank();
+
+        vm.clearMockedCalls();
+
+        // user should have received balance
+        assertEq(ERC20(USDC).balanceOf(user), depositAmount / 10, "User should have received balance");
     }
 }

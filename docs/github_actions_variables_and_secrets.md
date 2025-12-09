@@ -5,7 +5,6 @@
 | Name                        | Description                                                    |
 |-----------------------------|----------------------------------------------------------------|
 | `GCP_DOCKER_IMAGE_REGISTRY` | Prefix of GCP Artifact Registry used to store built containers |
-| `TENDERLY_SEPOLIA_RPC_URL`  | RPC URL for Tenderly Sepolia Virtual TestNet                   |
 | `TENDERLY_MAINNET_RPC_URL`  | RPC URL for Tenderly Mainnet Virtual TestNet                   |
 
 # Secrets

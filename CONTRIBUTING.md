@@ -76,4 +76,227 @@ Main time cost of developing smart-contract is audits, not development itself. B
 
 ---
 
+## 📚 NatSpec Documentation Standards
+
+**The Four Pillars**: Every NatSpec contribution must adhere to:
+1. **Syntax** - Proper tag usage and formatting
+2. **Semantics** - Accurate descriptions matching implementation
+3. **License** - Correct SPDX identifiers and copyleft compliance
+4. **Attribution** - Proper credit to original authors and sources
+
+### Quick Reference
+
+| Tag | Required | Example |
+|-----|----------|---------|
+| `@title` | YES | `@title YourContract` |
+| `@author` | YES | `@author [Golem Foundation](https://golem.foundation)` |
+| `@notice` | YES (functions/events) | `@notice Deposits assets and mints shares` |
+| `@dev` | When needed | `@dev Uses ERC4626 with ROUND_DOWN` |
+| `@param` | YES | `@param assets Amount of assets to deposit` |
+| `@return` | If returns | `@return Minted shares` |
+| `@inheritdoc` | For overrides | `@inheritdoc IYourInterface` |
+| `@custom:security-contact` | YES | `@custom:security-contact security@golem.foundation` |
+| `@custom:security` | For privileged | `@custom:security Only callable by management` |
+| `@custom:origin` | For adapted code | `@custom:origin https://github.com/org/repo/blob/hash/file.sol` |
+| `@custom:ported-from` | For ported code | `@custom:ported-from https://github.com/org/repo/blob/hash/file.sol` |
+
+**Note on Errors**: Custom errors should be self-documenting through descriptive names. Do NOT add @notice tags to errors.
+
+### Don't Repeat Yourself (DRY)
+
+**ALWAYS use `@inheritdoc` when overriding functions from parent contracts or interfaces to avoid duplicating documentation.**
+
+When a function overrides a parent implementation, use `@inheritdoc ParentContract` instead of duplicating the documentation. Only add additional context specific to your implementation using `@dev` tags.
+
+**Good - Using @inheritdoc**:
+```solidity
+/// @inheritdoc IERC4626Payable
+/// @dev Requires operator role when dragon mode is enabled
+function deposit(uint256 assets, address receiver)
+    external payable override returns (uint256 shares) {
+    // implementation
+}
+```
+
+**Bad - Duplicating parent documentation**:
+```solidity
+/// @notice Deposits assets into the vault and mints shares to receiver
+/// @param assets Amount of assets to deposit in asset base units
+/// @param receiver Address to receive minted shares
+/// @return shares Amount of shares minted in share base units
+/// @dev Requires operator role when dragon mode is enabled
+function deposit(uint256 assets, address receiver)
+    external payable override returns (uint256 shares) {
+    // implementation
+}
+```
+
+**When to use @inheritdoc**:
+- ✅ Function overrides parent/interface function
+- ✅ Documentation would be identical or nearly identical to parent
+- ✅ You want to reference the canonical documentation in the interface/parent
+
+**When NOT to use @inheritdoc**:
+- ❌ Signature or behavior differs significantly from parent
+- ❌ Parent contract has no documentation (document it properly instead)
+- ❌ Implementation-specific nuances require full documentation
+
+---
+
+### License & Attribution
+
+#### Attribution Patterns
+
+**Original Golem Code**:
+```solidity
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+/**
+ * @title YourContract
+ * @author [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
+ */
+```
+
+**Modified External Code**:
+```solidity
+// SPDX-License-Identifier: GPL-3.0  // ← Preserve original license
+
+/**
+ * @author Yearn.finance; modified by [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
+ * @custom:origin https://github.com/yearn/[repo]/blob/[COMMIT_HASH]/path/to/file.sol
+ * @notice Your description here
+ */
+```
+
+**Design-Inspired (Not Derivative)**:
+```solidity
+// SPDX-License-Identifier: AGPL-3.0-or-later  // ← Use AGPL-3.0-or-later
+
+/**
+ * @author [Golem Foundation](https://golem.foundation)
+ * @dev Design inspired by:
+ *      - OpenZeppelin Governor: https://github.com/OpenZeppelin/[...]
+ *      - Yearn Strategy: https://github.com/yearn/[...]
+ */
+```
+
+---
+
+### Documentation Rules
+
+**Core Principles**:
+- **Attention is scarce**: Document what's necessary and nothing more. Make it count.
+- Document WHY, not WHAT (code shows what)
+- Specify units ONLY when genuinely ambiguous (follow OpenZeppelin standard)
+- No "The..." anti-patterns that restate names
+- Keep it concise - every word must earn its place
+
+**Common Mistakes**:
+
+| ❌ Don't | ✅ Do |
+|---------|-------|
+| `@param amount The amount` | `@param amount Amount of assets to deposit` |
+| `@param assets Amount of assets in asset base units` | `@param assets Amount of assets to deposit` |
+| `@return The shares` | `@return Minted shares` |
+| `@param deployer The deployer address` | `@param deployer Address that deployed contract` |
+
+**Units Reference** (Only when genuinely ambiguous):
+
+| Type | When to Specify | Format |
+|------|-----------------|--------|
+| **ERC4626 assets/shares** | ❌ Never (standard convention) | `@param assets Amount of assets` |
+| **Multiple share types** | ✅ Always | `@param shares Proportional allocation shares (unitless)` |
+| **Basis points** | ✅ Always | `@param fee Fee in basis points (10000 = 100%)` |
+| **Time (ambiguous)** | ✅ When unclear | `@param duration Duration in seconds` (not blocks) |
+| **Timestamps** | ❌ Never (Unix standard) | `@param timestamp Timestamp of event` |
+| **Exchange rates** | ✅ Non-standard only | `@param rate Rate in RAY precision (1e27)` |
+
+**Golden Rule**: Follow OpenZeppelin conventions - only add unit qualifiers when there's genuine ambiguity.
+
+---
+
+### Marking Ported vs Adapted Code
+
+**Ported Code** = Implementation PRESERVED (we maintain but don't modify core logic)
+- Tag: `@custom:ported-from <URL>`
+- Example: Direct Solidity port of Vyper contract, extracted library, unmodified interface
+
+**Adapted Code** = Implementation MODIFIED (forked, adapted, or heavily changed from upstream)
+- Tag: `@custom:origin <URL>`
+- Example: Forked contract with Octant-specific changes, adapted interface
+
+**IMPORTANT**: These tags are **mutually exclusive** - use one or the other, never both.
+
+#### How to Mark Code
+
+**For Ported Code** (use `@custom:ported-from`):
+- ✅ Keep original NatSpec documentation style
+- ✅ Preserve original "The..." patterns (don't fix them)
+- ✅ Only update: SPDX license, @author attribution, @custom:security-contact
+- ✅ Add `@custom:ported-from <URL>` with link to original source
+- ❌ Don't apply our strict NatSpec standards
+
+**For Adapted Code** (use `@custom:origin`):
+- ✅ Apply full NatSpec standards from this guide
+- ✅ Fix "The..." patterns
+- ✅ Add proper @author attribution noting modification (forked/adapted/modified)
+- ✅ Add `@custom:origin <URL>` with link to original source
+
+#### Examples
+
+**Ported (Implementation Unmodified)**:
+```solidity
+/**
+ * @title MultistrategyVault
+ * @author yearn.finance; port maintained by [Golem Foundation]
+ * @custom:security-contact security@golem.foundation
+ * @custom:ported-from https://github.com/yearn/yearn-vaults-v3/blob/master/contracts/VaultV3.vy
+ * @notice ... (preserve original documentation)
+ */
+```
+
+**Extracted Library (Still Ported)**:
+```solidity
+/**
+ * @title DebtManagementLib
+ * @author yearn.finance; extracted as library by [Golem Foundation]
+ * @custom:security-contact security@golem.foundation
+ * @custom:ported-from https://github.com/yearn/yearn-vaults-v3/blob/master/contracts/VaultV3.vy
+ * @notice ... (preserve original documentation)
+ */
+```
+
+**Adapted Code (Implementation Modified)**:
+```solidity
+/**
+ * @title TokenizedStrategy
+ * @author yearn.finance; forked and modified by [Golem Foundation]
+ * @custom:security-contact security@golem.foundation
+ * @custom:origin https://github.com/yearn/tokenized-strategy/blob/master/src/TokenizedStrategy.sol
+ * @notice Tokenized strategy with Octant-specific enhancements
+ * @dev Apply our NatSpec standards - fix "The..." patterns, add units, etc.
+ */
+```
+
+---
+
+### Before You Commit
+
+- [ ] All public/external functions have `@notice`, `@param`, `@return`
+- [ ] All events have `@notice` and `@param` for each parameter
+- [ ] Used `@inheritdoc` for overridden functions instead of duplicating documentation
+- [ ] Ambiguous numeric params/returns specify units (follow OpenZeppelin - don't over-specify)
+- [ ] Contract has `@title`, `@author`, `@custom:security-contact`
+- [ ] Privileged functions have `@custom:security`
+- [ ] Custom errors use self-documenting names (NO @notice tags)
+- [ ] License adheres to copyleft if modifying GPL/AGPL code
+- [ ] Attribution credits original authors with source links
+- [ ] No TODO/FIXME in production
+- [ ] No "The..." patterns that merely restate names
+- [ ] `forge doc` generates clean output
+
+---
+
 Thank you for contributing to Octant V2 Core!

@@ -5,6 +5,7 @@ import { MockYieldSource } from "../core/MockYieldSource.sol";
 import { DragonBaseStrategy, ERC20 } from "src/zodiac-core/vaults/DragonBaseStrategy.sol";
 import { Module } from "zodiac/core/Module.sol";
 import "forge-std/Test.sol";
+import { NATIVE_TOKEN } from "src/constants.sol";
 
 contract MockStrategy is Module, DragonBaseStrategy {
     address public yieldSource;
@@ -45,7 +46,7 @@ contract MockStrategy is Module, DragonBaseStrategy {
         );
 
         yieldSource = _yieldSource;
-        if (_asset != ETH) ERC20(_asset).approve(_yieldSource, type(uint256).max);
+        if (_asset != NATIVE_TOKEN) ERC20(_asset).approve(_yieldSource, type(uint256).max);
 
         setAvatar(_owner);
         setTarget(_owner);
@@ -53,7 +54,7 @@ contract MockStrategy is Module, DragonBaseStrategy {
     }
 
     function _deployFunds(uint256 _amount) internal override {
-        if (address(asset) == ETH) MockYieldSource(yieldSource).deposit{ value: _amount }(_amount);
+        if (address(asset) == NATIVE_TOKEN) MockYieldSource(yieldSource).deposit{ value: _amount }(_amount);
         else MockYieldSource(yieldSource).deposit(_amount);
     }
 
@@ -64,14 +65,18 @@ contract MockStrategy is Module, DragonBaseStrategy {
     function _harvestAndReport() internal override returns (uint256) {
         uint256 amount = 0.1 ether;
         MockYieldSource(yieldSource).simulateHarvestRewards(amount);
-        uint256 balance = address(asset) == ETH ? address(this).balance : ERC20(asset).balanceOf(address(this));
+        uint256 balance = address(asset) == NATIVE_TOKEN
+            ? address(this).balance
+            : ERC20(asset).balanceOf(address(this));
         return MockYieldSource(yieldSource).balance() + balance;
     }
 
     function _tend(uint256 /*_idle*/) internal override {
-        uint256 balance = address(asset) == ETH ? address(this).balance : ERC20(asset).balanceOf(address(this));
+        uint256 balance = address(asset) == NATIVE_TOKEN
+            ? address(this).balance
+            : ERC20(asset).balanceOf(address(this));
         if (balance > 0) {
-            if (address(asset) == ETH) {
+            if (address(asset) == NATIVE_TOKEN) {
                 MockYieldSource(yieldSource).deposit{ value: balance }(balance);
                 return;
             }

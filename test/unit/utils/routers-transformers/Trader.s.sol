@@ -7,13 +7,13 @@ import "src/utils/routers-transformers/Trader.sol";
 import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
 import { HelperConfig } from "script/helpers/HelperConfig.s.sol";
 import { MockERC20 } from "test/mocks/MockERC20.sol";
+import { NATIVE_TOKEN } from "src/constants.sol";
 
 contract TestTraderRandomness is Test, TestPlus {
     MockERC20 public token;
 
     HelperConfig helperConfig = new HelperConfig(true);
 
-    address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
     address owner = makeAddr("owner");
     address beneficiary = makeAddr("beneficiary");
     address swapper = makeAddr("swapper");
@@ -34,7 +34,7 @@ contract TestTraderRandomness is Test, TestPlus {
         integrator = integrator_;
 
         trader = new Trader(
-            abi.encode(owner, ETH, uint24(10_000), token, wethToken, beneficiary, swapper, integrator, oracle)
+            abi.encode(owner, NATIVE_TOKEN, uint24(10_000), token, wethToken, beneficiary, swapper, integrator, oracle)
         );
         token.mint(address(owner), 100 ether);
     }

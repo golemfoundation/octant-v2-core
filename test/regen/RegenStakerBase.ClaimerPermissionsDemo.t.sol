@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.0;
 
+import { AccessMode } from "src/constants.sol";
 import { Test } from "forge-std/Test.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { RegenStaker } from "src/regen/RegenStaker.sol";
+import { RegenStakerBase } from "src/regen/RegenStakerBase.sol";
 import { Staker } from "staker/Staker.sol";
 import { MockERC20Staking } from "test/mocks/MockERC20Staking.sol";
 import { MockEarningPowerCalculator } from "test/mocks/MockEarningPowerCalculator.sol";
 import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
 import { OctantQFMechanism } from "src/mechanisms/mechanism/OctantQFMechanism.sol";
 import { AllocationConfig } from "src/mechanisms/BaseAllocationMechanism.sol";
-import { Whitelist } from "src/utils/Whitelist.sol";
-import { IWhitelist } from "src/utils/IWhitelist.sol";
+import { AddressSet } from "src/utils/AddressSet.sol";
+import { IAddressSet } from "src/utils/IAddressSet.sol";
 
 /// @title RegenStakerBase Claimer Permissions Demonstration
 /// @notice Demonstrates that claimers have intended staking permissions through compounding
@@ -24,11 +26,12 @@ contract RegenStakerBaseClaimerPermissionsDemoTest is Test {
     MockERC20Staking public token; // Same token for stake and reward
     MockEarningPowerCalculator public earningPowerCalculator;
     OctantQFMechanism public allocationMechanism;
-    Whitelist public stakerWhitelist;
-    Whitelist public allocationWhitelist;
+    AddressSet public stakerAllowset;
+    AddressSet public allocationAllowset;
 
     address public admin = makeAddr("admin");
-    address public owner = makeAddr("owner");
+    address public owner;
+    uint256 private ownerPk;
     address public claimer;
     uint256 private claimerPk;
     address public delegatee = makeAddr("delegatee");
@@ -57,18 +60,27 @@ contract RegenStakerBaseClaimerPermissionsDemoTest is Test {
             gracePeriod: 100,
             owner: admin
         });
-        allocationMechanism = new OctantQFMechanism(address(impl), cfg, 1, 1, address(0));
+        allocationMechanism = new OctantQFMechanism(
+            address(impl),
+            cfg,
+            1,
+            1,
+            IAddressSet(address(0)), // contributionAllowset
+            IAddressSet(address(0)), // contributionBlockset
+            AccessMode.NONE
+        );
 
-        // Deploy whitelists
+        // Deploy allowsets
         vm.startPrank(admin);
-        stakerWhitelist = new Whitelist();
-        allocationWhitelist = new Whitelist();
+        stakerAllowset = new AddressSet();
+        allocationAllowset = new AddressSet();
 
-        // Setup whitelists
-        stakerWhitelist.addToWhitelist(owner);
+        // Setup allowsets
+        (owner, ownerPk) = makeAddrAndKey("owner");
+        stakerAllowset.add(owner);
         (claimer, claimerPk) = makeAddrAndKey("claimer");
-        stakerWhitelist.addToWhitelist(claimer);
-        allocationWhitelist.addToWhitelist(address(allocationMechanism));
+        stakerAllowset.add(claimer);
+        allocationAllowset.add(address(allocationMechanism));
         vm.stopPrank();
 
         // Deploy RegenStaker with same token for stake/reward (enables compounding)
@@ -80,11 +92,11 @@ contract RegenStakerBaseClaimerPermissionsDemoTest is Test {
             0, // maxBumpTip
             admin,
             REWARD_DURATION,
-            0, // maxClaimFee
             1e18, // minimumStakeAmount
-            IWhitelist(address(stakerWhitelist)),
-            IWhitelist(address(stakerWhitelist)),
-            IWhitelist(address(allocationWhitelist))
+            IAddressSet(address(stakerAllowset)),
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            IAddressSet(address(allocationAllowset))
         );
 
         // Fund and create deposit with claimer designation
@@ -140,12 +152,13 @@ contract RegenStakerBaseClaimerPermissionsDemoTest is Test {
         regenStaker.withdraw(depositId, 10e18);
     }
 
-    /// @notice Demonstrates that claimers CAN contribute when on contribution whitelist
-    function testDemonstrate_ClaimerCanContributeIfWhitelisted() public {
+    /// @notice Demonstrates that claimers CAN contribute when on contribution allowset
+    function testDemonstrate_ClaimerCanContributeIfAllowseted() public {
         // Progress time to accrue rewards
         vm.warp(block.timestamp + REWARD_DURATION / 4);
 
         // Prepare EIP-712 signature for signupOnBehalfWithSignature(user=claimer, payer=regenStaker)
+        // Claimer receives voting power and provides signature (claimer autonomy)
         bytes32 domainSeparator = TokenizedAllocationMechanism(address(allocationMechanism)).DOMAIN_SEPARATOR();
         uint256 nonce = TokenizedAllocationMechanism(address(allocationMechanism)).nonces(claimer);
         uint256 amount = 1e18;
@@ -182,7 +195,7 @@ contract RegenStakerBaseClaimerPermissionsDemoTest is Test {
 
         // Owner changes claimer
         vm.prank(admin);
-        stakerWhitelist.addToWhitelist(newClaimer);
+        stakerAllowset.add(newClaimer);
 
         vm.prank(owner);
         regenStaker.alterClaimer(depositId, newClaimer);

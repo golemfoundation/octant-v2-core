@@ -5,7 +5,8 @@ import { Test } from "forge-std/Test.sol";
 import { console } from "forge-std/console.sol";
 import { MockERC20 } from "test/mocks/MockERC20.sol";
 import { MorphoCompounderStrategy } from "src/strategies/yieldDonating/MorphoCompounderStrategy.sol";
-import { MorphoCompounderStrategyFactory } from "src/factories/yieldDonating/MorphoCompounderStrategyFactory.sol";
+import { MorphoCompounderStrategyFactory } from "src/factories/MorphoCompounderStrategyFactory.sol";
+import { BaseStrategyFactory } from "src/factories/BaseStrategyFactory.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
@@ -78,7 +79,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         // Generate parameter hash for prediction
         bytes32 parameterHash = keccak256(
             abi.encode(
-                MORPHO_VAULT,
+                0x074134A2784F4F66b6ceD6f68849382990Ff3215, // YS_USDC
                 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, // USDC
                 vaultSharesName,
                 management,
@@ -94,7 +95,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         bytes memory bytecode = abi.encodePacked(
             type(MorphoCompounderStrategy).creationCode,
             abi.encode(
-                MORPHO_VAULT,
+                0x074134A2784F4F66b6ceD6f68849382990Ff3215, // YS_USDC
                 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, // USDC
                 vaultSharesName,
                 management,
@@ -119,7 +120,6 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         );
 
         address strategyAddress = factory.createStrategy(
-            MORPHO_VAULT,
             vaultSharesName,
             management,
             keeper,
@@ -151,7 +151,6 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
 
         vm.startPrank(management);
         address firstStrategyAddress = factory.createStrategy(
-            MORPHO_VAULT,
             firstVaultName,
             management,
             keeper,
@@ -165,7 +164,6 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         string memory secondVaultName = "Second MorphoCompounder Donating Vault";
 
         address secondStrategyAddress = factory.createStrategy(
-            MORPHO_VAULT,
             secondVaultName,
             management,
             keeper,
@@ -199,7 +197,6 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         // Create strategy for first user
         vm.startPrank(firstUser);
         address firstStrategyAddress = factory.createStrategy(
-            MORPHO_VAULT,
             firstVaultName,
             firstUser,
             keeper,
@@ -215,7 +212,6 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
 
         vm.startPrank(secondUser);
         address secondStrategyAddress = factory.createStrategy(
-            MORPHO_VAULT,
             secondVaultName,
             secondUser,
             keeper,
@@ -246,7 +242,6 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         // Create a strategy
         vm.startPrank(management);
         address firstAddress = factory.createStrategy(
-            MORPHO_VAULT,
             vaultSharesName,
             management,
             keeper,
@@ -259,11 +254,8 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
 
         // Try to deploy the exact same strategy again - should revert
         vm.startPrank(management);
-        vm.expectRevert(
-            abi.encodeWithSelector(MorphoCompounderStrategyFactory.StrategyAlreadyExists.selector, firstAddress)
-        );
+        vm.expectRevert(abi.encodeWithSelector(BaseStrategyFactory.StrategyAlreadyExists.selector, firstAddress));
         factory.createStrategy(
-            MORPHO_VAULT,
             vaultSharesName,
             management,
             keeper,
@@ -278,7 +270,6 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         string memory differentName = "Different Donating Vault";
         vm.startPrank(management);
         address secondAddress = factory.createStrategy(
-            MORPHO_VAULT,
             differentName,
             management,
             keeper,
@@ -293,17 +284,13 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         assertTrue(firstAddress != secondAddress, "Different params should create different address");
     }
 
-    /// @notice Test creating strategies with different Morpho vaults
-    function testDifferentMorphoVaults() public {
+    /// @notice Test creating strategies with different names
+    function testDifferentStrategyNames() public {
         string memory firstVaultName = "First Morpho Vault Strategy";
         string memory secondVaultName = "Second Morpho Vault Strategy";
 
-        // Use a different Morpho vault address for the second strategy
-        address secondMorphoVault = 0xBe53A109B494E5c9f97b9Cd39Fe969BE68BF6204; // another usdc vault
-
         vm.startPrank(management);
         address firstStrategyAddress = factory.createStrategy(
-            MORPHO_VAULT,
             firstVaultName,
             management,
             keeper,
@@ -314,7 +301,6 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         );
 
         address secondStrategyAddress = factory.createStrategy(
-            secondMorphoVault,
             secondVaultName,
             management,
             keeper,

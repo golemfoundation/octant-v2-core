@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.23;
 
+import { AccessMode } from "src/constants.sol";
 import { Test } from "forge-std/Test.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { RegenStaker } from "src/regen/RegenStaker.sol";
+import { RegenStakerBase } from "src/regen/RegenStakerBase.sol";
 import { Staker } from "staker/Staker.sol";
 import { DelegationSurrogate } from "staker/DelegationSurrogate.sol";
 import { DelegationSurrogateVotes } from "staker/DelegationSurrogateVotes.sol";
 import { IERC20Delegates } from "staker/interfaces/IERC20Delegates.sol";
 import { RegenEarningPowerCalculator } from "src/regen/RegenEarningPowerCalculator.sol";
 import { MockERC20Staking } from "test/mocks/MockERC20Staking.sol";
-import { IWhitelist } from "src/utils/IWhitelist.sol";
-import { Whitelist } from "src/utils/Whitelist.sol";
+import { IAddressSet } from "src/utils/IAddressSet.sol";
+import { AddressSet } from "src/utils/AddressSet.sol";
 
 /// @title RegenStaker CREATE2 Deployment Tests
 /// @notice Comprehensive tests for deterministic surrogate deployment using CREATE2
@@ -21,7 +23,7 @@ contract RegenStakerCreate2Test is Test {
     MockERC20Staking public stakeToken;
     MockERC20Staking public rewardToken;
     RegenEarningPowerCalculator public earningPowerCalculator;
-    Whitelist public whitelist;
+    AddressSet public allowset;
 
     address public admin = makeAddr("admin");
     address public user = makeAddr("user");
@@ -36,15 +38,20 @@ contract RegenStakerCreate2Test is Test {
         stakeToken = new MockERC20Staking(18);
         rewardToken = new MockERC20Staking(18);
 
-        // Deploy whitelists
-        whitelist = new Whitelist();
-        whitelist.addToWhitelist(user);
+        // Deploy allowsets
+        allowset = new AddressSet();
+        allowset.add(user);
 
-        // Deploy allocation mechanism whitelist
-        Whitelist allocationWhitelist = new Whitelist();
+        // Deploy allocation mechanism allowset
+        AddressSet allocationAllowset = new AddressSet();
 
         // Deploy earning power calculator
-        earningPowerCalculator = new RegenEarningPowerCalculator(admin, IWhitelist(address(whitelist)));
+        earningPowerCalculator = new RegenEarningPowerCalculator(
+            admin,
+            IAddressSet(address(allowset)),
+            IAddressSet(address(0)),
+            AccessMode.ALLOWSET
+        );
 
         // Deploy staker
         staker = new RegenStaker(
@@ -54,11 +61,11 @@ contract RegenStakerCreate2Test is Test {
             0, // maxBumpTip
             admin,
             30 days, // rewardDuration
-            0, // maxClaimFee
             1e18, // minimumStakeAmount
-            IWhitelist(address(whitelist)), // stakerWhitelist
-            IWhitelist(address(0)), // contributionWhitelist
-            IWhitelist(address(allocationWhitelist)) // allocationMechanismWhitelist
+            IAddressSet(address(allowset)), // stakerAllowset
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            IAddressSet(address(allocationAllowset)) // allocationMechanismAllowset
         );
 
         // Setup tokens
@@ -272,7 +279,7 @@ contract RegenStakerCreate2Test is Test {
         address prediction1 = staker.predictSurrogateAddress(delegatee);
 
         // Deploy a new staker with same parameters
-        Whitelist allocationWhitelist2 = new Whitelist();
+        AddressSet allocationAllowset2 = new AddressSet();
         RegenStaker staker2 = new RegenStaker(
             IERC20(address(rewardToken)),
             stakeToken,
@@ -280,11 +287,11 @@ contract RegenStakerCreate2Test is Test {
             0,
             admin,
             30 days,
-            0,
             1e18,
-            IWhitelist(address(whitelist)),
-            IWhitelist(address(0)),
-            IWhitelist(address(allocationWhitelist2))
+            IAddressSet(address(allowset)),
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            IAddressSet(address(allocationAllowset2))
         );
 
         // Predict from new staker
@@ -317,8 +324,8 @@ contract RegenStakerCreate2Test is Test {
         address charlie = makeAddr("charlie"); // Common delegatee
 
         // Setup both users
-        whitelist.addToWhitelist(alice);
-        whitelist.addToWhitelist(bob);
+        allowset.add(alice);
+        allowset.add(bob);
 
         stakeToken.mint(alice, STAKE_AMOUNT);
         stakeToken.mint(bob, STAKE_AMOUNT);
@@ -360,8 +367,8 @@ contract RegenStakerCreate2Test is Test {
         address davidDelegate = makeAddr("davidDelegate");
 
         // Setup both users
-        whitelist.addToWhitelist(alice);
-        whitelist.addToWhitelist(bob);
+        allowset.add(alice);
+        allowset.add(bob);
 
         stakeToken.mint(alice, STAKE_AMOUNT);
         stakeToken.mint(bob, STAKE_AMOUNT);
@@ -421,9 +428,9 @@ contract RegenStakerCreate2Test is Test {
             }
             amounts[i] = bound(amounts[i], 1e18, 100_000e18);
 
-            // Setup user - only add to whitelist if not already whitelisted
-            if (!whitelist.isWhitelisted(users[i])) {
-                whitelist.addToWhitelist(users[i]);
+            // Setup user - only add to allowset if not already inAllowset
+            if (!allowset.contains(users[i])) {
+                allowset.add(users[i]);
             }
             stakeToken.mint(users[i], amounts[i]);
             vm.prank(users[i]);
@@ -461,7 +468,7 @@ contract RegenStakerCreate2Test is Test {
         address alice = makeAddr("alice");
         address delegatee = makeAddr("delegatee");
 
-        whitelist.addToWhitelist(alice);
+        allowset.add(alice);
         stakeToken.mint(alice, STAKE_AMOUNT * 3);
 
         vm.prank(alice);
@@ -510,7 +517,7 @@ contract RegenStakerCreate2Test is Test {
         address delegatee1 = makeAddr("delegatee1");
         address delegatee2 = makeAddr("delegatee2");
 
-        whitelist.addToWhitelist(alice);
+        allowset.add(alice);
         stakeToken.mint(alice, STAKE_AMOUNT * 2);
 
         vm.prank(alice);
@@ -552,8 +559,8 @@ contract RegenStakerCreate2Test is Test {
         address bob = makeAddr("bob");
         address delegatee = makeAddr("delegatee");
 
-        whitelist.addToWhitelist(alice);
-        whitelist.addToWhitelist(bob);
+        allowset.add(alice);
+        allowset.add(bob);
 
         stakeToken.mint(alice, STAKE_AMOUNT);
         stakeToken.mint(bob, STAKE_AMOUNT);

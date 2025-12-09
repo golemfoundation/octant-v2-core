@@ -17,6 +17,7 @@ import { console } from "forge-std/console.sol";
 import { IERC4626Payable } from "src/zodiac-core/interfaces/IERC4626Payable.sol";
 import { DragonTokenizedStrategy__WithdrawMoreThanMax } from "src/errors.sol";
 import { IMethYieldStrategy } from "src/zodiac-core/interfaces/IMethYieldStrategy.sol";
+import { NATIVE_TOKEN } from "src/constants.sol";
 
 /**
  * @title MethYieldStrategyTest
@@ -46,7 +47,6 @@ contract MethYieldStrategyTest is BaseTest {
 
     // The actual constant addresses for reference
     address constant REAL_MANTLE_STAKING = 0xe3cBd06D7dadB3F4e6557bAb7EdD924CD1489E8f;
-    address constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     // Test parameters
     uint256 internal constant ZERO_BPS = 0;

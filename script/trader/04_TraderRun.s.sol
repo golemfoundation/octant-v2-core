@@ -9,6 +9,7 @@ import "solady/tokens/WETH.sol";
 
 import { HelperConfig } from "../helpers/HelperConfig.s.sol";
 import { Trader } from "src/utils/routers-transformers/Trader.sol";
+import { NATIVE_TOKEN } from "src/constants.sol";
 
 contract TraderRun is Script {
     Trader trader;
@@ -26,7 +27,7 @@ contract TraderRun is Script {
         (, , , uint256 deployerKey, , , , , , ) = new HelperConfig(false).activeNetworkConfig();
 
         trader = Trader(payable(vm.envAddress("TRADER")));
-        ETH = trader.ETH();
+        ETH = NATIVE_TOKEN;
         base = trader.BASE();
         quote = trader.QUOTE();
 
@@ -63,7 +64,7 @@ contract TraderRun is Script {
     }
 
     function safeBalanceOf(address token, address owner) private view returns (uint256) {
-        if ((token == ETH) || (token == address(0x0))) {
+        if (token == NATIVE_TOKEN) {
             return owner.balance;
         } else {
             return ERC20(token).balanceOf(owner);

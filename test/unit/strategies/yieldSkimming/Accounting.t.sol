@@ -957,7 +957,7 @@ contract AccountingTest is Setup {
 
     /**
      * @notice Test debt tracking when user transfers shares to dragon router
-     * @dev Verifies that totalUserDebtInAssetValue decreases and dragonRouterDebtInAssetValue increases
+     * @dev Verifies that totalDebtOwedToUserInAssetValue decreases and dragonRouterDebtInAssetValue increases
      */
     function test_transferToDragon_updatesDebtTracking(uint256 depositAmount, uint256 transferAmount) public {
         depositAmount = bound(depositAmount, minFuzzAmount, 1e27); // Limit to prevent overflow
@@ -993,7 +993,7 @@ contract AccountingTest is Setup {
 
     /**
      * @notice Test debt tracking when dragon router transfers shares to user
-     * @dev Verifies that dragonRouterDebtInAssetValue decreases and totalUserDebtInAssetValue increases
+     * @dev Verifies that dragonRouterDebtInAssetValue decreases and totalDebtOwedToUserInAssetValue increases
      */
     function test_transferFromDragon_updatesDebtTracking(
         uint256 depositAmount,

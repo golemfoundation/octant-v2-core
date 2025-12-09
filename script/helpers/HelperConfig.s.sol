@@ -6,10 +6,9 @@ import { Script } from "forge-std/Script.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { IUniswapV3Pool } from "../../src/utils/vendor/uniswap/IUniswapV3Pool.sol";
 import { IUniswapV3Factory } from "../../src/utils/vendor/uniswap/IUniswapV3Factory.sol";
+import { NATIVE_TOKEN } from "src/constants.sol";
 
 contract HelperConfig is Script {
-    address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
-
     struct UniswapPoolConfig {
         address base;
         address quote;
@@ -65,8 +64,8 @@ contract HelperConfig is Script {
             deployerKey = vm.envUint("PRIVATE_KEY");
         }
 
-        addPool("ETHGLM", ETH, 0x71432DD1ae7DB41706ee6a22148446087BdD0906, 10_000); // ETH -> GLM, 1%
-        addPool("GLMETH", 0x71432DD1ae7DB41706ee6a22148446087BdD0906, ETH, 10_000); // GLM -> ETH, 1%
+        addPool("ETHGLM", NATIVE_TOKEN, 0x71432DD1ae7DB41706ee6a22148446087BdD0906, 10_000); // ETH -> GLM, 1%
+        addPool("GLMETH", 0x71432DD1ae7DB41706ee6a22148446087BdD0906, NATIVE_TOKEN, 10_000); // GLM -> ETH, 1%
 
         return
             // UniswapV3Factory at 0x7eb12e415F88477B3Ef2f0D839161Ffa0f5329a0
@@ -92,8 +91,8 @@ contract HelperConfig is Script {
             deployerKey = vm.envUint("PRIVATE_KEY");
         }
 
-        addPool("ETHGLM", ETH, 0x7DD9c5Cba05E151C895FDe1CF355C9A1D5DA6429, 10_000); // ETH -> GLM, 1%
-        addPool("GLMETH", 0x7DD9c5Cba05E151C895FDe1CF355C9A1D5DA6429, ETH, 10_000); // ETH -> GLM, 1%
+        addPool("ETHGLM", NATIVE_TOKEN, 0x7DD9c5Cba05E151C895FDe1CF355C9A1D5DA6429, 10_000); // ETH -> GLM, 1%
+        addPool("GLMETH", 0x7DD9c5Cba05E151C895FDe1CF355C9A1D5DA6429, NATIVE_TOKEN, 10_000); // ETH -> GLM, 1%
 
         return
             NetworkConfig({

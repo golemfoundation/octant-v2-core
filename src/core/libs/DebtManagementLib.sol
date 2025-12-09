@@ -7,53 +7,140 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { IMultistrategyVault } from "src/core/interfaces/IMultistrategyVault.sol";
 import { ERC20SafeApproveLib } from "src/core/libs/ERC20SafeApproveLib.sol";
 
-/// @notice Library with all actions that can be performed on strategies
+/**
+ * @title DebtManagementLib
+ * @author yearn.finance; extracted as library by [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
+ * @custom:ported-from https://github.com/yearn/yearn-vaults-v3/blob/master/contracts/VaultV3.vy
+ * @notice Library for managing debt allocation and rebalancing between a multistrategy vault and its strategies
+ * @dev This library handles the complex logic of moving assets between the vault's idle reserves and
+ *      individual strategies to maintain target debt levels. It ensures proper accounting, respects
+ *      minimum idle requirements, and handles loss scenarios during withdrawals.
+ *
+ * Key Features:
+ * - Debt rebalancing: Moves assets to/from strategies to match target debt allocations
+ * - Loss protection: Enforces maximum acceptable loss thresholds during withdrawals
+ * - Idle management: Maintains minimum idle reserves in the vault for liquidity
+ * - Strategy constraints: Respects individual strategy deposit/withdrawal limits
+ * - Shutdown handling: Ensures controlled wind-down when vault is in shutdown mode
+ *
+ * The library follows the ERC4626 standard for strategy interactions and implements
+ * robust error handling for edge cases like insufficient liquidity or unrealized losses.
+ *
+ * Originally part of Yearn V3 Multistrategy Vault (Vyper), extracted to separate library
+ * due to Solidity contract size limitations.
+ * https://github.com/yearn/yearn-vaults-v3
+ */
 library DebtManagementLib {
-    // Constants
+    // ============================================
+    // CONSTANTS
+    // ============================================
+
+    /// @notice Maximum basis points (100%)
+    /// @dev Used for loss tolerance calculations
     uint256 public constant MAX_BPS = 10_000;
 
-    // Result struct to return updated storage values
-    struct UpdateDebtResult {
-        uint256 newDebt; // The new debt amount for the strategy
-        uint256 newTotalIdle; // The new total idle amount for the vault
-        uint256 newTotalDebt; // The new total debt amount for the vault
-    }
+    // ============================================
+    // STRUCTS
+    // ============================================
 
-    // Struct to organize calculation variables - following Vyper implementation
-    struct UpdateDebtVars {
-        uint256 newDebt; // How much we want the strategy to have
-        uint256 currentDebt; // How much the strategy currently has
-        uint256 assetsToWithdraw; // Amount to withdraw if reducing debt
-        uint256 assetsToDeposit; // Amount to deposit if increasing debt
-        uint256 minimumTotalIdle; // Minimum amount to keep in vault
-        uint256 totalIdle; // Current idle in vault
-        uint256 availableIdle; // Available idle after minimum
-        uint256 withdrawable; // Max withdrawable from strategy
-        uint256 maxDeposit; // Max deposit to strategy
-        uint256 maxDebt; // Strategy's max debt
-        address asset; // Vault's asset
-        uint256 preBalance; // Balance before operation
-        uint256 postBalance; // Balance after operation
-        uint256 withdrawn; // Actual amount withdrawn
-        uint256 actualDeposit; // Actual amount deposited
+    /**
+     * @notice Return values from updateDebt operation
+     * @dev Returned to vault to update storage after debt operation
+     */
+    struct UpdateDebtResult {
+        /// @notice New debt amount for the strategy
+        uint256 newDebt;
+        /// @notice New total idle amount for the vault
+        uint256 newTotalIdle;
+        /// @notice New total debt across all strategies
+        uint256 newTotalDebt;
     }
 
     /**
-     * @notice Update debt for a strategy
-     * @dev The vault will re-balance the debt vs target debt. Target debt must be
-     *      smaller or equal to strategy's max_debt. This function will compare the
-     *      current debt with the target debt and will take funds or deposit new
-     *      funds to the strategy.
-     * @param strategies Storage mapping of strategies
-     * @param totalIdle Current total idle in vault
-     * @param totalDebt Current total debt in vault
-     * @param strategy The strategy address
-     * @param targetDebt The target debt amount
-     * @param maxLoss Maximum acceptable loss in basis points
+     * @notice Working variables for updateDebt calculation
+     * @dev Follows Vyper implementation structure to avoid stack-too-deep errors
+     */
+    struct UpdateDebtVars {
+        /// @notice Target debt we want strategy to have
+        uint256 newDebt;
+        /// @notice Current debt strategy has
+        uint256 currentDebt;
+        /// @notice Amount to withdraw if reducing debt
+        uint256 assetsToWithdraw;
+        /// @notice Amount to deposit if increasing debt
+        uint256 assetsToDeposit;
+        /// @notice Minimum amount vault must keep idle
+        uint256 minimumTotalIdle;
+        /// @notice Current idle in vault
+        uint256 totalIdle;
+        /// @notice Available idle after reserving minimum
+        uint256 availableIdle;
+        /// @notice Max withdrawable from strategy per maxRedeem
+        uint256 withdrawable;
+        /// @notice Max deposit to strategy per maxDeposit
+        uint256 maxDeposit;
+        /// @notice Strategy's maximum debt limit
+        uint256 maxDebt;
+        /// @notice Vault's asset token address
+        address asset;
+        /// @notice Asset balance before operation (for diff accounting)
+        uint256 preBalance;
+        /// @notice Asset balance after operation (for diff accounting)
+        uint256 postBalance;
+        /// @notice Actual amount withdrawn (may differ from requested)
+        uint256 withdrawn;
+        /// @notice Actual amount deposited (may differ from requested)
+        uint256 actualDeposit;
+    }
+
+    /**
+     * @notice Rebalances strategy debt allocation by depositing or withdrawing assets
+     * @dev Core debt management function handling bidirectional asset movement
+     *
+     *      OPERATION MODES:
+     *      ═══════════════════════════════════
+     *      1. REDUCE DEBT (targetDebt < currentDebt):
+     *         - Withdraws assets from strategy back to vault
+     *         - Increases totalIdle, decreases totalDebt
+     *         - Respects strategy's maxRedeem limit
+     *         - Validates loss within maxLoss tolerance
+     *         - Ensures minimumTotalIdle is maintained
+     *
+     *      2. INCREASE DEBT (targetDebt > currentDebt):
+     *         - Deposits idle assets from vault to strategy
+     *         - Decreases totalIdle, increases totalDebt
+     *         - Respects strategy's maxDeposit limit
+     *         - Respects strategy's maxDebt cap
+     *         - Ensures minimumTotalIdle is preserved
+     *
+     *      SPECIAL VALUES:
+     *      - targetDebt = type(uint256).max: Deposit all available idle (up to maxDebt)
+     *      - targetDebt = 0: Withdraw all assets from strategy
+     *
+     *      SAFETY CHECKS:
+     *      - Prevents withdrawals if unrealized losses exist
+     *      - Uses actual balance diff for precise accounting
+     *      - Validates losses within maxLoss tolerance
+     *      - Maintains minimumTotalIdle buffer
+     *      - Auto-shutdown: Forces targetDebt = 0 if vault shutdown
+     *
+     *      LOSS HANDLING:
+     *      - maxLoss in basis points (0-10000)
+     *      - Loss = (assetsToWithdraw - actuallyWithdrawn)
+     *      - Reverts if loss exceeds tolerance
+     *      - Common values: 0 (no loss), 100 (1%), 10000 (100%)
+     *
+     * @param strategies Storage mapping of strategy parameters
+     * @param totalIdle Current vault idle assets
+     * @param totalDebt Current total debt across all strategies
+     * @param strategy Strategy address to rebalance
+     * @param targetDebt Target debt for strategy,  or type(uint256).max for max)
+     * @param maxLoss Maximum acceptable loss in basis points (0-10000)
      * @param minimumTotalIdle Minimum idle to maintain in vault
-     * @param asset The vault's asset address
-     * @param isShutdown Whether vault is shutdown
-     * @return result UpdateDebtResult with new debt, total idle, and total debt
+     * @param asset Vault's asset token address
+     * @param isShutdown Whether vault is shutdown (forces withdrawals)
+     * @return result Updated debt, totalIdle, and totalDebt values
      */
     /* solhint-disable code-complexity */
     function updateDebt(
@@ -174,6 +261,9 @@ library DebtManagementLib {
             }
 
             // Vault is increasing debt with the strategy by sending more funds.
+            // NOTE: For strategies that deposit into meta-vaults (e.g., MorphoCompounderStrategy → Morpho Steakhouse → SteakHouse USDC),
+            // maxDeposit may be inflated if underlying vaults have duplicate markets in their supplyQueue.
+            // This could cause deposit attempts to fail if the actual capacity is lower than reported.
             vars.maxDeposit = IERC4626Payable(strategy).maxDeposit(address(this));
             if (vars.maxDeposit == 0) {
                 result.newDebt = vars.currentDebt;
@@ -235,7 +325,7 @@ library DebtManagementLib {
 
     /**
      * @notice Internal function to withdraw from strategy
-     * @param strategy The strategy to withdraw from
+     * @param strategy Strategy to withdraw from
      * @param assetsToWithdraw Amount to withdraw
      */
     function _withdrawFromStrategy(address strategy, uint256 assetsToWithdraw) internal {

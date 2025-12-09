@@ -8,6 +8,8 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
  * @title MultistrategyLockedVault
+ * @author [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
  * @notice A locked vault with custody-based rage quit mechanism and two-step cooldown period changes
  *
  * @dev This vault implements a secure custody system that prevents rage quit cooldown bypass attacks
@@ -97,23 +99,53 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
  * 6. `getRageQuitableShares(user)` returns 0 (already has active rage quit)
  */
 contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVault {
-    // Mapping of user address to their custody info
+    // ============================================
+    // STATE VARIABLES
+    // ============================================
+
+    /// @notice Mapping of user addresses to their custody information
+    /// @dev Tracks locked shares and unlock timestamp for each user's rage quit
+    ///      Only one active custody per user (no concurrent rage quits)
     mapping(address => CustodyInfo) public custodyInfo;
 
-    // Regen governance address
+    /// @notice Address of regen governance controlling rage quit parameters
+    /// @dev Can propose/cancel rage quit cooldown period changes
+    ///      Set during initialize() to the roleManager address
     address public regenGovernance;
 
-    // Cooldown period for rage quit
+    /// @notice Current active cooldown period for rage quits
+    /// @dev In seconds. Applied to new rage quits when initiateRageQuit() is called
+    ///      Can be changed via two-step process (propose + finalize after grace period)
     uint256 public rageQuitCooldownPeriod;
 
-    // Two-step rage quit cooldown period change variables
+    /// @notice Pending new cooldown period awaiting finalization
+    /// @dev Set to 0 when no change is pending. Non-zero indicates active proposal
+    ///      Requires RAGE_QUIT_COOLDOWN_CHANGE_DELAY to elapse before finalization
     uint256 public pendingRageQuitCooldownPeriod;
+
+    /// @notice Timestamp when current cooldown period change was proposed
+    /// @dev Unix timestamp in seconds. Used to calculate grace period expiration
+    ///      Set to 0 when no change is pending
     uint256 public rageQuitCooldownPeriodChangeTimestamp;
 
-    // Constants
+    // ============================================
+    // CONSTANTS
+    // ============================================
+
+    /// @notice Initial rage quit cooldown period set at deployment
+    /// @dev 7 days in seconds. Applied until governance changes it
     uint256 public constant INITIAL_RAGE_QUIT_COOLDOWN_PERIOD = 7 days;
+
+    /// @notice Minimum allowed rage quit cooldown period
+    /// @dev 1 day in seconds. Prevents cooldown from being set too short
     uint256 public constant RANGE_MINIMUM_RAGE_QUIT_COOLDOWN_PERIOD = 1 days;
+
+    /// @notice Maximum allowed rage quit cooldown period
+    /// @dev 30 days in seconds. Prevents cooldown from being set too long
     uint256 public constant RANGE_MAXIMUM_RAGE_QUIT_COOLDOWN_PERIOD = 30 days;
+
+    /// @notice Grace period delay for cooldown changes
+    /// @dev 14 days in seconds. Users have this time to rage quit under old terms
     uint256 public constant RAGE_QUIT_COOLDOWN_CHANGE_DELAY = 14 days;
 
     /**
@@ -126,17 +158,25 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
     }
 
     /**
-     * @notice Initialize the locked vault with custody mechanism
-     * @param _asset Address of the underlying asset token
-     * @param _name Name of the vault token
-     * @param _symbol Symbol of the vault token
-     * @param _roleManager Address that manages vault roles (also becomes regen governance)
-     * @param _profitMaxUnlockTime Maximum time for profit unlocking
-     * @dev Initializes both the base MultistrategyVault and locked vault features:
-     *      - Sets initial rage quit cooldown period to 7 days
-     *      - Configures _roleManager as the regen governance address
-     *      - Inherits all base vault initialization (roles, asset, etc.)
-     * @custom:initializer Can only be called once during deployment
+     * @notice Initializes the locked vault with custody mechanism
+     * @dev Extends MultistrategyVault.initialize() with custody features
+     *
+     *      INITIALIZATION:
+     *      1. Sets initial rage quit cooldown to INITIAL_RAGE_QUIT_COOLDOWN_PERIOD (7 days)
+     *      2. Calls parent initialize() for standard vault setup
+     *      3. Sets _roleManager as regenGovernance address
+     *
+     *      DUAL ROLE:
+     *      - _roleManager becomes both roleManager AND regenGovernance
+     *      - roleManager: Controls vault roles (from parent)
+     *      - regenGovernance: Controls rage quit parameters (this contract)
+     *
+     * @param _asset Address of underlying asset token (cannot be zero)
+     * @param _name Human-readable vault token name
+     * @param _symbol Vault token symbol ticker
+     * @param _roleManager Address for role management AND regen governance
+     * @param _profitMaxUnlockTime Profit unlock duration in seconds (0-31556952)
+     * @custom:security Can only be called once per deployment
      */
     function initialize(
         address _asset,
@@ -151,9 +191,23 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
     }
 
     /**
-     * @notice Propose a new rage quit cooldown period
-     * @param _rageQuitCooldownPeriod New cooldown period for rage quit
-     * @dev Starts a grace period allowing users to rage quit under current terms
+     * @notice Proposes a new rage quit cooldown period (step 1 of 2)
+     * @dev Initiates two-step change process with grace period for user protection
+     *
+     *      VALIDATION:
+     *      - Must be within valid range (1-30 days)
+     *      - Must differ from current cooldown period
+     *
+     *      PROCESS:
+     *      1. Validates new period is within allowed range
+     *      2. Sets pendingRageQuitCooldownPeriod
+     *      3. Records proposal timestamp
+     *      4. Users have 14 days to rage quit under current terms
+     *      5. After 14 days, anyone can finalize the change
+     *
+     * @param _rageQuitCooldownPeriod New cooldown period in seconds (86400-2592000, i.e., 1-30 days)
+     * @custom:security Only callable by regenGovernance
+     * @custom:security 14-day grace period protects users from unfavorable changes
      */
     function proposeRageQuitCooldownPeriodChange(uint256 _rageQuitCooldownPeriod) external onlyRegenGovernance {
         if (
@@ -175,10 +229,19 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
     }
 
     /**
-     * @notice Finalize the rage quit cooldown period change after the grace period
-     * @dev Can only be called after the grace period has elapsed
+     * @notice Finalizes the rage quit cooldown period change (step 2 of 2)
+     * @dev Permissionless - anyone can call after grace period expires
+     *
+     *      REQUIREMENTS:
+     *      - Must have pending change (pendingRageQuitCooldownPeriod != 0)
+     *      - Grace period (14 days) must have elapsed
+     *
+     *      EFFECTS:
+     *      - Updates rageQuitCooldownPeriod to pending value
+     *      - Clears pending state
+     *      - New rage quits use new cooldown period immediately
      */
-    function finalizeRageQuitCooldownPeriodChange() external onlyRegenGovernance {
+    function finalizeRageQuitCooldownPeriodChange() external {
         if (pendingRageQuitCooldownPeriod == 0) {
             revert NoPendingRageQuitCooldownPeriodChange();
         }
@@ -196,45 +259,60 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
     }
 
     /**
-     * @notice Cancel a pending rage quit cooldown period change
-     * @dev Can only be called by governance during the grace period
+     * @notice Cancels a pending rage quit cooldown period change
+     * @dev Only callable during grace period (before finalization)
+     *
+     *      REQUIREMENTS:
+     *      - Must have pending change
+     *      - Grace period must NOT have elapsed yet
+     *
+     *      EFFECTS:
+     *      - Clears all pending change state
+     *      - Current cooldown period remains unchanged
+     *
+     * @custom:security Only callable by regenGovernance
+     * @custom:security Cannot cancel after grace period expires
      */
     function cancelRageQuitCooldownPeriodChange() external onlyRegenGovernance {
-        if (pendingRageQuitCooldownPeriod == 0) {
+        uint256 pending = pendingRageQuitCooldownPeriod;
+        if (pending == 0) {
             revert NoPendingRageQuitCooldownPeriodChange();
+        }
+
+        uint256 proposedAt = rageQuitCooldownPeriodChangeTimestamp;
+        if (block.timestamp >= proposedAt + RAGE_QUIT_COOLDOWN_CHANGE_DELAY) {
+            revert RageQuitCooldownPeriodChangeDelayElapsed();
         }
 
         pendingRageQuitCooldownPeriod = 0;
         rageQuitCooldownPeriodChangeTimestamp = 0;
 
+        emit RageQuitCooldownPeriodChangeCancelled(pending, proposedAt, block.timestamp);
         emit PendingRageQuitCooldownPeriodChange(0, 0);
     }
 
     /**
-     * @notice Get the pending rage quit cooldown period if any
-     * @return The pending cooldown period (0 if none)
-     */
-    function getPendingRageQuitCooldownPeriod() external view returns (uint256) {
-        return pendingRageQuitCooldownPeriod;
-    }
-
-    /**
-     * @notice Get the timestamp when rage quit cooldown period change was initiated
-     * @return Timestamp of the change initiation (0 if none)
-     */
-    function getRageQuitCooldownPeriodChangeTimestamp() external view returns (uint256) {
-        return rageQuitCooldownPeriodChangeTimestamp;
-    }
-
-    /**
-     * @notice Initiate rage quit process by placing specific shares in custody
-     * @param shares Number of shares to lock for rage quit (must not exceed balance)
-     * @dev Creates custody for specified shares with current cooldown period:
-     *      - Shares are locked and become non-transferable
-     *      - Custody tracks locked amount and unlock timestamp
-     *      - Cannot initiate if user already has active custody
-     *      - Uses current cooldown period (not pending changes)
-     * @custom:security Prevents cooldown bypass through share transfers
+     * @notice Initiates rage quit by locking shares in custody
+     * @dev Creates custody entry with current cooldown period
+     *
+     *      REQUIREMENTS:
+     *      - shares > 0
+     *      - shares <= user's balance
+     *      - User must NOT have existing active custody
+     *
+     *      EFFECTS:
+     *      - Locks specified shares (become non-transferable)
+     *      - Sets unlock time = current timestamp + rageQuitCooldownPeriod
+     *      - User can withdraw after unlock time
+     *
+     *      IMPORTANT:
+     *      - Uses CURRENT cooldown period (not pending)
+     *      - Locked shares cannot be transferred
+     *      - Only one custody per user at a time
+     *
+     * @param shares Number of shares to lock for rage quit
+     * @custom:security Reentrancy protected
+     * @custom:security Prevents cooldown bypass via transfers
      */
     function initiateRageQuit(uint256 shares) external nonReentrant {
         if (shares == 0) revert InvalidShareAmount();
@@ -248,15 +326,37 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
             revert RageQuitAlreadyInitiated();
         }
 
-        // Available shares = total balance - already locked shares
-        uint256 availableShares = userBalance - custody.lockedShares;
-        if (availableShares < shares) revert InsufficientAvailableShares();
-
         // Lock the shares in custody
         custody.lockedShares = shares;
         custody.unlockTime = block.timestamp + rageQuitCooldownPeriod;
 
         emit RageQuitInitiated(msg.sender, shares, custody.unlockTime);
+    }
+
+    /**
+     * @notice Cancels rage quit and releases custodied shares
+     * @dev Clears custody, making all shares transferable again
+     *
+     *      REQUIREMENTS:
+     *      - Must have active custody (lockedShares > 0)
+     *
+     *      EFFECTS:
+     *      - Deletes entire custody entry
+     *      - All shares become transferable
+     *      - User can initiate new rage quit if desired
+     */
+    function cancelRageQuit() external {
+        CustodyInfo storage custody = custodyInfo[msg.sender];
+
+        if (custody.lockedShares == 0) {
+            revert NoActiveRageQuit();
+        }
+
+        // Clear custody info
+        uint256 freedShares = custody.lockedShares;
+        delete custodyInfo[msg.sender];
+
+        emit RageQuitCancelled(msg.sender, freedShares);
     }
 
     /**
@@ -384,20 +484,64 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
 
 
     /**
-     * @notice Cancel rage quit and unlock custodied shares
+     * @notice Get the maximum amount of shares that can be redeemed by an owner
+     * @param owner_ Address owning shares to check redemption limits for
+     * @param maxLoss_ Custom max_loss if any
+     * @param strategiesArray_ Custom strategies queue if any
+     * @return Maximum amount of shares redeemable
+     * @dev This override accounts for custody constraints - returns 0 if:
+     *      - Custody is still in cooldown period
+     *      - Otherwise returns min of balance and custodied shares
      */
-    function cancelRageQuit() external {
-        CustodyInfo storage custody = custodyInfo[msg.sender];
+    function maxRedeem(
+        address owner_,
+        uint256 maxLoss_,
+        address[] calldata strategiesArray_
+    ) external view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
+        CustodyInfo memory custody = custodyInfo[owner_];
 
-        if (custody.lockedShares == 0) {
-            revert NoActiveRageQuit();
+        if (block.timestamp < custody.unlockTime) {
+            return 0;
         }
 
-        // Clear custody info
-        uint256 freedShares = custody.lockedShares;
-        delete custodyInfo[msg.sender];
+        // Get max shares from parent calculation
+        uint256 parentMax = Math.min(
+            _convertToShares(_maxWithdraw(owner_, maxLoss_, strategiesArray_), Rounding.ROUND_DOWN),
+            balanceOf(owner_)
+        );
 
-        emit RageQuitCancelled(msg.sender, freedShares);
+        // Get custody info to determine locked shares
+        uint256 lockedShares = custody.lockedShares;
+
+        // Return minimum of parent max and custody limit
+        return Math.min(parentMax, lockedShares);
+    }
+
+    /**
+     * @notice Get the amount of shares that can be transferred by a user
+     * @param user Address to check transferable shares for
+     * @return Amount of shares available for transfer (not locked in custody)
+     * @dev Returns total balance minus shares currently locked in custody
+     */
+    function getTransferableShares(address user) external view returns (uint256) {
+        uint256 totalShares = balanceOf(user);
+        uint256 lockedShares = custodyInfo[user].lockedShares;
+        return totalShares - lockedShares;
+    }
+
+    /**
+     * @notice Get the amount of shares available for rage quit initiation
+     * @param user Address to check rage quitable shares for
+     * @return Amount of shares available for initiating rage quit
+     * @dev Returns 0 if user already has active custody, otherwise returns full balance
+     */
+    function getRageQuitableShares(address user) external view returns (uint256) {
+        // If user already has active custody, they cannot initiate new rage quit
+        if (custodyInfo[user].lockedShares > 0) {
+            return 0;
+        }
+        // Otherwise, they can rage quit all their shares
+        return balanceOf(user);
     }
 
     /**

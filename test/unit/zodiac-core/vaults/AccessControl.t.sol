@@ -125,7 +125,7 @@ contract AccessControlTest is Setup {
     function test_initializeTokenizedStrategy_reverts(address _address, string memory name_) public {
         vm.assume(_address != address(0));
 
-        assertEq(tokenizedStrategy.management(), address(0));
+        assertEq(tokenizedStrategy.management(), address(1));
         assertEq(tokenizedStrategy.keeper(), address(0));
 
         vm.expectRevert(TokenizedStrategy__AlreadyInitialized.selector);
@@ -139,7 +139,7 @@ contract AccessControlTest is Setup {
             regenGovernance
         );
 
-        assertEq(tokenizedStrategy.management(), address(0));
+        assertEq(tokenizedStrategy.management(), address(1));
         assertEq(tokenizedStrategy.keeper(), address(0));
     }
 

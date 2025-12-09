@@ -14,6 +14,9 @@ jobs:
     name: Build Docker Image
     runs-on:
       - general
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,6 +47,7 @@ jobs:
             type=sha,prefix=,format=long
 
       - name: Build and push
+        id: build-and-push
         uses: docker/build-push-action@v6
         with:
           context: __local
@@ -53,6 +57,18 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=registry,ref=${{ vars.GCP_DOCKER_IMAGE_REGISTRY }}/cache:core
           cache-to: type=registry,ref=${{ vars.GCP_DOCKER_IMAGE_REGISTRY }}/cache:core,mode=max
+
+      - name: Sign the images with GitHub OIDC Token
+        env:
+          DIGEST: ${{ steps.build-and-push.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          images=""
+          for tag in ${TAGS}; do
+            images+="${tag}@${DIGEST} "
+          done
+          echo "Signing images: $images"
+          cosign sign --yes ${images}
 
   deploy-contract:
     name: Deploy contracts

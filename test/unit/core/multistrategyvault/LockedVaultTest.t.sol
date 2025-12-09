@@ -178,6 +178,26 @@ contract LockedVaultTest is Test {
         vm.stopPrank();
     }
 
+    function test_RegenGovernanceDirectTransfer() public {
+        address newGovernance = address(0xABCD);
+
+        vm.startPrank(gov);
+        vm.expectEmit(true, true, false, true);
+        emit IMultistrategyLockedVault.RegenGovernanceChanged(gov, newGovernance);
+        vault.setRegenGovernance(newGovernance);
+        vm.stopPrank();
+
+        assertEq(vault.regenGovernance(), newGovernance, "governance should update immediately");
+    }
+
+    function test_RegenGovernanceRejectsInvalidAddresses() public {
+        vm.startPrank(gov);
+        vm.expectRevert(IMultistrategyLockedVault.InvalidGovernanceAddress.selector);
+        vault.setRegenGovernance(address(0));
+        vault.setRegenGovernance(gov);
+        vm.stopPrank();
+    }
+
     function testFuzz_CannotInitiateRageQuitWhenAlreadyUnlockedAndCooldownPeriodHasNotPassed(
         uint256 depositAmount,
         uint256 timeElapsed

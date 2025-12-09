@@ -1,31 +1,41 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.25;
+
 import { TokenizedStrategy, Math } from "src/core/TokenizedStrategy.sol";
 import { IBaseStrategy } from "src/core/interfaces/IBaseStrategy.sol";
-
-import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 /**
  * @title YieldDonatingTokenizedStrategy
- * @author octant.finance
- * @notice A specialized version of DragonTokenizedStrategy designed for productive assets to generate and donate profits to the dragon router
- * @dev This strategy implements a yield donation mechanism by:
- *      - Calling harvestAndReport to collect all profits from the underlying strategy
- *      - Converting profits into shares using the standard conversion
- *      - Minting these shares directly to the dragonRouter address
- *      - Protecting against losses by burning shares from dragonRouter
+ * @author [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
+ * @notice Specialized TokenizedStrategy for productive assets with discrete harvesting; profits are donated by minting shares to the dragon router.
+ * @dev Behavior overview:
+ *      - On report(), harvests the underlying position via BaseStrategy.harvestAndReport()
+ *      - If newTotalAssets > oldTotalAssets, mints shares equal to the profit (asset value) to the dragon router
+ *      - If losses occur and burning is enabled, burns dragon router shares (up to its balance) using rounding-up shares-to-burn
+ *      - No tracked-loss bucket exists; any loss not covered by dragon router burning reduces totalAssets and affects PPS for all holders
+ *
+ * Economic notes:
+ *      - Profit donations are realized via share mints at the time of report
+ *      - Losses first attempt dragon share burning when enabled; residual losses decrease PPS
+ *      - Dragon router change follows TokenizedStrategy cooldown and two-step finalization
  */
+
 contract YieldDonatingTokenizedStrategy is TokenizedStrategy {
     using Math for uint256;
 
-    /// @dev Events for donation tracking
+    /// @notice Emitted when profit shares are minted to dragon router
+    /// @param dragonRouter Address receiving minted donation shares
+    /// @param amount Amount of shares minted in share base units
     event DonationMinted(address indexed dragonRouter, uint256 amount);
+
+    /// @notice Emitted when dragon shares are burned to cover losses
+    /// @param dragonRouter Address whose shares are burned
+    /// @param amount Amount of shares burned in share base units
     event DonationBurned(address indexed dragonRouter, uint256 amount);
     /**
-     * @inheritdoc TokenizedStrategy
-     * @dev This implementation overrides the base report function to mint profit-derived shares to dragonRouter.
-     * When the strategy generates profits (newTotalAssets > oldTotalAssets), the difference is converted to shares
-     * and minted to the dragonRouter. When losses occur, those losses can be offset by burning shares from dragonRouter
-     * through the _handleDragonLossProtection mechanism.
+     * @notice Reports strategy performance and distributes profits as donations
+     * @dev Mints profit-derived shares to dragon router when newTotalAssets > oldTotalAssets; on loss, attempts
+     *      dragon share burning if enabled. Residual loss reduces PPS (no tracked-loss bucket).
      */
     function report()
         public
@@ -50,7 +60,7 @@ contract YieldDonatingTokenizedStrategy is TokenizedStrategy {
 
             // mint the shares to the dragon router
             _mint(S, _dragonRouter, sharesToMint);
-            emit DonationMinted(_dragonRouter, profit);
+            emit DonationMinted(_dragonRouter, sharesToMint);
         } else {
             unchecked {
                 loss = oldTotalAssets - newTotalAssets;
@@ -72,7 +82,7 @@ contract YieldDonatingTokenizedStrategy is TokenizedStrategy {
     /**
      * @dev Internal function to handle loss protection for dragon principal
      * @param S Storage struct pointer to access strategy's storage variables
-     * @param loss The amount of loss in terms of asset to protect against
+     * @param loss Amount of loss to protect against in asset base units
      *
      * If burning is enabled, this function will try to burn shares from the dragon router
      * equivalent to the loss amount.
@@ -86,12 +96,9 @@ contract YieldDonatingTokenizedStrategy is TokenizedStrategy {
             uint256 sharesBurned = Math.min(sharesToBurn, S.balances[S.dragonRouter]);
 
             if (sharesBurned > 0) {
-                // Convert shares to assets BEFORE burning to get correct value
-                uint256 assetValueBurned = _convertToAssets(S, sharesBurned, Math.Rounding.Floor);
-
                 // Burn shares from dragon router
                 _burn(S, S.dragonRouter, sharesBurned);
-                emit DonationBurned(S.dragonRouter, assetValueBurned);
+                emit DonationBurned(S.dragonRouter, sharesBurned);
             }
         }
     }

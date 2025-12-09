@@ -4,6 +4,7 @@ pragma solidity >=0.8.18;
 import { MockYieldSource } from "../core/MockYieldSource.sol";
 import { DragonBaseStrategy, ERC20 } from "src/zodiac-core/vaults/DragonBaseStrategy.sol";
 import { Module } from "zodiac/core/Module.sol";
+import { NATIVE_TOKEN } from "src/constants.sol";
 
 contract MockStrategy is Module, DragonBaseStrategy {
     address public yieldSource;
@@ -44,7 +45,7 @@ contract MockStrategy is Module, DragonBaseStrategy {
         );
 
         yieldSource = _yieldSource;
-        if (_asset != ETH) ERC20(_asset).approve(_yieldSource, type(uint256).max);
+        if (_asset != NATIVE_TOKEN) ERC20(_asset).approve(_yieldSource, type(uint256).max);
 
         setAvatar(_owner);
         setTarget(_owner);

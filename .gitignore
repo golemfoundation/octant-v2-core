@@ -17,6 +17,9 @@ coverage/
 node_modules/
 reports/
 out/
+docs/*
+!docs/*.md
+!docs/.gitignore
 
 .secrets
 .env
@@ -28,3 +31,5 @@ gasreport.txt
 output.json
 package.tgz
 
+# Private/temporary files - do not commit
+_*.md

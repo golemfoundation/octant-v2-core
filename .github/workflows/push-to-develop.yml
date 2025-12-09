@@ -96,8 +96,9 @@ jobs:
           path: /app/reports/junit.xml
 
       - name: Prepare test report
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v2
         if: success() || failure()        # run this step even if previous step failed
+        continue-on-error: true
         with:
           artifact: test-results            # artifact name
           name: Tests results                # Name of the check run which will be created

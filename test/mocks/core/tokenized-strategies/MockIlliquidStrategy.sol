@@ -6,7 +6,7 @@ import { BaseStrategy, ERC20 } from "src/core/BaseStrategy.sol";
 
 contract MockIlliquidStrategy is BaseStrategy {
     address public yieldSource;
-    bool public whitelist;
+    bool public allowset;
     mapping(address => bool) public allowed;
 
     constructor(
@@ -57,7 +57,7 @@ contract MockIlliquidStrategy is BaseStrategy {
     }
 
     function availableDepositLimit(address _owner) public view override returns (uint256) {
-        if (whitelist && !allowed[_owner]) {
+        if (allowset && !allowed[_owner]) {
             return 0;
         } else {
             return super.availableDepositLimit(_owner);
@@ -68,8 +68,8 @@ contract MockIlliquidStrategy is BaseStrategy {
         return asset.balanceOf(address(this));
     }
 
-    function setWhitelist(bool _bool) external {
-        whitelist = _bool;
+    function setAllowset(bool _bool) external {
+        allowset = _bool;
     }
 
     function allow(address _address) external {

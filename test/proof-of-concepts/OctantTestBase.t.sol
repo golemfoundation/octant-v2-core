@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
+import { AccessMode } from "src/constants.sol";
 import { Test } from "forge-std/Test.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -11,6 +12,7 @@ import { IMultistrategyVault } from "src/core/interfaces/IMultistrategyVault.sol
 
 // Regen components
 import { RegenStaker } from "src/regen/RegenStaker.sol";
+import { RegenStakerBase } from "src/regen/RegenStakerBase.sol";
 import { RegenEarningPowerCalculator } from "src/regen/RegenEarningPowerCalculator.sol";
 
 // Allocation mechanisms
@@ -19,7 +21,8 @@ import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVoti
 import { AllocationConfig } from "src/mechanisms/BaseAllocationMechanism.sol";
 
 // Utils
-import { Whitelist } from "src/utils/Whitelist.sol";
+import { AddressSet } from "src/utils/AddressSet.sol";
+import { IAddressSet } from "src/utils/IAddressSet.sol";
 
 // Mocks
 import { MockERC20 } from "test/mocks/MockERC20.sol";
@@ -48,11 +51,11 @@ contract OctantTestBase is Test {
     MockERC20Staking public stakeToken;
     MockERC20 public rewardToken;
 
-    // Whitelists
-    Whitelist public stakerWhitelist;
-    Whitelist public contributionWhitelist;
-    Whitelist public allocationMechanismWhitelist;
-    Whitelist public earningPowerWhitelist;
+    // Allowsets
+    AddressSet public stakerAllowset;
+    AddressSet public contributionAllowset;
+    AddressSet public allocationMechanismAllowset;
+    AddressSet public earningPowerAllowset;
 
     // Standard test addresses
     address public admin = makeAddr("admin");
@@ -86,11 +89,11 @@ contract OctantTestBase is Test {
         stakeToken = new MockERC20Staking(18);
         rewardToken = new MockERC20(18);
 
-        // Deploy whitelists
-        stakerWhitelist = new Whitelist();
-        contributionWhitelist = new Whitelist();
-        allocationMechanismWhitelist = new Whitelist();
-        earningPowerWhitelist = new Whitelist();
+        // Deploy allowsets
+        stakerAllowset = new AddressSet();
+        contributionAllowset = new AddressSet();
+        allocationMechanismAllowset = new AddressSet();
+        earningPowerAllowset = new AddressSet();
 
         // Deploy vault infrastructure
         _deployVaultInfrastructure();
@@ -131,7 +134,12 @@ contract OctantTestBase is Test {
 
     function _deployRegenInfrastructure() internal {
         // Deploy earning power calculator
-        earningPowerCalculator = new RegenEarningPowerCalculator(admin, earningPowerWhitelist);
+        earningPowerCalculator = new RegenEarningPowerCalculator(
+            admin,
+            earningPowerAllowset,
+            IAddressSet(address(0)),
+            AccessMode.ALLOWSET
+        );
 
         // Deploy regen staker factory (skip for POC - use direct deployment)
         // regenStakerFactory = new RegenStakerFactory(regenStakerBytecode, noDelegationBytecode);
@@ -144,11 +152,11 @@ contract OctantTestBase is Test {
             1000, // maxBumpTip
             admin,
             uint128(REWARD_DURATION),
-            0, // maxClaimFee
             0, // minStakeAmount
-            stakerWhitelist,
-            contributionWhitelist,
-            allocationMechanismWhitelist
+            stakerAllowset,
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            allocationMechanismAllowset
         );
 
         // Set reward notifier
@@ -205,15 +213,15 @@ contract OctantTestBase is Test {
         vault.updateMaxDebtForStrategy(address(strategy), type(uint256).max);
         vm.stopPrank();
 
-        // Setup whitelists
+        // Setup allowsets
         vm.startPrank(admin);
-        stakerWhitelist.addToWhitelist(alice);
-        stakerWhitelist.addToWhitelist(bob);
-        contributionWhitelist.addToWhitelist(alice);
-        contributionWhitelist.addToWhitelist(bob);
-        earningPowerWhitelist.addToWhitelist(alice);
-        earningPowerWhitelist.addToWhitelist(bob);
-        allocationMechanismWhitelist.addToWhitelist(address(allocationMechanism));
+        stakerAllowset.add(alice);
+        stakerAllowset.add(bob);
+        contributionAllowset.add(alice);
+        contributionAllowset.add(bob);
+        earningPowerAllowset.add(alice);
+        earningPowerAllowset.add(bob);
+        allocationMechanismAllowset.add(address(allocationMechanism));
 
         // Mint tokens for testing
         asset.mint(alice, INITIAL_DEPOSIT * 10);

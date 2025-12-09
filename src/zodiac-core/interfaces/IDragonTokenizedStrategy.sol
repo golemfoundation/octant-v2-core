@@ -3,6 +3,13 @@ pragma solidity ^0.8.25;
 
 import { ITokenizedStrategy } from "./ITokenizedStrategy.sol";
 
+/**
+ * @title IDragonTokenizedStrategy
+ * @author [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
+ * @notice Interface for dragon mode strategies with voluntary lockups and rage quit
+ * @dev Extends ITokenizedStrategy with lockup mechanics and dragon-only deposit controls
+ */
 interface IDragonTokenizedStrategy is ITokenizedStrategy {
     // DragonTokenizedStrategy storage slot
     struct DragonTokenizedStrategyStorage {
@@ -10,34 +17,39 @@ interface IDragonTokenizedStrategy is ITokenizedStrategy {
     }
     /**
      * @notice Emitted when a new lockup is set for a user
-     * @param user The user whose lockup was set
-     * @param unlockTime The timestamp when shares will be unlocked
-     * @param lockedShares The amount of shares locked
+     * @param user User whose lockup was set
+     * @param lockTime Timestamp when lockup was set
+     * @param unlockTime Timestamp when shares will be unlocked
+     * @param lockedShares Amount of shares locked in share base units
      */
     event NewLockupSet(address indexed user, uint256 lockTime, uint256 unlockTime, uint256 lockedShares);
 
+    /// @notice Emitted when lockup duration is updated
+    /// @param lockupDuration New lockup duration in seconds
     event LockupDurationSet(uint256 lockupDuration);
+    /// @notice Emitted when rage quit cooldown period is updated
+    /// @param rageQuitCooldownPeriod New rage quit cooldown period in seconds
     event RageQuitCooldownPeriodSet(uint256 rageQuitCooldownPeriod);
 
     /**
      * @notice Emitted when a user initiates rage quit
-     * @param user The user who initiated rage quit
-     * @param unlockTime The new unlock time after rage quit
+     * @param user User who initiated rage quit
+     * @param unlockTime New unlock time after rage quit (timestamp)
      */
     event RageQuitInitiated(address indexed user, uint256 indexed unlockTime);
 
     /**
      * @notice Emitted when Dragon-only mode is toggled
-     * @param enabled Whether Dragon-only mode is enabled or disabled
+     * @param enabled True if Dragon-only mode is enabled, false otherwise
      */
     event DragonModeToggled(bool enabled);
 
     /**
      * @notice Deposits assets with a lockup period
-     * @param assets The amount of assets to deposit
-     * @param receiver The address to receive the shares
-     * @param lockupDuration The duration of the lockup in seconds
-     * @return shares The amount of shares minted
+     * @param assets Amount of assets to deposit in asset base units
+     * @param receiver Address to receive the shares
+     * @param lockupDuration Lockup duration in seconds
+     * @return shares Amount of shares minted in share base units
      */
     function depositWithLockup(
         uint256 assets,
@@ -47,10 +59,10 @@ interface IDragonTokenizedStrategy is ITokenizedStrategy {
 
     /**
      * @notice Mints shares with a lockup period
-     * @param shares The amount of shares to mint
-     * @param receiver The address to receive the shares
-     * @param lockupDuration The duration of the lockup in seconds
-     * @return assets The amount of assets used
+     * @param shares Amount of shares to mint in share base units
+     * @param receiver Address to receive the shares
+     * @param lockupDuration Lockup duration in seconds
+     * @return assets Amount of assets used in asset base units
      */
     function mintWithLockup(
         uint256 shares,
@@ -66,19 +78,19 @@ interface IDragonTokenizedStrategy is ITokenizedStrategy {
 
     /**
      * @notice Toggles the Dragon-only mode
-     * @param enabled Whether to enable or disable Dragon-only mode
+     * @param enabled True to enable Dragon-only mode, false to disable
      */
     function toggleDragonMode(bool enabled) external;
 
     /**
      * @notice Sets the minimum lockup duration
-     * @param newDuration The new minimum lockup duration in seconds
+     * @param newDuration New minimum lockup duration in seconds
      */
     function setLockupDuration(uint256 newDuration) external;
 
     /**
      * @notice Sets the rage quit cooldown period
-     * @param newPeriod The new rage quit cooldown period in seconds
+     * @param newPeriod New rage quit cooldown period in seconds
      */
     function setRageQuitCooldownPeriod(uint256 newPeriod) external;
 
@@ -90,26 +102,26 @@ interface IDragonTokenizedStrategy is ITokenizedStrategy {
 
     /**
      * @notice Returns the amount of unlocked shares for a user
-     * @param user The user's address
-     * @return The amount of shares that can be withdrawn/redeemed
+     * @param user User's address
+     * @return Amount of shares that can be withdrawn or redeemed in share base units
      */
     function unlockedShares(address user) external view returns (uint256);
 
     /**
      * @notice Returns the unlock time for a user's locked shares
-     * @param user The user's address
-     * @return The unlock timestamp
+     * @param user User's address
+     * @return Unlock timestamp in seconds
      */
     function getUnlockTime(address user) external view returns (uint256);
 
     /**
      * @notice Returns detailed information about a user's lockup status
-     * @param user The address to check
-     * @return unlockTime The timestamp when shares unlock
-     * @return lockedShares The amount of shares that are locked
-     * @return isRageQuit Whether the user is in rage quit mode
-     * @return totalShares Total shares owned by user
-     * @return withdrawableShares Amount of shares that can be withdrawn now
+     * @param user Address to check
+     * @return unlockTime Timestamp when shares unlock in seconds
+     * @return lockedShares Amount of shares that are locked in share base units
+     * @return isRageQuit Whether user is in rage quit mode
+     * @return totalShares Total shares owned by user in share base units
+     * @return withdrawableShares Amount of shares that can be withdrawn now in share base units
      */
     function getUserLockupInfo(
         address user
@@ -126,26 +138,26 @@ interface IDragonTokenizedStrategy is ITokenizedStrategy {
 
     /**
      * @notice Returns the remaining cooldown time in seconds for a user's lock
-     * @param user The address to check
-     * @return remainingTime The time remaining in seconds until unlock (0 if already unlocked)
+     * @param user Address to check
+     * @return remainingTime Time remaining in seconds until unlock (0 if already unlocked)
      */
     function getRemainingCooldown(address user) external view returns (uint256 remainingTime);
 
     /**
      * @notice Returns the minimum lockup duration
-     * @return The minimum lockup duration in seconds
+     * @return Minimum lockup duration in seconds
      */
     function minimumLockupDuration() external view returns (uint256);
 
     /**
      * @notice Returns the rage quit cooldown period
-     * @return The rage quit cooldown period in seconds
+     * @return Rage quit cooldown period in seconds
      */
     function rageQuitCooldownPeriod() external view returns (uint256);
 
     /**
      * @notice Returns the regen governance address
-     * @return The address of the regen governance
+     * @return Address of regen governance
      */
     function regenGovernance() external view returns (address);
 }

@@ -8,6 +8,8 @@ import { IBaseStrategy } from "src/zodiac-core/interfaces/IBaseStrategy.sol";
 
 /**
  * @title YieldBearingDragonTokenizedStrategy
+ * @author [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
  * @notice A specialized version of DragonTokenizedStrategy designed for yield-bearing tokens
  * like mETH whose value in ETH terms appreciates over time.
  */
@@ -15,8 +17,10 @@ contract YieldBearingDragonTokenizedStrategy is DragonTokenizedStrategy {
     using Math for uint256;
 
     /**
-     * @inheritdoc ITokenizedStrategy
-     * @dev Override report to update exchange rate
+     * @notice Reports profit for yield-bearing token strategies where token value appreciates
+     * @dev Overrides report to handle appreciation-based yield (e.g., mETH). Mints shares based on profit
+     * @return profit Profit generated in asset base units
+     * @return loss Loss incurred (always 0 for appreciation-only tokens)
      */
     function report() public override(DragonTokenizedStrategy) returns (uint256 profit, uint256 loss) {
         StrategyData storage S = super._strategyStorage();

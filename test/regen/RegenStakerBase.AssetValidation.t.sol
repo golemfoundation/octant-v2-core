@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import { AccessMode } from "src/constants.sol";
 import "forge-std/Test.sol";
 import { RegenStaker } from "src/regen/RegenStaker.sol";
 import { RegenStakerBase } from "src/regen/RegenStakerBase.sol";
 import { MockERC20Staking } from "test/mocks/MockERC20Staking.sol";
 import { MockERC20 } from "test/mocks/MockERC20.sol";
 import { RegenEarningPowerCalculator } from "src/regen/RegenEarningPowerCalculator.sol";
-import { Whitelist } from "src/utils/Whitelist.sol";
-import { IWhitelist } from "src/utils/IWhitelist.sol";
+import { AddressSet } from "src/utils/AddressSet.sol";
+import { IAddressSet } from "src/utils/IAddressSet.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Staker } from "staker/Staker.sol";
 
@@ -28,8 +29,8 @@ contract RegenStakerBaseAssetValidationTest is Test {
     MockERC20 public rewardToken;
     MockERC20 public wrongToken;
     RegenEarningPowerCalculator public calculator;
-    Whitelist public whitelist;
-    Whitelist public allocationWhitelist;
+    AddressSet public allowset;
+    AddressSet public allocationAllowset;
 
     address public admin = makeAddr("admin");
     address public alice = makeAddr("alice");
@@ -42,16 +43,21 @@ contract RegenStakerBaseAssetValidationTest is Test {
         wrongToken = new MockERC20(18);
 
         // Deploy calculator
-        calculator = new RegenEarningPowerCalculator(admin, IWhitelist(address(0)));
+        calculator = new RegenEarningPowerCalculator(
+            admin,
+            IAddressSet(address(0)),
+            IAddressSet(address(0)),
+            AccessMode.NONE
+        );
 
-        // Deploy whitelists as admin
+        // Deploy allowsets as admin
         vm.startPrank(admin);
-        whitelist = new Whitelist();
-        allocationWhitelist = new Whitelist();
+        allowset = new AddressSet();
+        allocationAllowset = new AddressSet();
 
-        // Setup whitelists
-        whitelist.addToWhitelist(alice);
-        // We'll add mechanisms to the allocation whitelist as needed in tests
+        // Setup allowsets
+        allowset.add(alice);
+        // We'll add mechanisms to the allocation allowset as needed in tests
         vm.stopPrank();
 
         // Deploy RegenStaker with rewardToken
@@ -63,11 +69,11 @@ contract RegenStakerBaseAssetValidationTest is Test {
             1e18, // maxBumpTip
             admin, // admin
             30 days, // rewardDuration
-            1e17, // maxClaimFee
             1e18, // minimumStakeAmount
-            IWhitelist(address(whitelist)), // stakerWhitelist
-            IWhitelist(address(0)), // contributionWhitelist (none)
-            IWhitelist(address(allocationWhitelist)) // allocationMechanismWhitelist
+            IAddressSet(address(allowset)), // stakerAllowset
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            IAddressSet(address(allocationAllowset)) // allocationMechanismAllowset
         );
 
         // Alice stakes
@@ -92,9 +98,9 @@ contract RegenStakerBaseAssetValidationTest is Test {
         // Deploy mechanism expecting wrong token
         MockMechanism mechanism = new MockMechanism(IERC20(address(wrongToken)));
 
-        // Add mechanism to whitelist
+        // Add mechanism to allowset
         vm.prank(admin);
-        allocationWhitelist.addToWhitelist(address(mechanism));
+        allocationAllowset.add(address(mechanism));
 
         // Expect AssetMismatch error
         vm.expectRevert(
@@ -118,9 +124,9 @@ contract RegenStakerBaseAssetValidationTest is Test {
         // Deploy mechanism expecting correct token
         MockMechanism mechanism = new MockMechanism(IERC20(address(rewardToken)));
 
-        // Add mechanism to whitelist
+        // Add mechanism to allowset
         vm.prank(admin);
-        allocationWhitelist.addToWhitelist(address(mechanism));
+        allocationAllowset.add(address(mechanism));
 
         // The validation should pass the asset check
         // (may still revert for other reasons like signature validation)

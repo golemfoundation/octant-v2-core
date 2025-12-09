@@ -100,25 +100,25 @@ abstract contract BatchScript is Script {
         // Set the Safe API base URL and multisend address based on chain
         if (chainId == 1) {
             SAFE_API_BASE_URL = "https://safe-transaction-mainnet.safe.global/api/v1/safes/";
-            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
+            SAFE_MULTISEND_ADDRESS = 0x40A2aCCbd92BCA938b02010E17A5b8929b49130D;
         } else if (chainId == 137) {
             SAFE_API_BASE_URL = "https://safe-transaction-polygon.safe.global/api/v1/safes/";
-            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
+            SAFE_MULTISEND_ADDRESS = 0x40A2aCCbd92BCA938b02010E17A5b8929b49130D;
         } else if (chainId == 5) {
             SAFE_API_BASE_URL = "https://safe-transaction-goerli.safe.global/api/v1/safes/";
-            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
+            SAFE_MULTISEND_ADDRESS = 0x40A2aCCbd92BCA938b02010E17A5b8929b49130D;
         } else if (chainId == 11155111) {
             SAFE_API_BASE_URL = "https://safe-transaction-sepolia.safe.global/api/v1/safes/";
-            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
+            SAFE_MULTISEND_ADDRESS = 0x40A2aCCbd92BCA938b02010E17A5b8929b49130D;
         } else if (chainId == 8453) {
             SAFE_API_BASE_URL = "https://safe-transaction-base.safe.global/api/v1/safes/";
-            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
+            SAFE_MULTISEND_ADDRESS = 0x40A2aCCbd92BCA938b02010E17A5b8929b49130D;
         } else if (chainId == 42161) {
             SAFE_API_BASE_URL = "https://safe-transaction-arbitrum.safe.global/api/v1/safes/";
-            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
+            SAFE_MULTISEND_ADDRESS = 0x40A2aCCbd92BCA938b02010E17A5b8929b49130D;
         } else if (chainId == 43114) {
             SAFE_API_BASE_URL = "https://safe-transaction-avalanche.safe.global/api/v1/safes/";
-            SAFE_MULTISEND_ADDRESS = 0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761;
+            SAFE_MULTISEND_ADDRESS = 0x40A2aCCbd92BCA938b02010E17A5b8929b49130D;
         } else {
             revert("Unsupported chain");
         }
@@ -414,13 +414,35 @@ abstract contract BatchScript is Script {
         (uint256 status, bytes memory data) = endpoint.get();
         if (status == 200) {
             string memory resp = string(data);
-            string[] memory results;
-            results = resp.readStringArray(".results");
-            if (results.length == 0) return 0;
-            return resp.readUint(".results[0].nonce") + 1;
+
+            // Check if there are any transactions by reading count
+            try vm.parseJsonUint(resp, ".count") returns (uint256 count) {
+                if (count == 0) {
+                    return 0; // No transactions yet
+                }
+                // Try to get nonce from first transaction
+                try vm.parseJsonUint(resp, ".results[0].nonce") returns (uint256 nonce) {
+                    return nonce + 1;
+                } catch {
+                    return _getSafeNonceFromContract(safe_);
+                }
+            } catch {
+                // If count doesn't exist, try direct contract call
+                return _getSafeNonceFromContract(safe_);
+            }
         } else {
-            revert("Get nonce failed!");
+            // API failed, get nonce from contract
+            return _getSafeNonceFromContract(safe_);
         }
+    }
+
+    // Helper to get nonce directly from Safe contract
+    function _getSafeNonceFromContract(address safe_) private view returns (uint256) {
+        (bool success, bytes memory data) = safe_.staticcall(abi.encodeWithSignature("nonce()"));
+        if (success && data.length == 32) {
+            return abi.decode(data, (uint256));
+        }
+        return 0; // Fallback
     }
 
     function _getSafeAPIEndpoint(address safe_) private view returns (string memory) {

@@ -28,18 +28,18 @@ Tests that demonstrate actual security vulnerabilities requiring immediate patch
 - **Severity**: High - User funds permanently stuck
 - **Impact**: Complete loss of user deposits
 
-#### `REG008_CompoundWhitelistBypassDemo.t.sol`
-- **Finding**: CompoundRewards whitelist bypass vulnerability
-- **Mechanism**: Missing depositor whitelist check when claimer calls compoundRewards
+#### `REG008_CompoundAllowsetBypassDemo.t.sol`
+- **Finding**: CompoundRewards allowset bypass vulnerability
+- **Mechanism**: Missing depositor allowset check when claimer calls compoundRewards
 - **Location**: `src/regen/RegenStakerBase.sol:590-647`
 - **Severity**: High - Access control bypass
-- **Impact**: Circumvents whitelist restrictions for delisted users
+- **Impact**: Circumvents allowset restrictions for delisted users
 
 ### 🟡 Architecture Validations (Educational)
 Tests that validate correct system behavior and design decisions.
 
-#### `REG001_DelegateeWhitelistDemo.t.sol`
-- **Finding**: Delegatee whitelist architecture analysis (NOT A VULNERABILITY)
+#### `REG001_DelegateeAllowsetDemo.t.sol`
+- **Finding**: Delegatee allowset architecture analysis (NOT A VULNERABILITY)
 - **Status**: Justified - Correct separation of protocol vs external governance
 - **Severity**: N/A - Architecture validation
 - **Purpose**: Demonstrates proper delegation design
@@ -91,7 +91,7 @@ forge test --match-contract "REG007WithdrawalLockupDemoTest" -vv
 - **LIN001**: Shows successful timestamp manipulation and fund extraction
 - **REG006**: Demonstrates admin reward extraction through earning power manipulation
 - **REG007**: Proves deposits succeed but withdrawals fail permanently
-- **REG008**: Shows whitelist bypass through claimer mechanism
+- **REG008**: Shows allowset bypass through claimer mechanism
 
 ### Demonstrations (Should Pass/Validate)
 - **REG001**: All tests pass showing correct delegatee architecture
@@ -102,7 +102,7 @@ forge test --match-contract "REG007WithdrawalLockupDemoTest" -vv
 ### Immediate Action Required
 1. **PATCH-001**: Fix LIN-001 timestamp staleness (High priority)
 2. **PATCH-007**: Fix REG-007 withdrawal lockup (High priority)  
-3. **PATCH-008**: Fix REG-008 whitelist bypass (High priority)
+3. **PATCH-008**: Fix REG-008 allowset bypass (High priority)
 
 ### Governance Review Required
 4. **PATCH-002**: Fix REG-006 governance asymmetry (Medium priority)

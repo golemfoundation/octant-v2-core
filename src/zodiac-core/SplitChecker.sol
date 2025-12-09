@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.25;
 
 import { Initializable } from "solady/utils/Initializable.sol";
@@ -6,6 +6,8 @@ import { ISplitChecker } from "src/zodiac-core/interfaces/ISplitChecker.sol";
 
 import { AlreadyInitialized } from "src/errors.sol";
 /// @title SplitChecker
+/// @author [Golem Foundation](https://golem.foundation)
+/// @custom:security-contact security@golem.foundation
 /// @notice Validates split configurations for revenue distribution
 /// @dev Ensures splits meet requirements for opex and metapool allocations
 
@@ -24,11 +26,11 @@ contract SplitChecker is ISplitChecker, Initializable {
     address public governance;
 
     /// @notice Max operational expenses split
-    /// @dev in precision of 1e18
+    /// @dev Scaled by 1e18 (1e18 = 100%)
     uint256 public maxOpexSplit;
 
     /// @notice Min metapool split
-    /// @dev in precision of 1e18
+    /// @dev Scaled by 1e18 (1e18 = 100%)
     uint256 public minMetapoolSplit;
 
     // =============================================================
@@ -36,27 +38,20 @@ contract SplitChecker is ISplitChecker, Initializable {
     // =============================================================
 
     /// @notice Emitted when the maximum opex split is updated
-    /// @param newMaxOpexSplit The new maximum opex split value
+    /// @param newMaxOpexSplit New maximum opex split (scaled by 1e18)
     event MaxOpexSplitUpdated(uint256 newMaxOpexSplit);
 
     /// @notice Emitted when the minimum metapool split is updated
-    /// @param newMinMetapoolSplit The new minimum metapool split value
+    /// @param newMinMetapoolSplit New minimum metapool split (scaled by 1e18)
     event MinMetapoolSplitUpdated(uint256 newMinMetapoolSplit);
 
     // =============================================================
     //                            ERRORS
     // =============================================================
 
-    /// @notice Thrown when the split configuration is invalid
     error InvalidSplit();
-
-    /// @notice Thrown when the caller is not authorized
     error NotAuthorized();
-
-    /// @notice Thrown when a value exceeds the allowed maximum
     error ValueExceedsMaximum();
-
-    /// @notice Thrown when a value is below the required minimum
     error ValueBelowMinimum();
 
     // =============================================================
@@ -108,9 +103,13 @@ contract SplitChecker is ISplitChecker, Initializable {
 
     /// @notice Validates split configuration for revenue distribution
     /// @param split Split configuration to validate
-    /// @param opexVault Address of the operational expenses vault
-    /// @param metapool Address of the metapool
-    /// @dev Ensures splits meet requirements for opex and metapool allocations
+    /// @param opexVault Address of the operational expenses vault (optional - no error if missing)
+    /// @param metapool Address of the metapool (required - reverts if missing)
+    /// @dev Ensures splits meet requirements:
+    ///      - opexVault presence is optional; if present, must not exceed maxOpexSplit
+    ///      - metapool is REQUIRED and must be STRICTLY GREATER than minMetapoolSplit (> not >=)
+    ///      - recipients/allocations arrays must have equal length
+    ///      - sum of allocations must equal totalAllocations
     function checkSplit(Split memory split, address opexVault, address metapool) external view override {
         if (split.recipients.length != split.allocations.length) revert InvalidSplit();
         bool flag = false;

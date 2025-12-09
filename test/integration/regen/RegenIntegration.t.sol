@@ -1,25 +1,28 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
+import { AccessMode } from "src/constants.sol";
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 import { RegenStaker } from "src/regen/RegenStaker.sol";
 import { RegenStakerBase } from "src/regen/RegenStakerBase.sol";
 import { RegenEarningPowerCalculator } from "src/regen/RegenEarningPowerCalculator.sol";
-import { Whitelist } from "src/utils/Whitelist.sol";
-import { IWhitelist } from "src/utils/IWhitelist.sol";
+import { AddressSet } from "src/utils/AddressSet.sol";
+import { IAddressSet } from "src/utils/IAddressSet.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC20Staking } from "staker/interfaces/IERC20Staking.sol";
-import { IWhitelistedEarningPowerCalculator } from "src/regen/interfaces/IWhitelistedEarningPowerCalculator.sol";
+import { IAccessControlledEarningPowerCalculator } from "src/regen/interfaces/IAccessControlledEarningPowerCalculator.sol";
 import { Staker } from "staker/Staker.sol";
 import { MockERC20 } from "test/mocks/MockERC20.sol";
 import { MockERC20Staking } from "test/mocks/MockERC20Staking.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
 import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
+import { OctantQFMechanism } from "src/mechanisms/mechanism/OctantQFMechanism.sol";
 // import { SimpleVotingMechanism } from "test/mocks/SimpleVotingMechanism.sol"; // SimpleVotingMechanism removed
 import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
 import { AllocationConfig } from "src/mechanisms/BaseAllocationMechanism.sol";
+import { NotInAllowset } from "src/errors.sol";
 
 /**
  * @title RegenIntegrationTest
@@ -34,10 +37,10 @@ contract RegenIntegrationTest is Test {
     event RewardDurationSet(uint256 newDuration);
 
     RegenEarningPowerCalculator calculator;
-    Whitelist stakerWhitelist;
-    Whitelist contributorWhitelist;
-    Whitelist allocationMechanismWhitelist;
-    Whitelist earningPowerWhitelist;
+    AddressSet stakerAllowset;
+    AddressSet contributorAllowset;
+    AddressSet allocationMechanismAllowset;
+    AddressSet earningPowerAllowset;
     MockERC20 rewardToken;
     MockERC20Staking stakeToken;
     AllocationMechanismFactory allocationFactory;
@@ -178,17 +181,17 @@ contract RegenIntegrationTest is Test {
         return baseAmount * (10 ** stakeTokenDecimals);
     }
 
-    function whitelistUser(address user, bool forStaking, bool forContributing, bool forEarningPower) internal {
+    function authorizeUser(address user, bool forStaking, bool forContributing, bool forEarningPower) internal {
         vm.startPrank(ADMIN);
-        if (forStaking) stakerWhitelist.addToWhitelist(user);
-        if (forContributing) contributorWhitelist.addToWhitelist(user);
-        if (forEarningPower) earningPowerWhitelist.addToWhitelist(user);
+        if (forStaking) stakerAllowset.add(user);
+        if (forContributing) contributorAllowset.add(user);
+        if (forEarningPower) earningPowerAllowset.add(user);
         vm.stopPrank();
     }
 
-    function whitelistAllocationMechanism(address allocationMechanism) internal {
+    function approveMechanism(address allocationMechanism) internal {
         vm.prank(ADMIN);
-        allocationMechanismWhitelist.addToWhitelist(allocationMechanism);
+        allocationMechanismAllowset.add(allocationMechanism);
     }
 
     function setUp() public virtual {
@@ -201,12 +204,17 @@ contract RegenIntegrationTest is Test {
         rewardToken = new MockERC20(rewardTokenDecimals);
         stakeToken = new MockERC20Staking(stakeTokenDecimals);
 
-        stakerWhitelist = new Whitelist();
-        contributorWhitelist = new Whitelist();
-        allocationMechanismWhitelist = new Whitelist();
-        earningPowerWhitelist = new Whitelist();
+        stakerAllowset = new AddressSet();
+        contributorAllowset = new AddressSet();
+        allocationMechanismAllowset = new AddressSet();
+        earningPowerAllowset = new AddressSet();
 
-        calculator = new RegenEarningPowerCalculator(ADMIN, earningPowerWhitelist);
+        calculator = new RegenEarningPowerCalculator(
+            ADMIN,
+            earningPowerAllowset,
+            IAddressSet(address(0)),
+            AccessMode.ALLOWSET
+        );
 
         allocationFactory = new AllocationMechanismFactory();
 
@@ -217,11 +225,11 @@ contract RegenIntegrationTest is Test {
             MAX_BUMP_TIP,
             ADMIN,
             uint128(rewardDuration),
-            MAX_CLAIM_FEE,
             0,
-            stakerWhitelist,
-            contributorWhitelist,
-            allocationMechanismWhitelist
+            stakerAllowset,
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            allocationMechanismAllowset
         );
 
         regenStaker.setRewardNotifier(ADMIN, true);
@@ -248,11 +256,11 @@ contract RegenIntegrationTest is Test {
             tipAmount,
             ADMIN,
             uint128(MIN_REWARD_DURATION),
-            feeAmount,
             uint128(minimumStakeAmount),
-            IWhitelist(address(0)),
-            IWhitelist(address(0)),
-            allocationMechanismWhitelist
+            IAddressSet(address(0)),
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            allocationMechanismAllowset
         );
 
         assertEq(address(localRegenStaker.REWARD_TOKEN()), address(rewardToken));
@@ -260,11 +268,9 @@ contract RegenIntegrationTest is Test {
         assertEq(localRegenStaker.admin(), ADMIN);
         assertEq(address(localRegenStaker.earningPowerCalculator()), address(calculator));
         assertEq(localRegenStaker.maxBumpTip(), tipAmount);
-        assertEq(localRegenStaker.MAX_CLAIM_FEE(), feeAmount);
         assertEq(localRegenStaker.minimumStakeAmount(), minimumStakeAmount);
 
-        assertEq(address(localRegenStaker.stakerWhitelist()), address(0));
-        assertEq(address(localRegenStaker.contributionWhitelist()), address(0));
+        assertEq(address(localRegenStaker.stakerAllowset()), address(0));
 
         (uint96 initialFeeAmount, address initialFeeCollector) = localRegenStaker.claimFeeParameters();
         assertEq(initialFeeAmount, 0);
@@ -276,7 +282,7 @@ contract RegenIntegrationTest is Test {
         vm.stopPrank();
     }
 
-    function testFuzz_Constructor_InitializesAllParametersWithProvidedWhitelists(
+    function testFuzz_Constructor_InitializesAllParametersWithProvidedAllowsets(
         uint256 tipAmount,
         uint256 feeAmount,
         uint256 minimumStakeAmount
@@ -286,11 +292,11 @@ contract RegenIntegrationTest is Test {
         minimumStakeAmount = bound(uint128(minimumStakeAmount), 0, getStakeAmount(1000));
 
         vm.startPrank(ADMIN);
-        Whitelist providedStakerWhitelist = new Whitelist();
-        Whitelist providedContributorWhitelist = new Whitelist();
+        AddressSet providedStakerAllowset = new AddressSet();
+        AddressSet providedContributorAllowset = new AddressSet();
 
-        providedStakerWhitelist.transferOwnership(ADMIN);
-        providedContributorWhitelist.transferOwnership(ADMIN);
+        providedStakerAllowset.transferOwnership(ADMIN);
+        providedContributorAllowset.transferOwnership(ADMIN);
 
         RegenStaker localRegenStaker = new RegenStaker(
             IERC20(address(rewardToken)),
@@ -299,11 +305,11 @@ contract RegenIntegrationTest is Test {
             tipAmount,
             ADMIN,
             uint128(MIN_REWARD_DURATION),
-            feeAmount,
             uint128(minimumStakeAmount),
-            providedStakerWhitelist,
-            providedContributorWhitelist,
-            allocationMechanismWhitelist
+            providedStakerAllowset,
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            allocationMechanismAllowset
         );
 
         assertEq(address(localRegenStaker.REWARD_TOKEN()), address(rewardToken));
@@ -311,14 +317,11 @@ contract RegenIntegrationTest is Test {
         assertEq(localRegenStaker.admin(), ADMIN);
         assertEq(address(localRegenStaker.earningPowerCalculator()), address(calculator));
         assertEq(localRegenStaker.maxBumpTip(), tipAmount);
-        assertEq(localRegenStaker.MAX_CLAIM_FEE(), feeAmount);
         assertEq(localRegenStaker.minimumStakeAmount(), minimumStakeAmount);
 
-        assertEq(address(localRegenStaker.stakerWhitelist()), address(providedStakerWhitelist));
-        assertEq(address(localRegenStaker.contributionWhitelist()), address(providedContributorWhitelist));
+        assertEq(address(localRegenStaker.stakerAllowset()), address(providedStakerAllowset));
 
-        assertEq(Ownable(address(localRegenStaker.stakerWhitelist())).owner(), ADMIN);
-        assertEq(Ownable(address(localRegenStaker.contributionWhitelist())).owner(), ADMIN);
+        assertEq(Ownable(address(localRegenStaker.stakerAllowset())).owner(), ADMIN);
 
         (uint96 initialFeeAmount, address initialFeeCollector) = localRegenStaker.claimFeeParameters();
         assertEq(initialFeeAmount, 0);
@@ -330,18 +333,14 @@ contract RegenIntegrationTest is Test {
         vm.stopPrank();
     }
 
-    function test_StakerWhitelistIsSet() public view {
-        assertEq(address(regenStaker.stakerWhitelist()), address(stakerWhitelist));
+    function test_StakerAllowsetIsSet() public view {
+        assertEq(address(regenStaker.stakerAllowset()), address(stakerAllowset));
     }
 
-    function test_ContributionWhitelistIsSet() public view {
-        assertEq(address(regenStaker.contributionWhitelist()), address(contributorWhitelist));
-    }
-
-    function test_EarningPowerWhitelistIsSet() public view {
+    function test_EarningPowerAllowsetIsSet() public view {
         assertEq(
-            address(IWhitelistedEarningPowerCalculator(address(regenStaker.earningPowerCalculator())).whitelist()),
-            address(earningPowerWhitelist)
+            address(IAccessControlledEarningPowerCalculator(address(regenStaker.earningPowerCalculator())).allowset()),
+            address(earningPowerAllowset)
         );
     }
 
@@ -376,7 +375,7 @@ contract RegenIntegrationTest is Test {
         regenStaker.setMinimumStakeAmount(uint128(minimumAmount));
 
         address user = makeAddr("user");
-        whitelistUser(user, true, false, true);
+        authorizeUser(user, true, false, true);
 
         stakeToken.mint(user, stakeAmount);
         vm.startPrank(user);
@@ -402,7 +401,7 @@ contract RegenIntegrationTest is Test {
         regenStaker.setMinimumStakeAmount(uint128(minimumAmount));
 
         address user = makeAddr("user");
-        whitelistUser(user, true, false, true);
+        authorizeUser(user, true, false, true);
 
         stakeToken.mint(user, stakeAmount);
         vm.startPrank(user);
@@ -437,7 +436,7 @@ contract RegenIntegrationTest is Test {
         regenStaker.setMinimumStakeAmount(uint128(minimumAmount));
 
         address user = makeAddr("user");
-        whitelistUser(user, true, false, true);
+        authorizeUser(user, true, false, true);
 
         stakeToken.mint(user, initialStake + additionalStake);
         vm.startPrank(user);
@@ -455,121 +454,88 @@ contract RegenIntegrationTest is Test {
         vm.stopPrank();
     }
 
-    function testFuzz_RevertIf_NonAdminCannotSetStakerWhitelist(address nonAdmin) public {
+    function testFuzz_RevertIf_NonAdminCannotSetStakerAddressSet(address nonAdmin) public {
         vm.assume(nonAdmin != ADMIN);
         vm.startPrank(nonAdmin);
         vm.expectRevert(abi.encodeWithSelector(Staker.Staker__Unauthorized.selector, bytes32("not admin"), nonAdmin));
-        regenStaker.setStakerWhitelist(Whitelist(address(0)));
+        regenStaker.setStakerAllowset(AddressSet(address(0)));
         vm.stopPrank();
     }
 
-    function testFuzz_StakerWhitelist_DisableAllowsStaking(uint256 stakeAmountBase) public {
+    function testFuzz_StakerAllowset_DisableAllowsStaking(uint256 stakeAmountBase) public {
         stakeAmountBase = bound(stakeAmountBase, 1, 10_000);
         uint256 stakeAmount = getStakeAmount(stakeAmountBase);
         uint256 partialStakeAmount = stakeAmount / 2;
 
-        address user = makeAddr("nonWhitelistedUser");
+        address user = makeAddr("unauthorizedUser");
         stakeToken.mint(user, stakeAmount);
 
+        // Enable ALLOWSET mode first
+        vm.prank(ADMIN);
+        regenStaker.setAccessMode(AccessMode.ALLOWSET);
+
         vm.startPrank(user);
         stakeToken.approve(address(regenStaker), stakeAmount);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(RegenStakerBase.NotWhitelisted.selector, regenStaker.stakerWhitelist(), user)
-        );
+        vm.expectRevert(abi.encodeWithSelector(RegenStakerBase.StakerNotAllowed.selector, user));
         regenStaker.stake(partialStakeAmount, user);
         vm.stopPrank();
 
+        // Disable access control by setting mode to NONE
         vm.prank(ADMIN);
-        regenStaker.setStakerWhitelist(Whitelist(address(0)));
-        assertEq(address(regenStaker.stakerWhitelist()), address(0));
+        regenStaker.setAccessMode(AccessMode.NONE);
 
         vm.startPrank(user);
         regenStaker.stake(partialStakeAmount, user);
         vm.stopPrank();
+
+        assertEq(stakeToken.balanceOf(user), stakeAmount - partialStakeAmount);
     }
 
-    function testFuzz_ContributionWhitelist_DisableAllowsContribution(
-        uint256 stakeAmountBase,
-        uint256 rewardAmountBase
-    ) public {
-        stakeAmountBase = bound(stakeAmountBase, 1, 10_000);
-        rewardAmountBase = bound(rewardAmountBase, regenStaker.rewardDuration(), MAX_REWARD_DURATION + 1_000_000_000);
-
-        uint256 stakeAmount = getStakeAmount(stakeAmountBase);
-        uint256 rewardAmount = getRewardAmount(rewardAmountBase);
-
-        address contributor = makeAddr("contributor");
-
-        whitelistUser(contributor, true, false, true);
-
-        stakeToken.mint(contributor, stakeAmount);
-        rewardToken.mint(address(regenStaker), rewardAmount);
-
-        vm.startPrank(contributor);
-        stakeToken.approve(address(regenStaker), stakeAmount);
-        regenStaker.stake(stakeAmount, contributor);
-        vm.stopPrank();
-
-        vm.prank(ADMIN);
-        regenStaker.notifyRewardAmount(rewardAmount);
-        vm.warp(block.timestamp + regenStaker.rewardDuration());
-
-        assertTrue(address(regenStaker.contributionWhitelist()) != address(0));
-        assertFalse(regenStaker.contributionWhitelist().isWhitelisted(contributor));
-
-        vm.prank(ADMIN);
-        regenStaker.setContributionWhitelist(Whitelist(address(0)));
-        assertEq(address(regenStaker.contributionWhitelist()), address(0));
-    }
-
-    function testFuzz_EarningPowerWhitelist_DisableGrantsEarningPower(uint256 stakeAmountBase) public {
+    function testFuzz_EarningPowerAllowset_DisableGrantsEarningPower(uint256 stakeAmountBase) public {
         stakeAmountBase = bound(stakeAmountBase, 1, 10_000);
         uint256 stakeAmount = getStakeAmount(stakeAmountBase);
 
-        address whitelistedUser = makeAddr("whitelistedUser");
-        address nonWhitelistedUser = makeAddr("nonWhitelistedUser");
+        address authorizedUser = makeAddr("authorizedUser");
+        address unauthorizedUser = makeAddr("unauthorizedUser");
 
-        stakeToken.mint(whitelistedUser, stakeAmount);
-        stakeToken.mint(nonWhitelistedUser, stakeAmount);
+        stakeToken.mint(authorizedUser, stakeAmount);
+        stakeToken.mint(unauthorizedUser, stakeAmount);
 
-        whitelistUser(whitelistedUser, true, false, true);
-        whitelistUser(nonWhitelistedUser, true, false, false);
+        // Staker access control is already NONE from setUp, no need to set it again
 
-        vm.startPrank(whitelistedUser);
+        authorizeUser(authorizedUser, true, false, true);
+        authorizeUser(unauthorizedUser, true, false, false);
+
+        vm.startPrank(authorizedUser);
         stakeToken.approve(address(regenStaker), stakeAmount);
-        regenStaker.stake(stakeAmount, whitelistedUser);
+        regenStaker.stake(stakeAmount, authorizedUser);
         vm.stopPrank();
 
-        vm.startPrank(nonWhitelistedUser);
+        vm.startPrank(unauthorizedUser);
         stakeToken.approve(address(regenStaker), stakeAmount);
-        regenStaker.stake(stakeAmount, nonWhitelistedUser);
+        regenStaker.stake(stakeAmount, unauthorizedUser);
         vm.stopPrank();
 
-        assertEq(regenStaker.depositorTotalEarningPower(whitelistedUser), stakeAmount);
-        assertEq(regenStaker.depositorTotalEarningPower(nonWhitelistedUser), 0);
+        assertEq(regenStaker.depositorTotalEarningPower(authorizedUser), stakeAmount);
+        assertEq(regenStaker.depositorTotalEarningPower(unauthorizedUser), 0);
 
         vm.prank(ADMIN);
-        IWhitelistedEarningPowerCalculator(address(calculator)).setWhitelist(Whitelist(address(0)));
+        calculator.setAccessMode(AccessMode.NONE);
 
-        assertEq(
-            address(IWhitelistedEarningPowerCalculator(address(regenStaker.earningPowerCalculator())).whitelist()),
-            address(0)
-        );
-
-        assertEq(regenStaker.depositorTotalEarningPower(nonWhitelistedUser), 0);
+        assertEq(regenStaker.depositorTotalEarningPower(unauthorizedUser), 0);
 
         Staker.DepositIdentifier depositId = Staker.DepositIdentifier.wrap(1);
 
         vm.prank(ADMIN);
         regenStaker.bumpEarningPower(depositId, ADMIN, 0);
 
-        assertEq(regenStaker.depositorTotalEarningPower(nonWhitelistedUser), stakeAmount);
+        assertEq(regenStaker.depositorTotalEarningPower(unauthorizedUser), stakeAmount);
 
         address newUser = makeAddr("newUser");
         stakeToken.mint(newUser, stakeAmount);
 
-        whitelistUser(newUser, true, false, false);
+        authorizeUser(newUser, true, false, false);
 
         vm.startPrank(newUser);
         stakeToken.approve(address(regenStaker), stakeAmount);
@@ -599,7 +565,7 @@ contract RegenIntegrationTest is Test {
         uint256 stakeAmount = getStakeAmount(stakeAmountBase);
 
         address user = makeAddr("user");
-        whitelistUser(user, true, false, false);
+        authorizeUser(user, true, false, false);
 
         stakeToken.mint(user, stakeAmount);
         vm.startPrank(user);
@@ -632,7 +598,7 @@ contract RegenIntegrationTest is Test {
         address contributor = vm.addr(contributorPrivateKey);
         address allocationMechanism = _deployAllocationMechanism();
 
-        whitelistUser(contributor, true, true, true);
+        authorizeUser(contributor, true, true, true);
 
         stakeToken.mint(contributor, stakeAmount);
         rewardToken.mint(address(regenStaker), rewardAmount);
@@ -679,7 +645,7 @@ contract RegenIntegrationTest is Test {
         joinTimePercent = bound(joinTimePercent, minJoinTime, maxJoinTime);
 
         address staker = makeAddr("staker");
-        whitelistUser(staker, true, false, true);
+        authorizeUser(staker, true, false, true);
 
         uint256 totalRewardAmount = getRewardAmount();
         rewardToken.mint(address(regenStaker), totalRewardAmount);
@@ -721,8 +687,8 @@ contract RegenIntegrationTest is Test {
         address stakerA = makeAddr("stakerA");
         address stakerB = makeAddr("stakerB");
 
-        whitelistUser(stakerA, true, false, true);
-        whitelistUser(stakerB, true, false, true);
+        authorizeUser(stakerA, true, false, true);
+        authorizeUser(stakerB, true, false, true);
 
         uint256 baseStakeAmount = getStakeAmount();
         uint256 ratioScaleFactor = 5;
@@ -765,7 +731,45 @@ contract RegenIntegrationTest is Test {
         assertApproxEqRel(claimedA + claimedB, totalRewardAmount, ONE_PICO);
     }
 
-    function testFuzz_TimeWeightedReward_NoEarningIfNotOnEarningWhitelist(
+    function test_PauseRewardScheduleWhenNoEarningPower() public {
+        _clearTestContext();
+
+        uint256 duration = regenStaker.rewardDuration();
+        uint256 rewardAmount = getRewardAmount();
+        uint256 stakeAmount = getStakeAmount();
+
+        rewardToken.mint(address(regenStaker), rewardAmount);
+        vm.prank(ADMIN);
+        regenStaker.notifyRewardAmount(rewardAmount);
+
+        uint256 initialEnd = regenStaker.rewardEndTime();
+        uint256 halfDuration = duration / 2;
+
+        vm.warp(block.timestamp + halfDuration);
+
+        address staker = makeAddr("option1Staker");
+        authorizeUser(staker, true, false, true);
+
+        stakeToken.mint(staker, stakeAmount);
+        vm.startPrank(staker);
+        stakeToken.approve(address(regenStaker), stakeAmount);
+        Staker.DepositIdentifier depositId = regenStaker.stake(stakeAmount, staker);
+        vm.stopPrank();
+
+        uint256 expectedEnd = initialEnd + halfDuration;
+        assertEq(regenStaker.rewardEndTime(), expectedEnd, "rewardEndTime should extend by idle window");
+        assertEq(regenStaker.unclaimedReward(depositId), 0, "no rewards should accrue during pause");
+
+        vm.warp(expectedEnd);
+
+        vm.startPrank(staker);
+        uint256 claimed = regenStaker.claimReward(depositId);
+        vm.stopPrank();
+
+        assertApproxEqRel(claimed, rewardAmount, ONE_MICRO, "reward should stream fully after pause");
+    }
+
+    function testFuzz_TimeWeightedReward_NoEarningIfNotOnEarningAddressSet(
         uint256 stakeAmountBase,
         uint256 rewardAmountBase
     ) public {
@@ -773,7 +777,7 @@ contract RegenIntegrationTest is Test {
         rewardAmountBase = bound(rewardAmountBase, regenStaker.rewardDuration(), MAX_REWARD_DURATION + 1_000_000_000);
 
         address staker = makeAddr("staker");
-        whitelistUser(staker, true, false, false);
+        authorizeUser(staker, true, false, false);
 
         uint256 stakeAmount = getStakeAmount(stakeAmountBase);
         uint256 rewardAmount = getRewardAmount(rewardAmountBase);
@@ -797,35 +801,35 @@ contract RegenIntegrationTest is Test {
         assertEq(claimedAmount, 0);
     }
 
-    function testFuzz_TimeWeightedReward_EarningStopsIfRemovedFromEarningWhitelistMidPeriod(
+    function testFuzz_TimeWeightedReward_EarningStopsIfRemovedFromEarningAllowsetMidPeriod(
         uint256 stakeAmountBase,
         uint256 rewardAmountBase
     ) public {
         stakeAmountBase = bound(stakeAmountBase, 1, 10_000);
         rewardAmountBase = bound(rewardAmountBase, regenStaker.rewardDuration(), MAX_REWARD_DURATION + 1_000_000_000);
 
-        address whitelistedStaker = makeAddr("whitelistedStaker");
-        address nonWhitelistedStaker = makeAddr("nonWhitelistedStaker");
+        address allowlistedStaker = makeAddr("allowlistedStaker");
+        address nonAllowlistedStaker = makeAddr("nonAllowlistedStaker");
 
-        whitelistUser(whitelistedStaker, true, false, true);
-        whitelistUser(nonWhitelistedStaker, true, false, false);
+        authorizeUser(allowlistedStaker, true, false, true);
+        authorizeUser(nonAllowlistedStaker, true, false, false);
 
         uint256 stakeAmount = getStakeAmount(stakeAmountBase);
-        stakeToken.mint(whitelistedStaker, stakeAmount);
-        stakeToken.mint(nonWhitelistedStaker, stakeAmount);
+        stakeToken.mint(allowlistedStaker, stakeAmount);
+        stakeToken.mint(nonAllowlistedStaker, stakeAmount);
 
-        vm.startPrank(whitelistedStaker);
+        vm.startPrank(allowlistedStaker);
         stakeToken.approve(address(regenStaker), stakeAmount);
-        Staker.DepositIdentifier whitelistedDepositId = regenStaker.stake(stakeAmount, whitelistedStaker);
+        Staker.DepositIdentifier allowlistedDepositId = regenStaker.stake(stakeAmount, allowlistedStaker);
         vm.stopPrank();
 
-        vm.startPrank(nonWhitelistedStaker);
+        vm.startPrank(nonAllowlistedStaker);
         stakeToken.approve(address(regenStaker), stakeAmount);
-        Staker.DepositIdentifier nonWhitelistedDepositId = regenStaker.stake(stakeAmount, nonWhitelistedStaker);
+        Staker.DepositIdentifier nonAllowlistedDepositId = regenStaker.stake(stakeAmount, nonAllowlistedStaker);
         vm.stopPrank();
 
-        assertEq(regenStaker.depositorTotalEarningPower(whitelistedStaker), stakeAmount);
-        assertEq(regenStaker.depositorTotalEarningPower(nonWhitelistedStaker), 0);
+        assertEq(regenStaker.depositorTotalEarningPower(allowlistedStaker), stakeAmount);
+        assertEq(regenStaker.depositorTotalEarningPower(nonAllowlistedStaker), 0);
 
         uint256 rewardAmount = getRewardAmount(rewardAmountBase);
         rewardToken.mint(address(regenStaker), rewardAmount);
@@ -834,16 +838,16 @@ contract RegenIntegrationTest is Test {
 
         vm.warp(block.timestamp + regenStaker.rewardDuration());
 
-        vm.startPrank(whitelistedStaker);
-        uint256 claimedByWhitelisted = regenStaker.claimReward(whitelistedDepositId);
+        vm.startPrank(allowlistedStaker);
+        uint256 claimedByAllowlisted = regenStaker.claimReward(allowlistedDepositId);
         vm.stopPrank();
 
-        vm.startPrank(nonWhitelistedStaker);
-        uint256 claimedByNonWhitelisted = regenStaker.claimReward(nonWhitelistedDepositId);
+        vm.startPrank(nonAllowlistedStaker);
+        uint256 claimedByNonAllowlisted = regenStaker.claimReward(nonAllowlistedDepositId);
         vm.stopPrank();
 
-        assertApproxEqRel(claimedByWhitelisted, rewardAmount, ONE_MICRO);
-        assertEq(claimedByNonWhitelisted, 0);
+        assertApproxEqRel(claimedByAllowlisted, rewardAmount, ONE_MICRO);
+        assertEq(claimedByNonAllowlisted, 0);
     }
 
     function testFuzz_TimeWeightedReward_RateResetsWithNewRewardNotification(
@@ -862,8 +866,8 @@ contract RegenIntegrationTest is Test {
         address stakerA = makeAddr("stakerA");
         address stakerB = makeAddr("stakerB");
 
-        whitelistUser(stakerA, true, false, true);
-        whitelistUser(stakerB, true, false, true);
+        authorizeUser(stakerA, true, false, true);
+        authorizeUser(stakerB, true, false, true);
 
         uint256 stakeAmount = getStakeAmount(stakeAmountBase);
 
@@ -926,7 +930,7 @@ contract RegenIntegrationTest is Test {
         timingPercent = bound(timingPercent, 10, 90);
 
         address user = makeAddr("user");
-        whitelistUser(user, true, false, true);
+        authorizeUser(user, true, false, true);
 
         uint256 baseAmount = getStakeAmount();
         uint256 initialStake = (baseAmount * initialStakeRatio) / 10;
@@ -942,7 +946,7 @@ contract RegenIntegrationTest is Test {
         assertEq(regenStaker.depositorTotalEarningPower(user), initialStake);
 
         address otherStaker = makeAddr("otherStaker");
-        whitelistUser(otherStaker, true, false, true);
+        authorizeUser(otherStaker, true, false, true);
         stakeToken.mint(otherStaker, getStakeAmount());
         vm.startPrank(otherStaker);
         stakeToken.approve(address(regenStaker), getStakeAmount());
@@ -982,7 +986,7 @@ contract RegenIntegrationTest is Test {
         rewardAmountBase = bound(rewardAmountBase, regenStaker.rewardDuration(), MAX_REWARD_DURATION + 1_000_000_000);
 
         address user = makeAddr("user");
-        whitelistUser(user, true, false, true);
+        authorizeUser(user, true, false, true);
 
         uint256 stakeAmount1 = getStakeAmount(stakeAmountBase1);
         uint256 stakeAmount2 = getStakeAmount(stakeAmountBase2);
@@ -1033,8 +1037,8 @@ contract RegenIntegrationTest is Test {
         address user = makeAddr("user");
         address otherStaker = makeAddr("otherStaker");
 
-        whitelistUser(user, true, false, true);
-        whitelistUser(otherStaker, true, false, true);
+        authorizeUser(user, true, false, true);
+        authorizeUser(otherStaker, true, false, true);
 
         uint256 userStakeAmount = getStakeAmount(stakeAmountBase);
         stakeToken.mint(user, userStakeAmount);
@@ -1093,7 +1097,7 @@ contract RegenIntegrationTest is Test {
         withdrawTimePercent = bound(withdrawTimePercent, minWithdrawTime, maxWithdrawTime);
 
         address user = makeAddr("user");
-        whitelistUser(user, true, false, true);
+        authorizeUser(user, true, false, true);
 
         uint256 stakeAmount = getStakeAmount(stakeAmountBase);
         stakeToken.mint(user, stakeAmount);
@@ -1148,7 +1152,7 @@ contract RegenIntegrationTest is Test {
         address owner = makeAddr("owner");
         address designatedClaimer = makeAddr("claimer");
 
-        whitelistUser(owner, true, false, true);
+        authorizeUser(owner, true, false, true);
 
         uint256 stakeAmount = getStakeAmount(stakeAmountBase);
         stakeToken.mint(owner, stakeAmount);
@@ -1210,7 +1214,7 @@ contract RegenIntegrationTest is Test {
         vm.assume(owner != unrelatedUser);
         vm.assume(designatedClaimer != unrelatedUser);
 
-        whitelistUser(owner, true, false, true);
+        authorizeUser(owner, true, false, true);
 
         uint256 stakeAmount = getStakeAmount(stakeAmountBase);
         stakeToken.mint(owner, stakeAmount);
@@ -1247,7 +1251,7 @@ contract RegenIntegrationTest is Test {
 
         vm.assume(ownerAddr != newClaimer);
 
-        whitelistUser(ownerAddr, true, false, true);
+        authorizeUser(ownerAddr, true, false, true);
 
         uint256 stakeAmount = getStakeAmount(stakeAmountBase);
         stakeToken.mint(ownerAddr, stakeAmount);
@@ -1270,7 +1274,7 @@ contract RegenIntegrationTest is Test {
         assertApproxEqRel(claimedByOwner, rewardAmount, ONE_MICRO);
     }
 
-    function testFuzz_RevertIf_WithdrawWhenPaused(uint256 stakeAmountBase, uint256 withdrawAmountRatio) public {
+    function testFuzz_WithdrawSucceedsWhenPaused(uint256 stakeAmountBase, uint256 withdrawAmountRatio) public {
         uint256 minStake = 100;
         uint256 maxStake = 10_000;
         stakeAmountBase = bound(stakeAmountBase, minStake, maxStake);
@@ -1283,7 +1287,7 @@ contract RegenIntegrationTest is Test {
         vm.assume(withdrawAmount > 0);
 
         address user = makeAddr("user");
-        whitelistUser(user, true, false, true);
+        authorizeUser(user, true, false, true);
 
         stakeToken.mint(user, stakeAmount);
         vm.startPrank(user);
@@ -1295,11 +1299,68 @@ contract RegenIntegrationTest is Test {
         regenStaker.pause();
         assertTrue(regenStaker.paused());
 
-        vm.startPrank(user);
-        vm.expectRevert(abi.encodeWithSelector(Pausable.EnforcedPause.selector));
+        // Withdrawal should succeed even when paused (user protection)
+        uint256 balanceBefore = stakeToken.balanceOf(user);
+        vm.prank(user);
         regenStaker.withdraw(depositId, withdrawAmount);
+
+        uint256 balanceAfter = stakeToken.balanceOf(user);
+        assertEq(balanceAfter - balanceBefore, withdrawAmount, "Withdrawal should succeed when paused");
+
+        // Verify deposit balance was reduced
+        (uint96 balance, , , , , , ) = regenStaker.deposits(depositId);
+        assertEq(balance, stakeAmount - withdrawAmount, "Deposit balance should be reduced");
+
+        vm.prank(ADMIN);
+        regenStaker.unpause();
+        assertFalse(regenStaker.paused());
+    }
+
+    /// @notice Test that withdrawals remain enabled when paused for user protection
+    function test_WithdrawalsEnabledWhenPaused() public {
+        uint256 stakeAmount = getStakeAmount(1000);
+        address user = makeAddr("user");
+        authorizeUser(user, true, false, true);
+
+        stakeToken.mint(user, stakeAmount);
+        vm.startPrank(user);
+        stakeToken.approve(address(regenStaker), stakeAmount);
+        Staker.DepositIdentifier depositId = regenStaker.stake(stakeAmount, user);
         vm.stopPrank();
 
+        // Pause the contract
+        vm.prank(ADMIN);
+        regenStaker.pause();
+        assertTrue(regenStaker.paused());
+
+        // Verify other operations are blocked
+        vm.startPrank(user);
+
+        // Staking should fail
+        stakeToken.mint(user, stakeAmount);
+        stakeToken.approve(address(regenStaker), stakeAmount);
+        vm.expectRevert(abi.encodeWithSelector(Pausable.EnforcedPause.selector));
+        regenStaker.stake(stakeAmount, user);
+
+        // Claiming should fail
+        vm.expectRevert(abi.encodeWithSelector(Pausable.EnforcedPause.selector));
+        regenStaker.claimReward(depositId);
+
+        // But withdrawal should succeed (MICA compliance)
+        uint256 withdrawAmount = stakeAmount / 2;
+        uint256 balanceBefore = stakeToken.balanceOf(user);
+        regenStaker.withdraw(depositId, withdrawAmount);
+        uint256 balanceAfter = stakeToken.balanceOf(user);
+
+        assertEq(
+            balanceAfter - balanceBefore,
+            withdrawAmount,
+            "Withdrawal should succeed when paused for user protection"
+        );
+
+        vm.stopPrank();
+
+        // Unpause
         vm.prank(ADMIN);
         regenStaker.unpause();
         assertFalse(regenStaker.paused());
@@ -1313,7 +1374,7 @@ contract RegenIntegrationTest is Test {
         uint256 rewardAmount = getRewardAmount(rewardAmountBase);
 
         address user = makeAddr("user");
-        whitelistUser(user, true, false, true);
+        authorizeUser(user, true, false, true);
 
         stakeToken.mint(user, stakeAmount);
         vm.startPrank(user);
@@ -1357,7 +1418,7 @@ contract RegenIntegrationTest is Test {
         uint256 contributorPrivateKey = uint256(keccak256(abi.encodePacked("contributor")));
         address contributor = vm.addr(contributorPrivateKey);
 
-        whitelistUser(contributor, true, true, true);
+        authorizeUser(contributor, true, true, true);
 
         stakeToken.mint(contributor, stakeAmount);
         rewardToken.mint(address(regenStaker), rewardAmount);
@@ -1431,7 +1492,7 @@ contract RegenIntegrationTest is Test {
         newDuration = bound(newDuration, uint128(MIN_REWARD_DURATION), MAX_REWARD_DURATION);
 
         address staker = makeAddr("staker");
-        whitelistUser(staker, true, false, true);
+        authorizeUser(staker, true, false, true);
 
         uint256 stakeAmount = getStakeAmount(1);
         uint256 rewardAmount = getRewardAmount(regenStaker.rewardDuration());
@@ -1465,11 +1526,11 @@ contract RegenIntegrationTest is Test {
             MAX_BUMP_TIP,
             ADMIN,
             uint128(customDuration),
-            MAX_CLAIM_FEE,
             0,
-            IWhitelist(address(0)),
-            IWhitelist(address(0)),
-            stakerWhitelist
+            IAddressSet(address(0)),
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            stakerAllowset
         );
 
         assertEq(localRegenStaker.rewardDuration(), customDuration);
@@ -1486,11 +1547,11 @@ contract RegenIntegrationTest is Test {
             MAX_BUMP_TIP,
             ADMIN,
             0,
-            MAX_CLAIM_FEE,
             0,
-            IWhitelist(address(0)),
-            IWhitelist(address(0)),
-            stakerWhitelist
+            IAddressSet(address(0)),
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            stakerAllowset
         );
         vm.stopPrank();
     }
@@ -1509,7 +1570,7 @@ contract RegenIntegrationTest is Test {
         regenStaker.setRewardDuration(uint128(customDuration));
 
         address staker = makeAddr("staker");
-        whitelistUser(staker, true, false, true);
+        authorizeUser(staker, true, false, true);
 
         uint256 stakeAmount = getStakeAmount(stakeAmountBase);
         uint256 rewardAmount = getRewardAmount(rewardAmountBase);
@@ -1551,8 +1612,8 @@ contract RegenIntegrationTest is Test {
         address stakerA = makeAddr("stakerA");
         address stakerB = makeAddr("stakerB");
 
-        whitelistUser(stakerA, true, false, true);
-        whitelistUser(stakerB, true, false, true);
+        authorizeUser(stakerA, true, false, true);
+        authorizeUser(stakerB, true, false, true);
 
         uint256 stakeAmount = getStakeAmount(stakeAmountBase);
         uint256 rewardAmount = getRewardAmount(rewardAmountBase);
@@ -1615,7 +1676,7 @@ contract RegenIntegrationTest is Test {
         regenStaker.setRewardDuration(uint128(customDuration));
 
         address staker = makeAddr("staker");
-        whitelistUser(staker, true, false, true);
+        authorizeUser(staker, true, false, true);
 
         uint256 stakeAmount = getStakeAmount(stakeAmountBase);
         uint256 rewardAmount = getRewardAmount(rewardAmountBase);
@@ -1674,7 +1735,7 @@ contract RegenIntegrationTest is Test {
         regenStaker.setRewardDuration(uint128(firstDuration));
 
         address staker = makeAddr("staker");
-        whitelistUser(staker, true, false, true);
+        authorizeUser(staker, true, false, true);
 
         uint256 stakeAmount = getStakeAmount(stakeAmountBase);
         uint256 rewardAmount = getRewardAmount(rewardAmountBase);
@@ -1737,18 +1798,18 @@ contract RegenIntegrationTest is Test {
             MAX_BUMP_TIP,
             ADMIN,
             uint128(MIN_REWARD_DURATION),
-            MAX_CLAIM_FEE,
             0,
-            stakerWhitelist,
-            contributorWhitelist,
-            allocationMechanismWhitelist
+            stakerAllowset,
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            allocationMechanismAllowset
         );
         compoundRegenStaker.setRewardNotifier(ADMIN, true);
         compoundRegenStaker.setMinimumStakeAmount(uint128(minimumAmount));
         vm.stopPrank();
 
         address user = makeAddr("user");
-        whitelistUser(user, true, false, true);
+        authorizeUser(user, true, false, true);
 
         // Temporarily set minimum to 0 to allow initial stake
         vm.prank(ADMIN);
@@ -1811,17 +1872,17 @@ contract RegenIntegrationTest is Test {
             MAX_BUMP_TIP,
             ADMIN,
             uint128(MIN_REWARD_DURATION),
-            MAX_CLAIM_FEE,
             0,
-            stakerWhitelist,
-            contributorWhitelist,
-            allocationMechanismWhitelist
+            stakerAllowset,
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            allocationMechanismAllowset
         );
         compoundRegenStaker.setRewardNotifier(ADMIN, true);
         vm.stopPrank();
 
         address user = makeAddr("user");
-        whitelistUser(user, true, false, true);
+        authorizeUser(user, true, false, true);
 
         uint256 stakeAmount = getStakeAmount(stakeAmountBase);
         uint256 rewardAmount = getRewardAmount(rewardAmountBase);
@@ -1858,89 +1919,6 @@ contract RegenIntegrationTest is Test {
         assertEq(compoundRegenStaker.unclaimedReward(depositId), 0);
     }
 
-    function testFuzz_CompoundRewards_WithVariableFees(
-        uint256 stakeAmountBase,
-        uint256 rewardAmountBase,
-        uint256 feeAmountBase
-    ) public {
-        stakeAmountBase = bound(stakeAmountBase, 1, 10_000);
-        rewardAmountBase = bound(rewardAmountBase, uint128(MIN_REWARD_DURATION), MAX_REWARD_DURATION + 1_000_000_000);
-        feeAmountBase = bound(feeAmountBase, 0, rewardAmountBase / 10);
-
-        MockERC20Staking sameToken = new MockERC20Staking(18);
-
-        vm.startPrank(ADMIN);
-        RegenStaker compoundRegenStaker = new RegenStaker(
-            IERC20(address(sameToken)),
-            IERC20Staking(address(sameToken)),
-            calculator,
-            MAX_BUMP_TIP,
-            ADMIN,
-            uint128(MIN_REWARD_DURATION),
-            MAX_CLAIM_FEE,
-            0,
-            stakerWhitelist,
-            contributorWhitelist,
-            allocationMechanismWhitelist
-        );
-        compoundRegenStaker.setRewardNotifier(ADMIN, true);
-        vm.stopPrank();
-
-        address user = makeAddr("user");
-        address feeCollector = makeAddr("feeCollector");
-        whitelistUser(user, true, false, true);
-
-        uint256 stakeAmount = getStakeAmount(stakeAmountBase);
-        uint256 rewardAmount = getRewardAmount(rewardAmountBase);
-        uint256 feeAmount = getRewardAmount(feeAmountBase);
-
-        feeAmount = bound(feeAmount, 0, MAX_CLAIM_FEE);
-
-        if (feeAmount > 0) {
-            vm.prank(ADMIN);
-            compoundRegenStaker.setClaimFeeParameters(
-                Staker.ClaimFeeParameters({ feeAmount: uint96(feeAmount), feeCollector: feeCollector })
-            );
-        }
-
-        sameToken.mint(user, stakeAmount);
-        // Protection requires balance >= totalStaked + rewardAmount
-        sameToken.mint(address(compoundRegenStaker), stakeAmount + rewardAmount);
-
-        vm.startPrank(user);
-        sameToken.approve(address(compoundRegenStaker), stakeAmount);
-        Staker.DepositIdentifier depositId = compoundRegenStaker.stake(stakeAmount, user);
-        vm.stopPrank();
-
-        vm.prank(ADMIN);
-        compoundRegenStaker.notifyRewardAmount(rewardAmount);
-
-        vm.warp(block.timestamp + compoundRegenStaker.rewardDuration());
-
-        uint256 unclaimedBefore = compoundRegenStaker.unclaimedReward(depositId);
-        (uint96 balanceBefore, , , , , , ) = compoundRegenStaker.deposits(depositId);
-        uint256 feeCollectorBalanceBefore = sameToken.balanceOf(feeCollector);
-
-        if (unclaimedBefore <= feeAmount) {
-            vm.prank(user);
-            uint256 compoundedAmount = compoundRegenStaker.compoundRewards(depositId);
-            assertEq(compoundedAmount, 0);
-        } else {
-            uint256 expectedCompounded = unclaimedBefore - feeAmount;
-
-            vm.prank(user);
-            uint256 compoundedAmount = compoundRegenStaker.compoundRewards(depositId);
-
-            assertEq(compoundedAmount, expectedCompounded);
-            (uint96 balanceAfter, , , , , , ) = compoundRegenStaker.deposits(depositId);
-            assertEq(balanceAfter, balanceBefore + expectedCompounded);
-
-            if (feeAmount > 0) {
-                assertEq(sameToken.balanceOf(feeCollector), feeCollectorBalanceBefore + feeAmount);
-            }
-        }
-    }
-
     function testFuzz_CompoundRewards_MultipleCompounds(
         uint256 stakeAmountBase,
         uint256 rewardAmountBase,
@@ -1960,17 +1938,17 @@ contract RegenIntegrationTest is Test {
             MAX_BUMP_TIP,
             ADMIN,
             uint128(MIN_REWARD_DURATION),
-            MAX_CLAIM_FEE,
             0,
-            stakerWhitelist,
-            contributorWhitelist,
-            allocationMechanismWhitelist
+            stakerAllowset,
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            allocationMechanismAllowset
         );
         compoundRegenStaker.setRewardNotifier(ADMIN, true);
         vm.stopPrank();
 
         address user = makeAddr("user");
-        whitelistUser(user, true, false, true);
+        authorizeUser(user, true, false, true);
 
         uint256 stakeAmount = getStakeAmount(stakeAmountBase);
         uint256 rewardAmount = getRewardAmount(rewardAmountBase);
@@ -2035,19 +2013,19 @@ contract RegenIntegrationTest is Test {
             MAX_BUMP_TIP,
             ADMIN,
             uint128(MIN_REWARD_DURATION),
-            MAX_CLAIM_FEE,
             0,
-            stakerWhitelist,
-            contributorWhitelist,
-            allocationMechanismWhitelist
+            stakerAllowset,
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            allocationMechanismAllowset
         );
         currentTestCtx.compoundRegenStaker.setRewardNotifier(ADMIN, true);
         vm.stopPrank();
 
         currentTestCtx.user1 = makeAddr("user1");
         currentTestCtx.user2 = makeAddr("user2");
-        whitelistUser(currentTestCtx.user1, true, false, true);
-        whitelistUser(currentTestCtx.user2, true, false, true);
+        authorizeUser(currentTestCtx.user1, true, false, true);
+        authorizeUser(currentTestCtx.user2, true, false, true);
 
         currentTestCtx.user1Stake = getStakeAmount(currentTestCtx.user1StakeBase);
         currentTestCtx.user2Stake = getStakeAmount(currentTestCtx.user2StakeBase);
@@ -2172,17 +2150,17 @@ contract RegenIntegrationTest is Test {
             MAX_BUMP_TIP,
             ADMIN,
             uint128(MIN_REWARD_DURATION),
-            MAX_CLAIM_FEE,
             0,
-            stakerWhitelist,
-            contributorWhitelist,
-            allocationMechanismWhitelist
+            stakerAllowset,
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            allocationMechanismAllowset
         );
         compoundRegenStaker.setRewardNotifier(ADMIN, true);
         vm.stopPrank();
 
         address user = makeAddr("user");
-        whitelistUser(user, true, false, true);
+        authorizeUser(user, true, false, true);
 
         uint256 stakeAmount = getStakeAmount(stakeAmountBase);
         uint256 rewardAmount = getRewardAmount(rewardAmountBase);
@@ -2242,17 +2220,17 @@ contract RegenIntegrationTest is Test {
             MAX_BUMP_TIP,
             ADMIN,
             uint128(MIN_REWARD_DURATION),
-            MAX_CLAIM_FEE,
             0,
-            stakerWhitelist,
-            contributorWhitelist,
-            allocationMechanismWhitelist
+            stakerAllowset,
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            allocationMechanismAllowset
         );
         compoundRegenStaker.setRewardNotifier(ADMIN, true);
         vm.stopPrank();
 
         address user = makeAddr("user");
-        whitelistUser(user, true, false, true);
+        authorizeUser(user, true, false, true);
 
         uint256 stakeAmount = stakeAmountBase * (10 ** decimals);
         uint256 rewardAmount = rewardAmountBase * (10 ** decimals);
@@ -2326,12 +2304,22 @@ contract RegenIntegrationTest is Test {
             quorumShares: 1e18,
             timelockDelay: 1 days,
             gracePeriod: 7 days,
-            owner: address(0) // Will be set by factory
+            owner: address(0) // Factory sets msg.sender as owner
         });
 
-        // Deploy QuadraticVotingMechanism instead of SimpleVotingMechanism
-        address allocationMechanism = allocationFactory.deployQuadraticVotingMechanism(config, 50, 100);
-        whitelistAllocationMechanism(allocationMechanism);
+        // Deploy OctantQFMechanism with no access control (so canSignup() always returns true)
+        config.owner = address(this); // Set owner since we're deploying directly
+        OctantQFMechanism octantQF = new OctantQFMechanism(
+            allocationFactory.tokenizedAllocationImplementation(),
+            config,
+            50, // alphaNumerator
+            100, // alphaDenominator
+            IAddressSet(address(0)), // contributionAllowset - null means no restrictions
+            IAddressSet(address(0)), // contributionBlockset
+            AccessMode.NONE // no access control
+        );
+        address allocationMechanism = address(octantQF);
+        approveMechanism(allocationMechanism);
         return allocationMechanism;
     }
 
@@ -2356,7 +2344,7 @@ contract RegenIntegrationTest is Test {
         // Advance to allow signup (startBlock + votingDelay period)
         vm.roll(block.number + 5);
 
-        whitelistUser(alice, true, true, true);
+        authorizeUser(alice, true, true, true);
 
         // Fund and stake
         stakeToken.mint(alice, currentTestCtx.stakeAmount);
@@ -2452,42 +2440,24 @@ contract RegenIntegrationTest is Test {
         );
     }
 
-    function test_Contribute_WithSignature_AndFees() public {
+    function test_Contribute_WithZeroAmount_AllowsSignup() public {
         _clearTestContext();
 
         currentTestCtx.stakeAmount = getStakeAmount(1000);
-        currentTestCtx.rewardAmount = getRewardAmount(100000); // Much larger reward amount to ensure sufficient rewards
-        currentTestCtx.contributeAmount = getRewardAmount(10); // Small amount to match partial voting period accumulation
+        currentTestCtx.rewardAmount = getRewardAmount(10000);
+        currentTestCtx.contributeAmount = 0;
 
-        // Setup with fees - make fee amount relative to contribution amount to avoid underflow
-        currentTestCtx.feeAmount = currentTestCtx.contributeAmount / 10; // 10% of contribution as fee
-        currentTestCtx.feeAmount = bound(currentTestCtx.feeAmount, 0, MAX_CLAIM_FEE); // Ensure it doesn't exceed max
-        currentTestCtx.feeCollector = makeAddr("feeCollector");
-
-        vm.prank(ADMIN);
-        regenStaker.setClaimFeeParameters(
-            Staker.ClaimFeeParameters({
-                feeAmount: uint96(currentTestCtx.feeAmount),
-                feeCollector: currentTestCtx.feeCollector
-            })
-        );
-
-        currentTestCtx.netContribution = currentTestCtx.contributeAmount - currentTestCtx.feeAmount;
-
-        // ✅ CORRECT: Fetch absolute timeline from contract
-        uint256 deploymentTime = block.timestamp; // When mechanism will be deployed
+        uint256 deploymentTime = block.timestamp;
         currentTestCtx.allocationMechanism = _deployAllocationMechanism();
         uint256 votingDelay = TokenizedAllocationMechanism(currentTestCtx.allocationMechanism).votingDelay();
         uint256 votingPeriod = TokenizedAllocationMechanism(currentTestCtx.allocationMechanism).votingPeriod();
         uint256 votingStartTime = deploymentTime + votingDelay;
         uint256 votingEndTime = votingStartTime + votingPeriod;
 
-        // Advance to allow signup (startBlock + votingDelay period)
         vm.roll(block.number + 5);
 
-        whitelistUser(alice, true, true, true);
+        authorizeUser(alice, true, true, true);
 
-        // Fund and stake
         stakeToken.mint(alice, currentTestCtx.stakeAmount);
         rewardToken.mint(address(regenStaker), currentTestCtx.rewardAmount);
 
@@ -2496,31 +2466,18 @@ contract RegenIntegrationTest is Test {
         currentTestCtx.depositId = regenStaker.stake(currentTestCtx.stakeAmount, alice);
         vm.stopPrank();
 
-        // Notify rewards
         vm.prank(ADMIN);
         regenStaker.notifyRewardAmount(currentTestCtx.rewardAmount);
 
-        // Warp to voting period and ensure sufficient rewards have accrued
-        // Warp to near end of voting period to accumulate maximum rewards
-        uint256 timeInVotingPeriod = votingEndTime - (votingPeriod / 10); // 90% through voting period
+        uint256 timeInVotingPeriod = votingEndTime - (votingPeriod / 10);
         vm.warp(timeInVotingPeriod);
+        assertTrue(block.timestamp >= votingStartTime && block.timestamp <= votingEndTime);
 
-        console.log("Voting start:", votingStartTime);
-        console.log("Voting end:", votingEndTime);
-        console.log("Current time:", block.timestamp);
-        console.log("Time in voting period?", block.timestamp >= votingStartTime && block.timestamp <= votingEndTime);
-
-        // Verify alice has unclaimed rewards
         currentTestCtx.unclaimedBefore = regenStaker.unclaimedReward(currentTestCtx.depositId);
-        assertGt(
-            currentTestCtx.unclaimedBefore,
-            currentTestCtx.contributeAmount,
-            "Alice should have sufficient unclaimed rewards"
-        );
 
-        // Create signature for the net contribution (after fees)
         currentTestCtx.nonce = TokenizedAllocationMechanism(currentTestCtx.allocationMechanism).nonces(alice);
         currentTestCtx.deadline = block.timestamp + 1 hours;
+        currentTestCtx.netContribution = 0;
 
         currentTestCtx.digest = _getSignupDigest(
             currentTestCtx.allocationMechanism,
@@ -2532,47 +2489,37 @@ contract RegenIntegrationTest is Test {
         );
         (currentTestCtx.v, currentTestCtx.r, currentTestCtx.s) = _signDigest(currentTestCtx.digest, ALICE_PRIVATE_KEY);
 
-        // Give Alice tokens and approve for the expected flow
-        rewardToken.mint(alice, currentTestCtx.netContribution);
-        vm.startPrank(alice);
-        rewardToken.approve(currentTestCtx.allocationMechanism, currentTestCtx.netContribution);
-
-        currentTestCtx.feeCollectorBalanceBefore = rewardToken.balanceOf(currentTestCtx.feeCollector);
-
-        // Call contribute function
+        vm.prank(alice);
         currentTestCtx.actualContribution = regenStaker.contribute(
             currentTestCtx.depositId,
             currentTestCtx.allocationMechanism,
-            currentTestCtx.contributeAmount,
+            0,
             currentTestCtx.deadline,
             currentTestCtx.v,
             currentTestCtx.r,
             currentTestCtx.s
         );
-        vm.stopPrank();
 
-        // Verify results
+        assertEq(currentTestCtx.actualContribution, 0);
         assertEq(
-            currentTestCtx.actualContribution,
-            currentTestCtx.netContribution,
-            "Net contribution should exclude fees"
+            regenStaker.unclaimedReward(currentTestCtx.depositId),
+            currentTestCtx.unclaimedBefore,
+            "Unclaimed rewards should remain unchanged"
         );
         assertEq(
-            rewardToken.balanceOf(currentTestCtx.feeCollector),
-            currentTestCtx.feeCollectorBalanceBefore + currentTestCtx.feeAmount,
-            "Fee collector should receive fees"
+            TokenizedAllocationMechanism(currentTestCtx.allocationMechanism).nonces(alice),
+            currentTestCtx.nonce + 1,
+            "Mechanism nonce should increment"
+        );
+        assertEq(
+            TokenizedAllocationMechanism(currentTestCtx.allocationMechanism).votingPower(alice),
+            0,
+            "Voting power should remain zero"
         );
         assertEq(
             rewardToken.balanceOf(currentTestCtx.allocationMechanism),
-            currentTestCtx.netContribution,
-            "Allocation mechanism should receive net amount"
-        );
-        // SimpleVotingMechanism scales voting power to 18 decimals
-        uint256 expectedVotingPower = currentTestCtx.netContribution * (10 ** (18 - rewardTokenDecimals));
-        assertEq(
-            TokenizedAllocationMechanism(currentTestCtx.allocationMechanism).votingPower(alice),
-            expectedVotingPower,
-            "Voting power should be net amount"
+            0,
+            "Allocation mechanism should not receive tokens"
         );
     }
 
@@ -2586,7 +2533,7 @@ contract RegenIntegrationTest is Test {
         // Advance to allow signup (startBlock + votingDelay period)
         vm.roll(block.number + 5);
 
-        whitelistUser(alice, true, true, true);
+        authorizeUser(alice, true, true, true);
 
         // Fund and stake
         stakeToken.mint(alice, stakeAmount);
@@ -2629,18 +2576,42 @@ contract RegenIntegrationTest is Test {
         vm.stopPrank();
     }
 
-    function test_Contribute_WithSignature_RevertIfNotWhitelisted() public {
+    function test_Contribute_WithSignature_RevertIfNotAllowseted() public {
         uint256 stakeAmount = getStakeAmount(1000);
         uint256 rewardAmount = getRewardAmount(10000);
         uint256 contributeAmount = getRewardAmount(100);
 
-        address allocationMechanism = _deployAllocationMechanism();
+        // Deploy OctantQFMechanism directly to test contribution access control
+        AllocationConfig memory config = AllocationConfig({
+            asset: IERC20(address(rewardToken)),
+            name: "Test Allocation",
+            symbol: "TEST",
+            votingDelay: 1,
+            votingPeriod: 8 days,
+            quorumShares: 1e18,
+            timelockDelay: 1 days,
+            gracePeriod: 7 days,
+            owner: address(this)
+        });
+
+        OctantQFMechanism octantQF = new OctantQFMechanism(
+            allocationFactory.tokenizedAllocationImplementation(),
+            config,
+            50, // alphaNumerator
+            100, // alphaDenominator
+            contributorAllowset, // contributionAllowset
+            IAddressSet(address(0)), // contributionBlockset
+            AccessMode.ALLOWSET
+        );
+        address allocationMechanism = address(octantQF);
+
+        approveMechanism(allocationMechanism);
 
         // Advance to allow signup (startBlock + votingDelay period)
         vm.roll(block.number + 5);
 
-        // Don't whitelist alice for contribution (only for staking)
-        whitelistUser(alice, true, false, true);
+        // Don't allowset alice for contribution (only for staking)
+        authorizeUser(alice, true, false, true);
 
         // Fund and stake
         stakeToken.mint(alice, stakeAmount);
@@ -2670,17 +2641,16 @@ contract RegenIntegrationTest is Test {
         );
         (uint8 v, bytes32 r, bytes32 s) = _signDigest(digest, ALICE_PRIVATE_KEY);
 
-        // Give Alice tokens and approve for the expected flow
-        rewardToken.mint(alice, contributeAmount);
-        vm.startPrank(alice);
-        rewardToken.approve(allocationMechanism, contributeAmount);
-
-        // Should revert with NotWhitelisted
+        // Alice is not allowseted for contribution, defense-in-depth check rejects
+        vm.prank(alice);
         vm.expectRevert(
-            abi.encodeWithSelector(RegenStakerBase.NotWhitelisted.selector, regenStaker.contributionWhitelist(), alice)
+            abi.encodeWithSelector(
+                RegenStakerBase.DepositOwnerNotEligibleForMechanism.selector,
+                allocationMechanism,
+                alice
+            )
         );
         regenStaker.contribute(depositId, allocationMechanism, contributeAmount, deadline, v, r, s);
-        vm.stopPrank();
     }
 
     function test_Contribute_WithSignature_RevertWhenPaused() public {
@@ -2693,7 +2663,7 @@ contract RegenIntegrationTest is Test {
         // Advance to allow signup (startBlock + votingDelay period)
         vm.roll(block.number + 5);
 
-        whitelistUser(alice, true, true, true);
+        authorizeUser(alice, true, true, true);
 
         // Fund and stake
         stakeToken.mint(alice, stakeAmount);
@@ -2748,7 +2718,7 @@ contract RegenIntegrationTest is Test {
         // Advance to allow signup (startBlock + votingDelay period)
         vm.roll(block.number + 5);
 
-        whitelistUser(alice, true, true, true);
+        authorizeUser(alice, true, true, true);
 
         // Fund and stake
         stakeToken.mint(alice, stakeAmount);
@@ -2789,12 +2759,12 @@ contract RegenIntegrationTest is Test {
         vm.stopPrank();
     }
 
-    function test_Contribute_WithSignature_RevertIfAllocationMechanismNotWhitelisted() public {
+    function test_Contribute_WithSignature_RevertIfAllocationMechanismNotAllowseted() public {
         uint256 stakeAmount = getStakeAmount(1000);
         uint256 rewardAmount = getRewardAmount(10000);
         uint256 contributeAmount = getRewardAmount(100);
 
-        // Deploy allocation mechanism but don't whitelist it
+        // Deploy allocation mechanism but don't allowset it
         AllocationConfig memory config = AllocationConfig({
             asset: IERC20(address(rewardToken)),
             name: "Test Allocation",
@@ -2812,7 +2782,7 @@ contract RegenIntegrationTest is Test {
         // Advance to allow signup (startBlock + votingDelay period)
         vm.roll(block.number + 5);
 
-        whitelistUser(alice, true, true, true);
+        authorizeUser(alice, true, true, true);
 
         // Fund and stake
         stakeToken.mint(alice, stakeAmount);
@@ -2847,19 +2817,13 @@ contract RegenIntegrationTest is Test {
         vm.startPrank(alice);
         rewardToken.approve(allocationMechanism, contributeAmount);
 
-        // Should revert with NotWhitelisted for allocation mechanism
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                RegenStakerBase.NotWhitelisted.selector,
-                regenStaker.allocationMechanismWhitelist(),
-                allocationMechanism
-            )
-        );
+        // Should revert with NotAllowseted for allocation mechanism
+        vm.expectRevert(abi.encodeWithSelector(NotInAllowset.selector, allocationMechanism));
         regenStaker.contribute(depositId, allocationMechanism, contributeAmount, deadline, v, r, s);
         vm.stopPrank();
     }
 
-    function test_AllocationMechanismWhitelistIsSet() public view {
-        assertEq(address(regenStaker.allocationMechanismWhitelist()), address(allocationMechanismWhitelist));
+    function test_AllocationMechanismAllowsetIsSet() public view {
+        assertEq(address(regenStaker.allocationMechanismAllowset()), address(allocationMechanismAllowset));
     }
 }

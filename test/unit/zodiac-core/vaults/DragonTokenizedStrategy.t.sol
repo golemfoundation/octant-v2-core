@@ -9,6 +9,7 @@ import { TokenizedStrategy__NotOperator, DragonTokenizedStrategy__InsufficientLo
 import { BaseTest } from "../Base.t.sol";
 import { ITokenizedStrategy } from "src/zodiac-core/interfaces/ITokenizedStrategy.sol";
 import { console } from "forge-std/console.sol";
+import { NATIVE_TOKEN } from "src/constants.sol";
 
 /// @dev This test is incomplete.
 /// @dev temps.safe == operator == dragon
@@ -35,12 +36,12 @@ contract DragonTokenizedStrategyTest is BaseTest {
 
         moduleImplementation = new MockStrategy();
         tokenizedStrategyImplementation = new DragonTokenizedStrategy();
-        yieldSource = new MockYieldSource(tokenizedStrategyImplementation.ETH());
+        yieldSource = new MockYieldSource(NATIVE_TOKEN);
         temps = _testTemps(
             address(moduleImplementation),
             abi.encode(
                 address(tokenizedStrategyImplementation),
-                tokenizedStrategyImplementation.ETH(),
+                NATIVE_TOKEN,
                 address(yieldSource),
                 management,
                 keeper,

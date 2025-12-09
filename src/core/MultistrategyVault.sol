@@ -5,6 +5,7 @@ pragma solidity ^0.8.25;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { IMultistrategyVault } from "src/core/interfaces/IMultistrategyVault.sol";
 import { IDepositLimitModule } from "src/core/interfaces/IDepositLimitModule.sol";
@@ -15,8 +16,11 @@ import { IMultistrategyVaultFactory } from "src/factories/interfaces/IMultistrat
 import { DebtManagementLib } from "src/core/libs/DebtManagementLib.sol";
 
 /**
- * @notice
- *   This MultistrategyVault is based on the original VaultV3.vy Vyper implementation
+ * @title MultistrategyVault
+ * @author yearn.finance; port maintained by [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
+ * @custom:ported-from https://github.com/yearn/yearn-vaults-v3/blob/master/contracts/VaultV3.vy
+ * @notice This MultistrategyVault is based on the original VaultV3.vy Vyper implementation
  *   that has been ported to Solidity. It is designed as a non-opinionated system
  *   to distribute funds of depositors for a specific `asset` into different
  *   opportunities (aka Strategies) and manage accounting in a robust way.
@@ -42,98 +46,225 @@ import { DebtManagementLib } from "src/core/libs/DebtManagementLib.sol";
  *   The vault is built to be customized by the management to be able to fit their
  *   specific desired needs. Including the customization of strategies, accountants,
  *   ownership etc.
+ *
+ * @dev Security considerations (summary):
+ *  - Roles: privileged functions gated via `Roles`; improper assignment can lead to fund mismanagement.
+ *  - Reentrancy: mutating flows guarded by `nonReentrant`.
+ *  - Precision/rounding: use preview/convert helpers; PPS exposed has limited precision.
+ *  - Withdrawal queue: incorrect ordering/duplicates can distort maxWithdraw/maxRedeem views.
+ *  - Strategy trust: vault does not attest to strategy safety; management must curate strategies.
  */
 contract MultistrategyVault is IMultistrategyVault {
+    // ============================================
     // CONSTANTS
-    // The max length the withdrawal queue can be.
+    // ============================================
+
+    /// @notice Maximum number of strategies allowed in the withdrawal queue
+    /// @dev Prevents excessive gas costs during withdrawal iterations and queue management
     uint256 public constant MAX_QUEUE = 10;
-    // 100% in Basis Points.
+
+    /// @notice Maximum basis points representing 100%
+    /// @dev Used for all percentage calculations (fees, losses, etc.)
+    ///      10,000 basis points = 100%
     uint256 public constant MAX_BPS = 10_000;
-    // Extended for profit locking calculations.
+
+    /// @notice Extended precision for profit unlocking rate calculations
+    /// @dev Used to maintain precision when calculating per-second profit unlock rates
+    ///      1,000,000,000,000 = 1e12 for high precision time-weighted calculations
     uint256 public constant MAX_BPS_EXTENDED = 1_000_000_000_000;
-    // The version of this vault.
+
+    /// @notice API version of this vault implementation
+    /// @dev Based on Yearn V3 vault version
     string public constant API_VERSION = "3.0.4";
 
-    // EIP-712 constants
+    /// @notice EIP-712 domain type hash for signature verification
+    /// @dev Used in permit() function for gasless approvals
     bytes32 private constant DOMAIN_TYPE_HASH =
         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
+
+    /// @notice EIP-712 permit type hash for signature verification
+    /// @dev Used in permit() function for gasless approvals
     bytes32 private constant PERMIT_TYPE_HASH =
         keccak256("Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)");
+    // ============================================
+    // STATE VARIABLES - CORE
+    // ============================================
 
-    // STORAGE
-    // Underlying token used by the vault.
+    /// @notice Address of the underlying ERC20 asset token
+    /// @dev Must be ERC20-compliant. Set during initialization and cannot be changed
     address public override asset;
-    // Based off the `asset` decimals.
+
+    /// @notice Decimal places for vault shares, matching the underlying asset
+    /// @dev Inherited from the asset token to maintain 1:1 precision
     uint8 public override decimals;
-    // Deployer contract used to retrieve the protocol fee config.
+
+    /// @notice Address of the factory contract that deployed this vault
+    /// @dev Used to retrieve protocol fee configuration and maintain vault registry
     address private _factory;
 
-    // HashMap that records all the strategies that are allowed to receive assets from the vault.
+    // ============================================
+    // STATE VARIABLES - STRATEGY MANAGEMENT
+    // ============================================
+
+    /// @notice Mapping of strategy addresses to their parameters and accounting
+    /// @dev Only strategies with activation != 0 are considered active
+    ///      Stores: activation timestamp, lastReport, currentDebt, maxDebt
     mapping(address => StrategyParams) internal _strategies;
 
-    // The current default withdrawal queue.
+    /// @notice Array of strategy addresses used as the default withdrawal queue
+    /// @dev Maximum length of MAX_QUEUE (10). Order determines withdrawal priority
+    ///      Strategies are attempted in array order during withdrawals
     address[] internal _defaultQueue;
-    // Should the vault use the defaultQueue regardless whats passed in.
+
+    /// @notice Whether to force use of default queue for all withdrawals
+    /// @dev When true, custom withdrawal queues passed to withdraw/redeem are ignored
     bool public useDefaultQueue;
-    // Should the vault automatically allocate funds to the first strategy in queue.
+
+    /// @notice Whether to automatically allocate deposited funds to strategies
+    /// @dev When true, deposits are automatically sent to _defaultQueue[0] if queue is not empty
+    ///      Requires a non-empty default queue or deposits will fail
     bool public autoAllocate;
 
-    /// ACCOUNTING ///
-    // ERC20 - amount of shares per account
+    // ============================================
+    // STATE VARIABLES - ACCOUNTING
+    // ============================================
+
+    /// @notice Mapping of account addresses to their vault share balances
+    /// @dev ERC20-compliant balance tracking
     mapping(address => uint256) private _balanceOf;
-    // ERC20 - owner -> (spender -> amount)
+
+    /// @notice Nested mapping of owner to spender to approved share amounts
+    /// @dev ERC20-compliant allowance tracking for transferFrom operations
     mapping(address => mapping(address => uint256)) public override allowance;
-    // Total amount of shares that are currently minted including those locked.
+
+    /// @notice Total supply of vault shares including locked shares
+    /// @dev Includes both circulating shares and shares locked for profit unlocking
+    ///      Actual circulating supply = _totalSupplyValue - _unlockedShares()
     uint256 private _totalSupplyValue;
-    // Total amount of assets that has been deposited in strategies.
+
+    /// @notice Total amount of assets currently deployed across all strategies
+    /// @dev In asset base units (typically 18 decimals). Updated via updateDebt() and processReport()
+    ///      Invariant: _totalAssets = _totalIdle + _totalDebt
     uint256 private _totalDebt;
-    // Current assets held in the vault contract. Replacing balanceOf(this) to avoid price_per_share manipulation.
+
+    /// @notice Amount of underlying asset held idle in the vault contract
+    /// @dev In asset base units. Used instead of balanceOf(this) to prevent PPS manipulation via direct transfers
+    ///      Acts as buffer for cheap withdrawals without touching strategies
     uint256 private _totalIdle;
-    // Minimum amount of assets that should be kept in the vault contract to allow for fast, cheap redeems.
+
+    /// @notice Minimum amount of assets to maintain idle in the vault
+    /// @dev In asset base units. Set by MINIMUM_IDLE_MANAGER role
+    ///      Helps ensure gas-efficient withdrawals by maintaining a buffer
+    ///      Value of 0 means no minimum is enforced
     uint256 public override minimumTotalIdle;
-    // Maximum amount of tokens that the vault can accept. If totalAssets > depositLimit, deposits will revert.
+
+    /// @notice Maximum total assets the vault can hold
+    /// @dev In asset base units. When totalAssets >= depositLimit, deposits revert
+    ///      Can be overridden by depositLimitModule if set to type(uint256).max
     uint256 public override depositLimit;
 
-    /// PERIPHERY ///
-    // Contract that charges fees and can give refunds.
+    // ============================================
+    // STATE VARIABLES - PERIPHERY CONTRACTS
+    // ============================================
+
+    /// @notice Address of accountant contract for fee assessment
+    /// @dev Charges fees on profits and can issue refunds. Set to address(0) to disable fees
+    ///      Called during processReport() to calculate fees and refunds
     address public override accountant;
-    // Contract to control the deposit limit.
+
+    /// @notice Address of deposit limit module contract
+    /// @dev When set (non-zero), overrides the standard depositLimit
+    ///      Must implement IDepositLimitModule.availableDepositLimit()
     address public override depositLimitModule;
-    // Contract to control the withdraw limit.
+
+    /// @notice Address of withdraw limit module contract
+    /// @dev When set (non-zero), overrides the standard maxWithdraw calculation
+    ///      Must implement IWithdrawLimitModule.availableWithdrawLimit()
     address public override withdrawLimitModule;
 
-    /// ROLES ///
-    // HashMap mapping addresses to their roles
+    // ============================================
+    // STATE VARIABLES - ACCESS CONTROL
+    // ============================================
+
+    /// @notice Mapping of addresses to their role bitmasks
+    /// @dev Each bit represents a different role (see Roles enum)
+    ///      Multiple roles can be assigned by combining bits with OR
     mapping(address => uint256) public roles;
-    // Address that can add and remove roles to addresses.
+
+    /// @notice Address with authority to manage all role assignments
+    /// @dev Can add/remove roles for any address including itself
+    ///      Transfer requires two-step process via transferRoleManager() and acceptRoleManager()
     address public override roleManager;
-    // Temporary variable to store the address of the next roleManager until the role is accepted.
+
+    /// @notice Pending role manager address during transfer
+    /// @dev Set by transferRoleManager(), cleared after acceptRoleManager()
+    ///      Two-step process prevents accidental transfer to wrong address
     address public override futureRoleManager;
 
-    // ERC20 - name of the vaults token.
+    // ============================================
+    // STATE VARIABLES - ERC20 METADATA
+    // ============================================
+
+    /// @notice Human-readable name of the vault token
+    /// @dev ERC20 standard. Can be updated by roleManager via setName()
     string public override name;
-    // ERC20 - symbol of the vaults token.
+
+    /// @notice Symbol ticker of the vault token
+    /// @dev ERC20 standard. Can be updated by roleManager via setSymbol()
     string public override symbol;
 
-    // State of the vault - if set to true, only withdrawals will be available. It can't be reverted.
+    // ============================================
+    // STATE VARIABLES - VAULT STATE
+    // ============================================
+
+    /// @notice Whether the vault has been shutdown
+    /// @dev When true, only withdrawals are allowed. Cannot be reversed once set
+    ///      Triggered by EMERGENCY_MANAGER role via shutdownVault()
     bool private _shutdown;
-    // The amount of time profits will unlock over.
+
+    // ============================================
+    // STATE VARIABLES - PROFIT LOCKING
+    // ============================================
+
+    /// @notice Duration over which profits are gradually unlocked
+    /// @dev In seconds. Maximum 31,556,952 (1 year)
+    ///      Set to 0 to disable profit locking (profits unlock immediately)
+    ///      Prevents PPS manipulation by locking profits as vault shares
     uint256 private _profitMaxUnlockTime;
-    // The timestamp of when the current unlocking period ends.
+
+    /// @notice Timestamp when all currently locked profits will be fully unlocked
+    /// @dev Unix timestamp in seconds. Set to 0 when no profits are locked
+    ///      Updated after each profitable report
     uint256 private _fullProfitUnlockDate;
-    // The per second rate at which profit will unlock.
+
+    /// @notice Rate at which locked profit shares unlock per second
+    /// @dev In MAX_BPS_EXTENDED precision (1e12)
+    ///      Formula: (totalLockedShares * MAX_BPS_EXTENDED) / unlockingPeriod
     uint256 private _profitUnlockingRate;
-    // Last timestamp of the most recent profitable report.
+
+    /// @notice Timestamp of the last update to profit locking state
+    /// @dev Unix timestamp in seconds. Used to calculate _unlockedShares()
+    ///      Updated whenever shares are locked (during processReport)
     uint256 private _lastProfitUpdate;
 
-    // `nonces` track `permit` approvals with signature.
+    /// @notice Mapping of addresses to their current nonce for EIP-2612 permit
+    /// @dev Incremented each time permit() is successfully called
+    ///      Prevents replay attacks on signed approvals
     mapping(address => uint256) public override nonces;
 
-    /// MODIFIERS ///
+    // ============================================
+    // REENTRANCY GUARD
+    // ============================================
 
-    // Re-entrancy guard
+    /// @notice Reentrancy guard lock state
+    /// @dev True when a nonReentrant function is executing
     bool private _locked;
 
+    /**
+     * @notice Prevents reentrancy attacks on state-changing functions
+     * @dev Uses simple lock flag. Applied to deposit, withdraw, redeem, updateDebt, and processReport
+     *      Reverts with Reentrancy() error if reentrant call is detected
+     */
     modifier nonReentrant() {
         require(!_locked, Reentrancy());
         _locked = true;
@@ -141,19 +272,30 @@ contract MultistrategyVault is IMultistrategyVault {
         _locked = false;
     }
 
-    /// CONSTRUCTOR ///
+    // ============================================
+    // CONSTRUCTOR
+    // ============================================
+
+    /**
+     * @notice Constructor that prevents reinitialization
+     * @dev Sets asset to a non-zero value (this contract address) to prevent initialize() from being called
+     *      Actual initialization happens via initialize() when deployed through factory
+     */
     constructor() {
         // Set `asset` so it cannot be re-initialized.
         asset = address(this);
     }
 
     /**
-     * @notice Initialize a new vault. Sets the asset, name, symbol, and role manager.
-     * @param asset_ The address of the asset that the vault will accept.
-     * @param name_ The name of the vault token.
-     * @param symbol_ The symbol of the vault token.
-     * @param roleManager_ The address that can add and remove roles to addresses
-     * @param profitMaxUnlockTime_ The amount of time that the profit will be locked for
+     * @notice Initialize a new vault with core parameters
+     * @dev Can only be called once per deployment (checked via asset == address(0))
+     *      Called by factory immediately after deployment. Sets all critical vault parameters
+     * @param asset_ Address of the underlying ERC20 asset token (cannot be zero address)
+     * @param name_ Human-readable name for the vault token (e.g., "Octant ETH Vault")
+     * @param symbol_ Token symbol for the vault token (e.g., "ovETH")
+     * @param roleManager_ Address that can manage role assignments (cannot be zero address)
+     * @param profitMaxUnlockTime_ Duration for profit unlocking in seconds (0-31556952, max 1 year)
+     * @custom:security Only callable once due to asset check. All parameters are immutable except profitMaxUnlockTime
      */
     function initialize(
         address asset_,
@@ -182,11 +324,15 @@ contract MultistrategyVault is IMultistrategyVault {
         roleManager = roleManager_;
     }
 
-    // SETTERS //
+    // ============================================
+    // VAULT CONFIGURATION SETTERS
+    // ============================================
+
     /**
-     * @notice Change the vault name.
-     * @dev Can only be called by the Role Manager.
-     * @param name_ The new name for the vault.
+     * @notice Updates the vault token name
+     * @dev ERC20 metadata update. Does not affect existing approvals or balances
+     * @param name_ New name for the vault token
+     * @custom:security Only callable by roleManager
      */
     function setName(string memory name_) external override {
         require(msg.sender == roleManager, NotAllowed());
@@ -194,9 +340,10 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Change the vault symbol.
-     * @dev Can only be called by the Role Manager.
-     * @param symbol_ The new name for the vault.
+     * @notice Updates the vault token symbol
+     * @dev ERC20 metadata update. Does not affect existing approvals or balances
+     * @param symbol_ New symbol ticker for the vault token
+     * @custom:security Only callable by roleManager
      */
     function setSymbol(string memory symbol_) external override {
         require(msg.sender == roleManager, NotAllowed());
@@ -204,8 +351,11 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Set the new accountant address.
-     * @param newAccountant_ The new accountant address.
+     * @notice Sets the accountant contract for fee assessment
+     * @dev Accountant is called during processReport() to calculate fees and refunds
+     *      Set to address(0) to disable fee assessment
+     * @param newAccountant_ Address of the new accountant contract (or address(0) to disable)
+     * @custom:security Only callable by ACCOUNTANT_MANAGER role
      */
     function setAccountant(address newAccountant_) external override {
         _enforceRole(msg.sender, Roles.ACCOUNTANT_MANAGER);
@@ -215,11 +365,12 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Set the new default queue array (max 10 strategies)
-     * @dev Will check each strategy to make sure it is active. But will not
-     *      check that the same strategy is not added twice. maxRedeem and maxWithdraw
-     *      return values may be inaccurate if a strategy is added twice.
-     * @param newDefaultQueue_ The new default queue array.
+     * @notice Sets the default withdrawal queue
+     * @dev Validates that all strategies are active but does NOT check for duplicates
+     *      WARNING: Adding the same strategy twice will cause incorrect maxRedeem/maxWithdraw values
+     *      Queue order determines withdrawal priority (index 0 = highest priority)
+     * @param newDefaultQueue_ Array of strategy addresses (maximum length MAX_QUEUE = 10)
+     * @custom:security Only callable by QUEUE_MANAGER role
      */
     function setDefaultQueue(address[] calldata newDefaultQueue_) external override {
         _enforceRole(msg.sender, Roles.QUEUE_MANAGER);
@@ -237,10 +388,11 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Set a new value for `useDefaultQueue`.
-     * @dev If set `True` the default queue will always be
-     *      used no matter whats passed in.
-     * @param useDefaultQueue_ new value.
+     * @notice Sets whether to force use of default withdrawal queue
+     * @dev When true, custom withdrawal queues passed to withdraw/redeem are ignored
+     *      Useful for ensuring consistent withdrawal behavior across all users
+     * @param useDefaultQueue_ True to force default queue, false to allow custom queues
+     * @custom:security Only callable by QUEUE_MANAGER role
      */
     function setUseDefaultQueue(bool useDefaultQueue_) external override {
         _enforceRole(msg.sender, Roles.QUEUE_MANAGER);
@@ -250,12 +402,12 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Set new value for `autoAllocate`
-     * @dev If `True` every {deposit} and {mint} call will
-     *      try and allocate the deposited amount to the strategy
-     *      at position 0 of the `defaultQueue` atomically.
-     * NOTE: An empty `defaultQueue` will cause deposits to fail.
-     * @param autoAllocate_ new value.
+     * @notice Sets whether to automatically allocate deposits to strategies
+     * @dev When true, deposits are automatically sent to _defaultQueue[0] via updateDebt()
+     *      WARNING: Requires non-empty default queue or all deposits will fail
+     *      Deposits become atomic (deposit + allocation) which increases gas cost
+     * @param autoAllocate_ True to enable auto-allocation, false to keep deposits idle
+     * @custom:security Only callable by DEBT_MANAGER role
      */
     function setAutoAllocate(bool autoAllocate_) external override {
         _enforceRole(msg.sender, Roles.DEBT_MANAGER);
@@ -265,11 +417,13 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Set the new deposit limit.
-     * @dev Can not be changed if a depositLimitModule
-     *      is set unless the override flag is true or if shutdown.
-     * @param depositLimit_ The new deposit limit.
-     * @param shouldOverride_ If a `depositLimitModule` already set should be overridden.
+     * @notice Sets the maximum total assets the vault can hold
+     * @dev Cannot be changed if depositLimitModule is set unless shouldOverride_ is true
+     *      Reverts if vault is shutdown
+     * @param depositLimit_ New maximum total assets (use type(uint256).max for unlimited)
+     * @param shouldOverride_ If true, clears depositLimitModule to allow setting depositLimit
+     * @custom:security Only callable by DEPOSIT_LIMIT_MANAGER role
+     * @custom:security Reverts if vault is shutdown
      */
     function setDepositLimit(uint256 depositLimit_, bool shouldOverride_) external override {
         require(_shutdown == false, VaultShutdown());
@@ -293,12 +447,13 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Set a contract to handle the deposit limit.
-     * @dev The default `depositLimit` will need to be set to
-     *      max uint256 since the module will override it or the override flag
-     *      must be set to true to set it to max in 1 tx.
-     * @param depositLimitModule_ Address of the module.
-     * @param shouldOverride_ If a `depositLimit` already set should be overridden.
+     * @notice Sets a module contract to dynamically control deposit limits
+     * @dev Module overrides static depositLimit. Requires depositLimit = type(uint256).max
+     *      or shouldOverride_ = true. Reverts if vault is shutdown
+     * @param depositLimitModule_ Address of IDepositLimitModule contract (or address(0) to disable)
+     * @param shouldOverride_ If true, automatically sets depositLimit to type(uint256).max
+     * @custom:security Only callable by DEPOSIT_LIMIT_MANAGER role
+     * @custom:security Reverts if vault is shutdown
      */
     function setDepositLimitModule(address depositLimitModule_, bool shouldOverride_) external override {
         require(_shutdown == false, VaultShutdown());
@@ -322,9 +477,11 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Set a contract to handle the withdraw limit.
-     * @dev This will override the default `maxWithdraw`.
-     * @param withdrawLimitModule_ Address of the module.
+     * @notice Sets a module contract to dynamically control withdraw limits
+     * @dev Module overrides standard maxWithdraw() calculation
+     *      Module must implement IWithdrawLimitModule.availableWithdrawLimit()
+     * @param withdrawLimitModule_ Address of IWithdrawLimitModule contract (or address(0) to disable)
+     * @custom:security Only callable by WITHDRAW_LIMIT_MANAGER role
      */
     function setWithdrawLimitModule(address withdrawLimitModule_) external override {
         _enforceRole(msg.sender, Roles.WITHDRAW_LIMIT_MANAGER);
@@ -335,8 +492,11 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Set the new minimum total idle.
-     * @param minimumTotalIdle_ The new minimum total idle.
+     * @notice Sets the minimum amount of assets to keep idle in the vault
+     * @dev Acts as buffer for cheap withdrawals. updateDebt() maintains this minimum
+     *      Set to 0 to disable minimum idle requirement
+     * @param minimumTotalIdle_ Minimum idle assets (0 = no minimum)
+     * @custom:security Only callable by MINIMUM_IDLE_MANAGER role
      */
     function setMinimumTotalIdle(uint256 minimumTotalIdle_) external override {
         _enforceRole(msg.sender, Roles.MINIMUM_IDLE_MANAGER);
@@ -346,16 +506,20 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Set the new profit max unlock time.
-     * @dev The time is denominated in seconds and must be less than 1 year.
-     *      We only need to update locking period if setting to 0,
-     *      since the current period will use the old rate and on the next
-     *      report it will be reset with the new unlocking time.
+     * @notice Sets the duration over which profits are gradually unlocked
+     * @dev Prevents PPS manipulation by time-locking profit shares
      *
-     *      Setting to 0 will cause any currently locked profit to instantly
-     *      unlock and an immediate increase in the vaults Price Per Share.
+     *      IMPORTANT BEHAVIORS:
+     *      - Setting to 0: Instantly unlocks all locked profits (immediate PPS increase)
+     *      - Setting to non-zero: Next report will use new duration, current lock continues with old rate
      *
-     * @param newProfitMaxUnlockTime_ The new profit max unlock time.
+     *      CONSTRAINTS:
+     *      - Maximum value: 31,556,952 seconds (1 year)
+     *      - When set to 0, burns all locked shares and resets unlocking variables
+     *
+     * @param newProfitMaxUnlockTime_ New unlock duration in seconds (0-31556952)
+     * @custom:security Only callable by PROFIT_UNLOCK_MANAGER role
+     * @custom:security Setting to 0 causes immediate PPS change
      */
     function setProfitMaxUnlockTime(uint256 newProfitMaxUnlockTime_) external override {
         _enforceRole(msg.sender, Roles.PROFIT_UNLOCK_MANAGER);
@@ -380,22 +544,29 @@ contract MultistrategyVault is IMultistrategyVault {
         emit UpdateProfitMaxUnlockTime(newProfitMaxUnlockTime_);
     }
 
-    // ROLE MANAGEMENT //
+    // ============================================
+    // ACCESS CONTROL - ROLE MANAGEMENT
+    // ============================================
 
     /**
-     * @dev Enforces that the sender has the required role
+     * @dev Enforces that an account has the required role
+     * @param account_ Address to check role for
+     * @param role_ Required role enum value
+     * @custom:security Reverts with NotAllowed() if account lacks the role
      */
     function _enforceRole(address account_, Roles role_) internal view {
-        // Check bit at role position
-        require(roles[account_] & (1 << uint256(role_)) != 0, NotAllowed());
+        uint256 mask = 1 << uint256(role_);
+        require((roles[account_] & mask) == mask, NotAllowed());
     }
 
     /**
-     * @notice Set the roles for an account.
-     * @dev This will fully override an accounts current roles
-     *      so it should include all roles the account should hold.
-     * @param account_ The account to set the role for.
-     * @param rolesBitmask_ The roles the account should hold.
+     * @notice Sets the complete role bitmask for an account
+     * @dev OVERWRITES all existing roles - must include all desired roles in bitmask
+     *      Use addRole() or removeRole() to modify individual roles
+     *      Bitmask calculated as: (1 << role1) | (1 << role2) | ...
+     * @param account_ Address to set roles for
+     * @param rolesBitmask_ Complete role bitmask (overwrites existing)
+     * @custom:security Only callable by roleManager
      */
     function setRole(address account_, uint256 rolesBitmask_) external override {
         require(msg.sender == roleManager, NotAllowed());
@@ -405,11 +576,12 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Add a new role/s to an address.
-     * @dev This will add a new role/s to the account
-     *      without effecting any of the previously held roles.
-     * @param account_ The account to add a role to.
-     * @param role_ The new role/s to add to account.
+     * @notice Adds a role to an account without affecting existing roles
+     * @dev Uses bitwise OR to add role while preserving others
+     *      Account can hold multiple roles simultaneously
+     * @param account_ Address to grant role to
+     * @param role_ Role enum value to add (single role only)
+     * @custom:security Only callable by roleManager
      */
     function addRole(address account_, Roles role_) external override {
         require(msg.sender == roleManager, NotAllowed());
@@ -419,11 +591,12 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Remove a role/s from an account.
-     * @dev This will leave all other roles for the
-     *      account unchanged.
-     * @param account_ The account to remove a Role/s from.
-     * @param role_ The Role/s to remove.
+     * @notice Removes a role from an account without affecting other roles
+     * @dev Uses bitwise AND with NOT to remove role while preserving others
+     *      Does not revert if account doesn't have the role
+     * @param account_ Address to revoke role from
+     * @param role_ Role enum value to remove (single role only)
+     * @custom:security Only callable by roleManager
      */
     function removeRole(address account_, Roles role_) external override {
         require(msg.sender == roleManager, NotAllowed());
@@ -434,11 +607,11 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Step 1 of 2 in order to transfer the
-     *      role manager to a new address. This will set
-     *      the futureRoleManager. Which will then
-     *      need to be accepted by the new manager.
-     * @param roleManager_ The new role manager address.
+     * @notice Initiates role manager transfer (step 1 of 2)
+     * @dev Two-step process prevents accidental transfer to wrong/inaccessible address
+     *      Sets futureRoleManager which must then call acceptRoleManager()
+     * @param roleManager_ Address of the new role manager
+     * @custom:security Only callable by current roleManager
      */
     function transferRoleManager(address roleManager_) external override {
         require(msg.sender == roleManager, NotAllowed());
@@ -448,7 +621,10 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Accept the role manager transfer.
+     * @notice Completes role manager transfer (step 2 of 2)
+     * @dev Caller must be the futureRoleManager set by transferRoleManager()
+     *      Clears futureRoleManager and updates roleManager to caller
+     * @custom:security Only callable by futureRoleManager address
      */
     function acceptRoleManager() external override {
         require(msg.sender == futureRoleManager, NotFutureRoleManager());
@@ -458,88 +634,146 @@ contract MultistrategyVault is IMultistrategyVault {
         emit UpdateRoleManager(msg.sender);
     }
 
+    // ============================================
     // VAULT STATUS VIEWS
+    // ============================================
 
     /**
-     * @notice Get if the vault is shutdown.
-     * @return Bool representing the shutdown status
+     * @notice Returns whether the vault has been shutdown
+     * @dev Shutdown is permanent and cannot be reversed
+     *      When shutdown, only withdrawals are allowed
+     * @return True if vault is shutdown, false otherwise
      */
     function isShutdown() external view override returns (bool) {
         return _shutdown;
     }
 
     /**
-     * @notice Get the amount of shares that have been unlocked.
-     * @return The amount of shares that have been unlocked.
+     * @notice Returns the amount of profit shares that have unlocked since last update
+     * @dev Calculates time-weighted unlocking based on _profitUnlockingRate and elapsed time
+     *      Returns total locked shares if unlock period has ended
+     * @return Amount of shares unlocked,  typically 18 decimals)
      */
     function unlockedShares() external view override returns (uint256) {
         return _unlockedShares();
     }
 
     /**
-     * @notice Get the price per share (pps) of the vault.
-     * @dev This value offers limited precision. Integrations that require
-     *      exact precision should use convertToAssets or convertToShares instead.
-     * @return The price per share.
+     * @notice Returns the current price per share (PPS)
+     * @dev PRECISION WARNING: Limited precision due to division. For exact calculations
+     *      use convertToAssets() or convertToShares() instead
+     *      Formula: (10^decimals * totalAssets) / totalSupply
+     *      Returns 10^decimals when totalSupply = 0 (1:1 initial ratio)
+     * @return Price per share (e.g., 1.05e18 = 1.05 assets per share)
      */
     function pricePerShare() external view override returns (uint256) {
         return _convertToAssets(10 ** uint256(decimals), Rounding.ROUND_DOWN);
     }
 
     /**
-     * @notice Get the default queue.
-     * @return The default queue.
+     * @notice Returns the default withdrawal queue array
+     * @dev Array of strategy addresses in withdrawal priority order
+     *      Maximum length is MAX_QUEUE (10)
+     * @return Array of strategy addresses
      */
     function getDefaultQueue() external view returns (address[] memory) {
         return _defaultQueue;
     }
 
-    /// REPORTING MANAGEMENT ///
+    // ============================================
+    // REPORTING MANAGEMENT
+    // ============================================
 
+    /**
+     * @notice Processes a strategy's performance report and updates vault accounting
+     * @dev CRITICAL FUNCTION for vault accounting. Updates gains/losses, assesses fees, and locks profits
+     *
+     *      PROCESS OVERVIEW:
+     *      1. Calculate gain/loss by comparing strategy assets vs recorded debt
+     *      2. Assess fees and refunds via accountant (if set)
+     *      3. Calculate shares to burn (for losses/fees) and shares to lock (for profits)
+     *      4. Update share supply and locked shares accordingly
+     *      5. Pull refunds from accountant if any
+     *      6. Update strategy debt tracking
+     *      7. Issue fee shares to accountant and protocol
+     *      8. Update profit unlocking rate and schedule
+     *
+     *      IMPORTANT NOTES:
+     *      - Strategy's convertToAssets() MUST NOT be manipulable or vault reports incorrect gains/losses
+     *      - Pass address(this) as strategy_ to accrue airdrops into totalIdle
+     *      - Profit locking prevents PPS manipulation by gradually releasing profits over time
+     *      - Fees are taken as shares, reducing profit for existing shareholders
+     *
+     *      ACCOUNTING INVARIANTS:
+     *      - totalAssets = totalIdle + totalDebt
+     *      - totalSupply = circulating shares + locked shares
+     *
+     * @param strategy_ Address of strategy to report (or address(this) to report vault airdrops)
+     * @return gain Amount of profit generated since last report
+     * @return loss Amount of loss incurred since last report
+     * @custom:security Only callable by REPORTING_MANAGER role
+     * @custom:security Reentrancy protected
+     * @custom:security Strategy convertToAssets() must be manipulation-resistant
+     */
     function processReport(address strategy_) external nonReentrant returns (uint256, uint256) {
         _enforceRole(msg.sender, Roles.REPORTING_MANAGER);
 
         // slither-disable-next-line uninitialized-local
         ProcessReportLocalVars memory vars;
 
+        // ============================================
+        // STEP 1: Determine Current Strategy Position
+        // ============================================
+
         if (strategy_ != address(this)) {
-            // Make sure we have a valid strategy.
+            // Processing a strategy report
+            // Ensure strategy is active (activation timestamp != 0)
             require(_strategies[strategy_].activation != 0, InactiveStrategy());
 
-            // Vault assesses profits using 4626 compliant interface.
-            // NOTE: It is important that a strategies `convertToAssets` implementation
-            // cannot be manipulated or else the vault could report incorrect gains/losses.
+            // SECURITY CRITICAL: Query strategy's current asset value
+            // The strategy's convertToAssets() MUST be manipulation-resistant
+            // Any manipulation here will cause incorrect gain/loss accounting
             uint256 strategyShares = IERC4626Payable(strategy_).balanceOf(address(this));
-            // How much the vaults position is worth.
+
+            // Calculate the current value of our position in the strategy
             vars.strategyTotalAssets = IERC4626Payable(strategy_).convertToAssets(strategyShares);
-            // How much the vault had deposited to the strategy.
+
+            // Retrieve the debt we previously recorded for this strategy
             vars.currentDebt = _strategies[strategy_].currentDebt;
         } else {
-            // Accrue any airdropped `asset` into `total_idle`
+            // Processing vault idle assets (for airdrop accounting)
+            // This accrues any tokens directly transferred to vault into totalIdle
             vars.strategyTotalAssets = IERC20(asset).balanceOf(address(this));
             vars.currentDebt = _totalIdle;
         }
 
-        /// Assess Gain or Loss ///
+        // ============================================
+        // STEP 2: Calculate Gain or Loss
+        // ============================================
 
-        // Compare reported assets vs. the current debt.
+        // Compare current asset value against expected debt
         if (vars.strategyTotalAssets > vars.currentDebt) {
-            // We have a gain.
+            // Strategy gained value - profit!
             vars.gain = vars.strategyTotalAssets - vars.currentDebt;
         } else {
-            // We have a loss.
+            // Strategy lost value or stayed flat
             vars.loss = vars.currentDebt - vars.strategyTotalAssets;
         }
 
-        /// Assess Fees and Refunds ///
+        // ============================================
+        // STEP 3: Assess Fees and Refunds
+        // ============================================
 
-        // If accountant is not set, fees and refunds remain unchanged.
+        // Check if accountant is configured for fee assessment
         vars.accountant = accountant;
         if (vars.accountant != address(0)) {
+            // Call accountant to calculate fees and potential refunds
+            // Fees are charged on gains, refunds may be given for losses
             (vars.totalFees, vars.totalRefunds) = IAccountant(vars.accountant).report(strategy_, vars.gain, vars.loss);
 
             if (vars.totalRefunds > 0) {
-                // Make sure we have enough approval and enough asset to pull.
+                // Cap refunds to what's actually available
+                // Check both accountant's balance and allowance to vault
                 vars.totalRefunds = Math.min(
                     vars.totalRefunds,
                     Math.min(
@@ -549,138 +783,196 @@ contract MultistrategyVault is IMultistrategyVault {
                 );
             }
         }
+        // If no accountant, fees and refunds remain 0 (initialized values)
 
-        // Only need to burn shares if there is a loss or fees.
+        // ============================================
+        // STEP 4: Calculate Shares to Burn (Losses/Fees)
+        // ============================================
+
+        // We burn shares to offset losses and to take fees from shareholders
         if (vars.loss + vars.totalFees > 0) {
-            // The amount of shares we will want to burn to offset losses and fees.
+            // Convert the total loss + fees amount to shares
+            // ROUND_UP ensures we burn enough shares to cover the full amount
             vars.sharesToBurn = _convertToShares(vars.loss + vars.totalFees, Rounding.ROUND_UP);
 
-            // If we have fees then get the proportional amount of shares to issue.
+            // If we have fees, calculate the portion of burned shares to reissue as fees
             if (vars.totalFees > 0) {
-                // Get the total amount shares to issue for the fees.
+                // Calculate what proportion of burned shares represent fees (vs losses)
+                // These shares will be reissued to accountant and protocol
                 vars.totalFeesShares = (vars.sharesToBurn * vars.totalFees) / (vars.loss + vars.totalFees);
 
-                // Get the protocol fee config for this vault.
+                // Query protocol fee configuration from factory
                 (vars.protocolFeeBps, vars.protocolFeeRecipient) = IMultistrategyVaultFactory(_factory)
                     .protocolFeeConfig(address(this));
 
-                // If there is a protocol fee.
+                // Calculate protocol's share of the fees
                 if (vars.protocolFeeBps > 0) {
-                    // Get the percent of fees to go to protocol fees.
+                    // Protocol fee is a percentage of total fees
                     vars.protocolFeesShares = (vars.totalFeesShares * uint256(vars.protocolFeeBps)) / MAX_BPS;
                 }
             }
         }
 
-        // Shares to lock is any amount that would otherwise increase the vaults PPS.
+        // ============================================
+        // STEP 5: Calculate Shares to Lock (Profits)
+        // ============================================
+
+        // Profit locking prevents PPS manipulation by gradually releasing profits
         vars.profitMaxUnlockTimeVar = _profitMaxUnlockTime;
-        // Get the amount we will lock to avoid a PPS increase.
+
+        // Only lock shares if we have profits and locking is enabled
         if (vars.gain + vars.totalRefunds > 0 && vars.profitMaxUnlockTimeVar != 0) {
+            // Convert profit amount to shares that will be locked
+            // ROUND_DOWN is conservative (locks slightly less)
             vars.sharesToLock = _convertToShares(vars.gain + vars.totalRefunds, Rounding.ROUND_DOWN);
         }
 
-        // The total current supply including locked shares.
-        vars.currentTotalSupply = _totalSupplyValue;
-        // The total shares the vault currently owns. Both locked and unlocked.
-        vars.totalLockedShares = _balanceOf[address(this)];
-        // Get the desired end amount of shares after all accounting.
+        // ============================================
+        // STEP 6: Adjust Total Share Supply
+        // ============================================
+
+        // Cache current values for calculation
+        vars.currentTotalSupply = _totalSupplyValue; // Includes locked shares
+        vars.totalLockedShares = _balanceOf[address(this)]; // Current vault balance (locked shares)
+
+        // Calculate the target total supply after accounting for:
+        // + new shares to lock (profits)
+        // - shares to burn (losses + fees)
+        // - shares that have unlocked since last report
         vars.endingSupply = vars.currentTotalSupply + vars.sharesToLock - vars.sharesToBurn - _unlockedShares();
 
-        // If we will end with more shares than we have now.
+        // Adjust total supply to reach target
         if (vars.endingSupply > vars.currentTotalSupply) {
-            // Issue the difference.
+            // Need to mint new shares to the vault for locking
             _issueShares(vars.endingSupply - vars.currentTotalSupply, address(this));
-        }
-        // Else we need to burn shares.
-        else if (vars.currentTotalSupply > vars.endingSupply) {
-            // Can't burn more than the vault owns.
+        } else if (vars.currentTotalSupply > vars.endingSupply) {
+            // Need to burn shares from vault's locked balance
+            // Can't burn more than vault currently owns
             vars.toBurn = Math.min(vars.currentTotalSupply - vars.endingSupply, vars.totalLockedShares);
             _burnShares(vars.toBurn, address(this));
         }
 
-        // Adjust the amount to lock for this period.
+        // Calculate net shares to lock this period
+        // If we burned more than we're locking (loss > profit), net lock is 0
         if (vars.sharesToLock > vars.sharesToBurn) {
-            // Don't lock fees or losses.
+            // Only lock the net profit shares (don't relock burned shares)
             vars.sharesToLock = vars.sharesToLock - vars.sharesToBurn;
         } else {
             vars.sharesToLock = 0;
         }
 
-        // Pull refunds
+        // ============================================
+        // STEP 7: Pull Refunds from Accountant
+        // ============================================
+
         if (vars.totalRefunds > 0) {
-            // Transfer the refunded amount of asset to the vault.
+            // Transfer refunded assets from accountant to vault
             _safeTransferFrom(asset, vars.accountant, address(this), vars.totalRefunds);
-            // Update storage to increase total assets.
+            // Increase idle assets by refund amount
             _totalIdle += vars.totalRefunds;
         }
 
-        // Record any reported gains.
+        // ============================================
+        // STEP 8: Update Strategy Debt Tracking
+        // ============================================
+
+        // Record gains or losses to update debt tracking
         if (vars.gain > 0) {
-            // NOTE: this will increase total_assets
+            // Increase debt by gain amount
             vars.currentDebt = vars.currentDebt + vars.gain;
+
             if (strategy_ != address(this)) {
+                // Update strategy's recorded debt
                 _strategies[strategy_].currentDebt = vars.currentDebt;
+                // Increase global debt tracker
                 _totalDebt += vars.gain;
             } else {
-                // Add in any refunds since it is now idle.
+                // Vault idle report: add refunds to the current debt
                 vars.currentDebt = vars.currentDebt + vars.totalRefunds;
+                // Update idle with final amount
                 _totalIdle = vars.currentDebt;
             }
-        }
-        // Or record any reported loss
-        else if (vars.loss > 0) {
+        } else if (vars.loss > 0) {
+            // Decrease debt by loss amount
             vars.currentDebt = vars.currentDebt - vars.loss;
+
             if (strategy_ != address(this)) {
+                // Update strategy's recorded debt (reduced by loss)
                 _strategies[strategy_].currentDebt = vars.currentDebt;
+                // Decrease global debt tracker
                 _totalDebt -= vars.loss;
             } else {
-                // Add in any refunds since it is now idle.
+                // Vault idle report: add refunds to the current debt
                 vars.currentDebt = vars.currentDebt + vars.totalRefunds;
+                // Update idle with final amount
                 _totalIdle = vars.currentDebt;
             }
         }
 
-        // Issue shares for fees that were calculated above if applicable.
+        // ============================================
+        // STEP 9: Issue Fee Shares
+        // ============================================
+
         if (vars.totalFeesShares > 0) {
-            // Accountant fees are (total_fees - protocol_fees).
+            // Issue shares to accountant (total fees minus protocol portion)
             _issueShares(vars.totalFeesShares - vars.protocolFeesShares, vars.accountant);
 
-            // If we also have protocol fees.
+            // Issue protocol fee shares if applicable
             if (vars.protocolFeesShares > 0) {
                 _issueShares(vars.protocolFeesShares, vars.protocolFeeRecipient);
             }
         }
 
-        // Update unlocking rate and time to fully unlocked.
+        // ============================================
+        // STEP 10: Update Profit Unlocking Schedule
+        // ============================================
+
+        // Recalculate total locked shares after all operations
         vars.totalLockedShares = _balanceOf[address(this)];
+
         if (vars.totalLockedShares > 0) {
+            // We have shares to lock - need to calculate unlocking schedule
             vars.fullProfitUnlockDateVar = _fullProfitUnlockDate;
-            // Check if we need to account for shares still unlocking.
+
+            // Check if there are previously locked shares still unlocking
             if (vars.fullProfitUnlockDateVar > block.timestamp) {
-                // There will only be previously locked shares if time remains.
-                // We calculate this here since it will not occur every time we lock shares.
+                // Calculate the "time-weight" of previously locked shares
+                // Formula: (shares still locked) * (time remaining)
+                // This represents the total "share-seconds" still locked
                 vars.previouslyLockedTime =
                     (vars.totalLockedShares - vars.sharesToLock) *
                     (vars.fullProfitUnlockDateVar - block.timestamp);
             }
 
-            // new_profit_locking_period is a weighted average between the remaining time of the previously locked shares and the profit_max_unlock_time
+            // Calculate new unlocking period as weighted average:
+            // - Previously locked shares: weighted by their remaining time
+            // - Newly locked shares: weighted by profitMaxUnlockTime
+            // This ensures smooth unlocking across multiple reports
             vars.newProfitLockingPeriod =
                 (vars.previouslyLockedTime + vars.sharesToLock * vars.profitMaxUnlockTimeVar) /
                 vars.totalLockedShares;
-            // Calculate how many shares unlock per second.
+
+            // Calculate per-second unlock rate
+            // Uses MAX_BPS_EXTENDED (1e12) for high precision
             _profitUnlockingRate = (vars.totalLockedShares * MAX_BPS_EXTENDED) / vars.newProfitLockingPeriod;
-            // Calculate how long until the full amount of shares is unlocked.
+
+            // Set the timestamp when all shares will be fully unlocked
             _fullProfitUnlockDate = block.timestamp + vars.newProfitLockingPeriod;
-            // Update the last profitable report timestamp.
+
+            // Record when this unlocking started
             _lastProfitUpdate = block.timestamp;
         } else {
-            // NOTE: only setting this to the 0 will turn in the desired effect,
-            // no need to update profit_unlocking_rate
+            // No shares locked - reset unlocking state
+            // Setting fullProfitUnlockDate to 0 indicates no active unlocking
+            // No need to reset profitUnlockingRate as it won't be used
             _fullProfitUnlockDate = 0;
         }
 
-        // Record the report of profit timestamp.
+        // ============================================
+        // STEP 11: Finalize Report
+        // ============================================
+
+        // Update strategy's last report timestamp
         _strategies[strategy_].lastReport = block.timestamp;
 
         // We have to recalculate the fees paid for cases with an overall loss or no profit locking
@@ -702,14 +994,28 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Used for governance to buy bad debt from the vault.
-     * @dev This should only ever be used in an emergency in place
-     *      of force revoking a strategy in order to not report a loss.
-     *      It allows the DEBT_PURCHASER role to buy the strategies debt
-     *      for an equal amount of `asset`.
+     * @notice Emergency function to purchase bad debt from a strategy
+     * @dev EMERGENCY USE ONLY: Alternative to force revoking to avoid reporting losses
      *
-     * @param strategy_ The strategy to buy the debt for
-     * @param amount_ The amount of debt to buy from the vault.
+     *      MECHANISM:
+     *      - Transfers assets from caller to vault
+     *      - Transfers proportional strategy shares from vault to caller
+     *      - Reduces strategy debt and converts to idle assets
+     *
+     *      USE CASES:
+     *      - Strategy is underwater but shares still have value
+     *      - Governance wants to absorb loss without affecting vault PPS
+     *      - Allows time to recover or liquidate strategy position separately
+     *
+     *      WARNINGS:
+     *      - Does not rely on strategy's conversion rates (assumes issues)
+     *      - Caller receives strategy shares at recorded debt ratio
+     *      - Caller assumes all risk of strategy position
+     *
+     * @param strategy_ Address of the strategy to buy debt from (must be active)
+     * @param amount_ Amount of debt to purchase (capped at current debt)
+     * @custom:security Only callable by DEBT_PURCHASER role
+     * @custom:security Reentrancy protected
      */
     function buyDebt(address strategy_, uint256 amount_) external override nonReentrant {
         _enforceRole(msg.sender, Roles.DEBT_PURCHASER);
@@ -751,12 +1057,28 @@ contract MultistrategyVault is IMultistrategyVault {
         emit DebtPurchased(strategy_, _amount);
     }
 
-    /// STRATEGY MANAGEMENT ///
+    // ============================================
+    // STRATEGY MANAGEMENT
+    // ============================================
 
     /**
-     * @notice Add a new strategy.
-     * @param newStrategy_ The new strategy to add.
-     * @param addToQueue_ Whether to add the strategy to the default queue.
+     * @notice Adds a new strategy to the vault
+     * @dev Validates strategy compatibility and initializes tracking
+     *      Strategy MUST be ERC4626-compliant with matching asset
+     *
+     *      REQUIREMENTS:
+     *      - Strategy address cannot be zero or vault address
+     *      - Strategy asset must match vault asset
+     *      - Strategy cannot already be active
+     *
+     *      INITIALIZATION:
+     *      - Sets activation timestamp to current block
+     *      - Initializes currentDebt and maxDebt to 0
+     *      - Optionally adds to default queue if space available (max 10)
+     *
+     * @param newStrategy_ Address of the ERC4626 strategy to add
+     * @param addToQueue_ If true, adds to default queue (if queue has space)
+     * @custom:security Only callable by ADD_STRATEGY_MANAGER role
      */
     function addStrategy(address newStrategy_, bool addToQueue_) external override {
         _enforceRole(msg.sender, Roles.ADD_STRATEGY_MANAGER);
@@ -764,8 +1086,14 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Revoke a strategy.
-     * @param strategy_ The strategy to revoke.
+     * @notice Revokes a strategy (soft revoke)
+     * @dev Removes strategy from vault. REQUIRES strategy to have zero debt
+     *      Use updateDebt() to withdraw all funds before revoking
+     *      Strategy is removed from default queue if present
+     *      Strategy can be re-added later if needed
+     *
+     * @param strategy_ Address of the strategy to revoke (must have currentDebt = 0)
+     * @custom:security Only callable by REVOKE_STRATEGY_MANAGER role
      */
     function revokeStrategy(address strategy_) external override {
         _enforceRole(msg.sender, Roles.REVOKE_STRATEGY_MANAGER);
@@ -773,13 +1101,27 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Force revoke a strategy.
-     * @dev The vault will remove the strategy and write off any debt left
-     *      in it as a loss. This function is a dangerous function as it can force a
-     *      strategy to take a loss. All possible assets should be removed from the
-     *      strategy first via updateDebt. If a strategy is removed erroneously it
-     *      can be re-added and the loss will be credited as profit. Fees will apply.
-     * @param strategy_ The strategy to force revoke.
+     * @notice Force revokes a strategy and realizes any outstanding debt as loss
+     * @dev DANGEROUS OPERATION: Immediately writes off all strategy debt as vault loss
+     *
+     *      WARNING: Use as last resort only!
+     *      - Reduces totalDebt by strategy's currentDebt
+     *      - Does NOT attempt to withdraw funds
+     *      - Loss affects all vault shareholders
+     *      - Strategy is permanently removed from vault
+     *
+     *      BEFORE USING:
+     *      1. Try updateDebt() to withdraw all possible funds
+     *      2. Consider buyDebt() if strategy shares have value
+     *      3. Only force revoke if strategy is completely unrecoverable
+     *
+     *      RECOVERY:
+     *      - If removed erroneously, strategy can be re-added
+     *      - Any recovered funds will be credited as profit (with fees)
+     *
+     * @param strategy_ Address of the strategy to force revoke
+     * @custom:security Only callable by FORCE_REVOKE_MANAGER role
+     * @custom:security Realizes immediate loss for all shareholders
      */
     function forceRevokeStrategy(address strategy_) external override {
         _enforceRole(msg.sender, Roles.FORCE_REVOKE_MANAGER);
@@ -787,9 +1129,14 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Update the max debt for a strategy.
-     * @param strategy_ The strategy to update the max debt for.
-     * @param newMaxDebt_ The new max debt for the strategy.
+     * @notice Sets the maximum debt allowed for a strategy
+     * @dev Controls how much of vault's assets can be allocated to this strategy
+     *      updateDebt() will respect this cap when allocating funds
+     *      Set to 0 to prevent new allocations (existing debt remains)
+     *
+     * @param strategy_ Address of the strategy (must be active)
+     * @param newMaxDebt_ Maximum debt (0 = no new allocations)
+     * @custom:security Only callable by MAX_DEBT_MANAGER role
      */
     function updateMaxDebtForStrategy(address strategy_, uint256 newMaxDebt_) external override {
         _enforceRole(msg.sender, Roles.MAX_DEBT_MANAGER);
@@ -799,15 +1146,35 @@ contract MultistrategyVault is IMultistrategyVault {
         emit UpdatedMaxDebtForStrategy(msg.sender, strategy_, newMaxDebt_);
     }
 
-    /// DEBT MANAGEMENT ///
+    // ============================================
+    // DEBT MANAGEMENT
+    // ============================================
+
     /**
-     * @notice Update the debt for a strategy.
-     * @dev This function will rebalance the debt of a strategy, either by withdrawing
-     *      funds or depositing new funds. Uses a struct to avoid stack too deep errors.
-     * @param strategy_ The strategy to update the debt for.
-     * @param targetDebt_ The target debt for the strategy.
-     * @param maxLoss_ The maximum acceptable loss in basis points.
-     * @return The new current debt of the strategy.
+     * @notice Rebalances the debt allocation for a strategy
+     * @dev Moves funds between vault and strategy to reach target debt level
+     *
+     *      OPERATIONS:
+     *      - If targetDebt_ > currentDebt: Deposits idle assets to strategy
+     *      - If targetDebt_ < currentDebt: Withdraws assets from strategy
+     *      - Respects strategy's maxDebt limit
+     *      - Maintains vault's minimumTotalIdle if configured
+     *
+     *      SPECIAL VALUES:
+     *      - targetDebt_ = type(uint256).max: Deposit all available idle (up to maxDebt)
+     *      - targetDebt_ = 0: Withdraw all assets from strategy
+     *
+     *      LOSS HANDLING:
+     *      - maxLoss_ parameter caps acceptable loss in basis points (0-10000)
+     *      - Reverts if realized loss exceeds maxLoss_
+     *      - Common values: 0 (no loss), 100 (1%), 10000 (100% - accept any loss)
+     *
+     * @param strategy_ Address of the strategy to rebalance (must be active)
+     * @param targetDebt_ Target debt (or type(uint256).max for max allocation)
+     * @param maxLoss_ Maximum acceptable loss in basis points (0-10000, where 10000 = 100%)
+     * @return newDebt The new current debt after rebalancing
+     * @custom:security Only callable by DEBT_MANAGER role
+     * @custom:security Reentrancy protected
      */
     function updateDebt(
         address strategy_,
@@ -845,9 +1212,34 @@ contract MultistrategyVault is IMultistrategyVault {
         return result.newDebt;
     }
 
-    /// EMERGENCY MANAGEMENT ///
+    // ============================================
+    // EMERGENCY MANAGEMENT
+    // ============================================
+
     /**
-     * @notice Shutdown the vault.
+     * @notice Permanently shuts down the vault
+     * @dev IRREVERSIBLE OPERATION - cannot be undone
+     *
+     *      EFFECTS:
+     *      - Sets _shutdown = true permanently
+     *      - Disables all deposits (depositLimit = 0)
+     *      - Clears depositLimitModule
+     *      - Grants DEBT_MANAGER role to caller for emergency withdrawals
+     *      - Withdrawals remain available
+     *
+     *      USE CASES:
+     *      - Critical vulnerability discovered
+     *      - Strategy failures requiring user protection
+     *      - Planned vault migration/deprecation
+     *
+     *      POST-SHUTDOWN:
+     *      - Users can withdraw funds
+     *      - No new deposits accepted
+     *      - Debt manager can rebalance strategies
+     *      - Vault continues operating in withdrawal-only mode
+     *
+     * @custom:security Only callable by EMERGENCY_MANAGER role
+     * @custom:security IRREVERSIBLE - use with extreme caution
      */
     function shutdownVault() external override {
         _enforceRole(msg.sender, Roles.EMERGENCY_MANAGER);
@@ -867,21 +1259,43 @@ contract MultistrategyVault is IMultistrategyVault {
 
         // Add debt manager role to the sender
         roles[msg.sender] = roles[msg.sender] | (1 << uint256(Roles.DEBT_MANAGER));
-        // todo might need to emit the combined roles
         emit RoleSet(msg.sender, roles[msg.sender]);
 
         emit Shutdown();
     }
 
-    /// SHARE MANAGEMENT ///
-    /// ERC20 + ERC4626 ///
+    // ============================================
+    // SHARE MANAGEMENT - ERC4626 DEPOSIT/WITHDRAW
+    // ============================================
 
     /**
-     * @notice Deposit assets into the vault.
-     * @dev Pass max uint256 to deposit full asset balance.
-     * @param assets_ The amount of assets to deposit.
-     * @param receiver_ The address to receive the shares.
-     * @return The amount of shares minted.
+     * @notice Deposits assets into the vault and mints shares to receiver
+     * @dev ERC4626-compliant deposit function. Converts assets to shares using current PPS
+     *
+     *      CONVERSION:
+     *      - Uses ROUND_DOWN when calculating shares (favors vault)
+     *      - shares = (assets * totalSupply) / totalAssets
+     *      - First deposit: 1:1 ratio (1 asset = 1 share)
+     *
+     *      SPECIAL VALUES:
+     *      - assets_ = type(uint256).max: Deposits caller's full asset balance
+     *
+     *      BEHAVIOR:
+     *      - Transfers assets from msg.sender to vault
+     *      - Increases totalIdle
+     *      - Mints shares to receiver
+     *      - If autoAllocate is true, automatically allocates to defaultQueue[0]
+     *
+     *      REQUIREMENTS:
+     *      - Vault not shutdown
+     *      - Amount > 0
+     *      - Amount <= maxDeposit(receiver)
+     *      - If autoAllocate, defaultQueue must not be empty
+     *
+     * @param assets_ Amount of assets to deposit (or type(uint256).max for full balance)
+     * @param receiver_ Address to receive the minted vault shares
+     * @return shares Amount of shares minted to receiver
+     * @custom:security Reentrancy protected
      */
     function deposit(uint256 assets_, address receiver_) external virtual nonReentrant returns (uint256) {
         uint256 amount = assets_;
@@ -896,10 +1310,24 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Mint shares for the receiver.
-     * @param shares_ The amount of shares to mint.
-     * @param receiver_ The address to receive the shares.
-     * @return The amount of assets deposited.
+     * @notice Mints exact amount of shares by depositing required assets
+     * @dev ERC4626-compliant mint function. Calculates assets needed for exact share amount
+     *
+     *      CONVERSION:
+     *      - Uses ROUND_UP when calculating assets (favors vault)
+     *      - assets = (shares * totalAssets) / totalSupply + 1
+     *      - First deposit: 1:1 ratio (1 share = 1 asset)
+     *
+     *      BEHAVIOR:
+     *      - Calculates assets required for shares amount
+     *      - Transfers calculated assets from msg.sender
+     *      - Mints exact shares_ amount to receiver
+     *      - If autoAllocate is true, automatically allocates to defaultQueue[0]
+     *
+     * @param shares_ Exact amount of shares to mint
+     * @param receiver_ Address to receive the minted vault shares
+     * @return assets Amount of assets deposited from caller
+     * @custom:security Reentrancy protected
      */
     function mint(uint256 shares_, address receiver_) external virtual nonReentrant returns (uint256) {
         uint256 assets = _convertToAssets(shares_, Rounding.ROUND_UP);
@@ -908,14 +1336,43 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Withdraw an amount of asset to `receiver` burning `owner`s shares.
-     * @dev The default behavior is to not allow any loss.
-     * @param assets_ The amount of asset to withdraw.
-     * @param receiver_ The address to receive the assets.
-     * @param owner_ The address who's shares are being burnt.
-     * @param maxLoss_ Optional amount of acceptable loss in Basis Points.
-     * @param strategiesArray_ Optional array of strategies to withdraw from.
-     * @return The amount of shares actually burnt.
+     * @notice Withdraws assets from the vault by burning owner's shares
+     * @dev ERC4626-extended withdraw function with loss tolerance and custom queue
+     *
+     *      CONVERSION:
+     *      - Uses ROUND_UP when calculating shares to burn (favors vault)
+     *      - shares = (assets * totalSupply) / totalAssets + 1
+     *
+     *      WITHDRAWAL FLOW:
+     *      1. Burns calculated shares from owner
+     *      2. Pulls from idle assets first
+     *      3. If insufficient idle, withdraws from strategies in queue order
+     *      4. Handles unrealized losses according to maxLoss parameter
+     *      5. Transfers assets to receiver
+     *
+     *      QUEUE BEHAVIOR:
+     *      - Empty array + useDefaultQueue=false: Uses default queue
+     *      - Empty array + useDefaultQueue=true: Uses default queue
+     *      - Custom array + useDefaultQueue=false: Uses custom queue
+     *      - Custom array + useDefaultQueue=true: Ignores custom, uses default
+     *
+     *      LOSS HANDLING:
+     *      - maxLoss_ = 0: No loss accepted (default, reverts on any loss)
+     *      - maxLoss_ = 100: Accept up to 1% loss
+     *      - maxLoss_ = 10000: Accept any loss (100%)
+     *      - Users receive proportional share of unrealized losses
+     *
+     *      ALLOWANCE:
+     *      - If msg.sender != owner, requires sufficient allowance
+     *      - Spends allowance (unless type(uint256).max)
+     *
+     * @param assets_ Amount of assets to withdraw
+     * @param receiver_ Address to receive the withdrawn assets
+     * @param owner_ Address whose shares will be burned
+     * @param maxLoss_ Maximum acceptable loss in basis points (0-10000, default 0 = no loss)
+     * @param strategiesArray_ Optional custom withdrawal queue (empty = use default)
+     * @return shares Amount of shares actually burned from owner
+     * @custom:security Reentrancy protected
      */
     function withdraw(
         uint256 assets_,
@@ -930,14 +1387,31 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Redeems an amount of shares of `owners` shares sending funds to `receiver`.
-     * @dev The default behavior is to allow losses to be realized.
-     * @param shares_ The amount of shares to burn.
-     * @param receiver_ The address to receive the assets.
-     * @param owner_ The address who's shares are being burnt.
-     * @param maxLoss_ Optional amount of acceptable loss in Basis Points.
-     * @param strategiesArray_ Optional array of strategies to withdraw from.
-     * @return The amount of assets actually withdrawn.
+     * @notice Redeems exact amount of shares for assets
+     * @dev ERC4626-extended redeem function with loss tolerance and custom queue
+     *
+     *      CONVERSION:
+     *      - Uses ROUND_DOWN when calculating assets (favors vault)
+     *      - assets = (shares * totalAssets) / totalSupply
+     *
+     *      BEHAVIOR:
+     *      - Burns exact shares_ amount from owner
+     *      - Calculates assets to withdraw based on shares
+     *      - Follows same withdrawal flow as withdraw()
+     *      - May return less assets than expected if losses occur
+     *
+     *      DIFFERENCE FROM WITHDRAW:
+     *      - withdraw(): User specifies assets, function calculates shares
+     *      - redeem(): User specifies shares, function calculates assets
+     *      - redeem() may return less assets than preview if losses occur
+     *
+     * @param shares_ Exact amount of shares to burn
+     * @param receiver_ Address to receive the withdrawn assets
+     * @param owner_ Address whose shares will be burned
+     * @param maxLoss_ Maximum acceptable loss in basis points (0-10000, default 10000 = accept all)
+     * @param strategiesArray_ Optional custom withdrawal queue (empty = use default)
+     * @return assets Amount of assets actually withdrawn and sent to receiver
+     * @custom:security Reentrancy protected
      */
     function redeem(
         uint256 shares_,
@@ -951,21 +1425,28 @@ contract MultistrategyVault is IMultistrategyVault {
         return _redeem(msg.sender, receiver_, owner_, assets, shares_, maxLoss_, strategiesArray_);
     }
 
+    // ============================================
+    // ERC20 FUNCTIONS
+    // ============================================
+
     /**
-     * @notice Approve an address to spend the vault's shares.
-     * @param spender_ The address to approve.
-     * @param amount_ The amount of shares to approve.
-     * @return True if the approval was successful.
+     * @notice Approves spender to transfer shares on behalf of caller
+     * @dev ERC20-compliant approve function
+     * @param spender_ Address authorized to spend shares
+     * @param amount_ Amount of shares to approve (type(uint256).max for unlimited)
+     * @return success True (reverts on failure)
      */
     function approve(address spender_, uint256 amount_) external override returns (bool) {
         return _approve(msg.sender, spender_, amount_);
     }
 
     /**
-     * @notice Transfer shares to a receiver.
-     * @param receiver_ The address to transfer shares to.
-     * @param amount_ The amount of shares to transfer.
-     * @return True if the transfer was successful.
+     * @notice Transfers shares from caller to receiver
+     * @dev ERC20-compliant transfer function
+     *      Prevents transfers to vault address or zero address
+     * @param receiver_ Address to receive shares (cannot be vault or zero address)
+     * @param amount_ Amount of shares to transfer
+     * @return success True (reverts on failure)
      */
     function transfer(address receiver_, uint256 amount_) external override returns (bool) {
         require(receiver_ != address(this) && receiver_ != address(0), InvalidReceiver());
@@ -974,11 +1455,14 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Transfer shares from a sender to a receiver.
-     * @param sender_ The address to transfer shares from.
-     * @param receiver_ The address to transfer shares to.
-     * @param amount_ The amount of shares to transfer.
-     * @return True if the transfer was successful.
+     * @notice Transfers shares from sender to receiver using allowance
+     * @dev ERC20-compliant transferFrom function
+     *      Requires sufficient allowance from sender to caller
+     *      Prevents transfers to vault address or zero address
+     * @param sender_ Address to transfer shares from (requires allowance)
+     * @param receiver_ Address to receive shares (cannot be vault or zero address)
+     * @param amount_ Amount of shares to transfer
+     * @return success True (reverts on failure)
      */
     function transferFrom(address sender_, address receiver_, uint256 amount_) external override returns (bool) {
         require(receiver_ != address(this) && receiver_ != address(0), InvalidReceiver());
@@ -988,15 +1472,19 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Approve an address to spend the vault's shares with permit.
-     * @param owner_ The address to approve from.
-     * @param spender_ The address to approve.
-     * @param amount_ The amount of shares to approve.
-     * @param deadline_ The deadline for the permit.
-     * @param v_ The v component of the signature.
-     * @param r_ The r component of the signature.
-     * @param s_ The s component of the signature.
-     * @return True if the approval was successful.
+     * @notice Approves spender using EIP-2612 signature (gasless approval)
+     * @dev Allows approval without on-chain transaction from owner
+     *      Uses EIP-712 structured data signing
+     *      Increments nonce to prevent replay attacks
+     * @param owner_ Address of the share owner granting approval
+     * @param spender_ Address authorized to spend shares
+     * @param amount_ Amount of shares to approve
+     * @param deadline_ Unix timestamp after which signature expires
+     * @param v_ ECDSA signature v component
+     * @param r_ ECDSA signature r component
+     * @param s_ ECDSA signature s component
+     * @return success True (reverts if signature invalid or expired)
+     * @custom:security Validates signature against owner and increments nonce
      */
     function permit(
         address owner_,
@@ -1010,10 +1498,16 @@ contract MultistrategyVault is IMultistrategyVault {
         return _permit(owner_, spender_, amount_, deadline_, v_, r_, s_);
     }
 
+    // ============================================
+    // VIEW FUNCTIONS - ERC20
+    // ============================================
+
     /**
-     * @notice Get the balance of a user.
-     * @param addr_ The address to get the balance of.
-     * @return The balance of the user.
+     * @notice Returns the share balance of an account
+     * @dev For vault address, excludes shares that have unlocked from profit locking
+     *      For all other addresses, returns full balance
+     * @param addr_ Address to query balance for
+     * @return balance Share balance,  typically 18 decimals)
      */
     function balanceOf(address addr_) public view override returns (uint256) {
         if (addr_ == address(this)) {
@@ -1025,94 +1519,115 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Get the total supply of shares.
-     * @return The total supply of shares.
+     * @notice Returns the circulating supply of vault shares
+     * @dev Excludes locked shares that haven't unlocked yet
+     *      Formula: _totalSupplyValue - _unlockedShares()
+     * @return supply Total circulating shares
      */
     function totalSupply() external view override returns (uint256) {
         return _totalSupply();
     }
 
+    // ============================================
+    // VIEW FUNCTIONS - ERC4626
+    // ============================================
+
     /**
-     * @notice Get the total assets held by the vault.
-     * @return The total assets held by the vault.
+     * @notice Returns total assets under management
+     * @dev Formula: totalIdle + totalDebt
+     *      Includes both idle assets and assets deployed to strategies
+     * @return assets Total assets
+     * @custom:invariant totalAssets = totalIdle + totalDebt
      */
     function totalAssets() external view override returns (uint256) {
         return _totalAssets();
     }
 
     /**
-     * @notice Get the amount of loose `asset` the vault holds.
-     * @return The current total idle.
+     * @notice Returns amount of assets held idle in the vault
+     * @dev Assets available for immediate withdrawal without touching strategies
+     * @return idle Idle assets
      */
     function totalIdle() external view override returns (uint256) {
         return _totalIdle;
     }
 
     /**
-     * @notice Get the the total amount of funds invested across all strategies.
-     * @return The current total debt.
+     * @notice Returns total assets deployed across all strategies
+     * @dev Sum of currentDebt for all active strategies
+     * @return debt Total debt
      */
     function totalDebt() external view override returns (uint256) {
         return _totalDebt;
     }
 
     /**
-     * @notice Convert an amount of assets to shares.
-     * @param assets_ The amount of assets to convert.
-     * @return The amount of shares.
+     * @notice Converts asset amount to equivalent shares
+     * @dev Uses ROUND_DOWN (favors vault)
+     *      Formula: (assets * totalSupply) / totalAssets
+     * @param assets_ Amount of assets to convert
+     * @return shares Equivalent amount of shares
      */
     function convertToShares(uint256 assets_) external view override returns (uint256) {
         return _convertToShares(assets_, Rounding.ROUND_DOWN);
     }
 
     /**
-     * @notice Preview the amount of shares that would be minted for a deposit.
-     * @param assets_ The amount of assets to deposit.
-     * @return The amount of shares that would be minted.
+     * @notice Previews shares that would be minted for a deposit
+     * @dev Identical to convertToShares() for this implementation
+     * @param assets_ Amount of assets to deposit
+     * @return shares Amount of shares that would be minted
      */
     function previewDeposit(uint256 assets_) external view override returns (uint256) {
         return _convertToShares(assets_, Rounding.ROUND_DOWN);
     }
 
     /**
-     * @notice Preview the amount of assets that would be deposited for a mint.
-     * @param shares_ The amount of shares to mint.
-     * @return The amount of assets that would be deposited.
+     * @notice Previews assets required to mint exact share amount
+     * @dev Uses ROUND_UP (favors vault)
+     * @param shares_ Amount of shares to mint
+     * @return assets Amount of assets required
      */
     function previewMint(uint256 shares_) external view override returns (uint256) {
         return _convertToAssets(shares_, Rounding.ROUND_UP);
     }
 
     /**
-     * @notice Convert an amount of shares to assets.
-     * @param shares_ The amount of shares to convert.
-     * @return The amount of assets.
+     * @notice Converts share amount to equivalent assets
+     * @dev Uses ROUND_DOWN (favors vault)
+     *      Formula: (shares * totalAssets) / totalSupply
+     * @param shares_ Amount of shares to convert
+     * @return assets Equivalent amount of assets
      */
     function convertToAssets(uint256 shares_) external view override returns (uint256) {
         return _convertToAssets(shares_, Rounding.ROUND_DOWN);
     }
 
     /**
-     * @notice Get the default queue of strategies.
-     * @return The default queue of strategies.
+     * @notice Returns the default withdrawal queue
+     * @dev Same as getDefaultQueue()
+     * @return queue Array of strategy addresses in withdrawal priority order
      */
     function defaultQueue() external view override returns (address[] memory) {
         return _defaultQueue;
     }
 
     /**
-     * @notice Get the maximum amount of assets that can be deposited.
-     * @param receiver_ The address that will receive the shares.
-     * @return The maximum amount of assets that can be deposited.
+     * @notice Returns maximum assets that can be deposited for a receiver
+     * @dev Checks against depositLimit or depositLimitModule (if set)
+     *      Returns 0 if receiver is vault address or zero address
+     * @param receiver_ Address that would receive the shares
+     * @return max Maximum deposit amount (0 if deposits disabled)
      */
     function maxDeposit(address receiver_) external view override returns (uint256) {
         return _maxDeposit(receiver_);
     }
 
     /**
-     * @notice Get the maximum amount of shares that can be minted.
-     * @param receiver_ The address that will receive the shares.
-     * @return The maximum amount of shares that can be minted.
+     * @notice Returns maximum shares that can be minted for a receiver
+     * @dev Converts maxDeposit to shares using current PPS
+     * @param receiver_ Address that would receive the shares
+     * @return max Maximum mint amount (0 if deposits disabled)
      */
     function maxMint(address receiver_) external view override returns (uint256) {
         uint256 maxDepositAmount = _maxDeposit(receiver_);
@@ -1120,14 +1635,23 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Get the maximum amount of assets that can be withdrawn.
-     * @dev Complies to normal 4626 interface and takes custom params.
-     * NOTE: Passing in a incorrectly ordered queue may result in
-     *       incorrect returns values.
-     * @param owner_ The address that owns the shares.
-     * @param maxLoss_ Custom max_loss if any.
-     * @param strategiesArray_ Custom strategies queue if any.
-     * @return The maximum amount of assets that can be withdrawn.
+     * @notice Returns maximum assets that owner can withdraw
+     * @dev ERC4626-extended with custom loss tolerance and withdrawal queue
+     *
+     *      CALCULATION:
+     *      1. Calculates owner's share value in assets
+     *      2. Checks idle assets availability
+     *      3. Simulates withdrawal through strategy queue
+     *      4. Accounts for unrealized losses per maxLoss tolerance
+     *      5. Checks withdrawLimitModule if set
+     *
+     *      WARNING: Incorrect queue ordering may return inaccurate values
+     *      Use default queue or ensure custom queue is properly ordered
+     *
+     * @param owner_ Address that owns the shares
+     * @param maxLoss_ Maximum acceptable loss in basis points (0-10000)
+     * @param strategiesArray_ Custom withdrawal queue (empty = use default)
+     * @return max Maximum withdrawable assets
      */
     function maxWithdraw(
         address owner_,
@@ -1138,14 +1662,18 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Get the maximum amount of shares that can be redeemed.
-     * @dev Complies to normal 4626 interface and takes custom params.
-     * NOTE: Passing in a incorrectly ordered queue may result in
-     *       incorrect returns values.
-     * @param owner_ The address that owns the shares.
-     * @param maxLoss_ Custom max_loss if any.
-     * @param strategiesArray_ Custom strategies queue if any.
-     * @return The maximum amount of shares that can be redeemed.
+     * @notice Returns maximum shares that owner can redeem
+     * @dev ERC4626-extended with custom loss tolerance and withdrawal queue
+     *      Returns minimum of:
+     *      - Shares equivalent of maxWithdraw
+     *      - Owner's full share balance
+     *
+     *      WARNING: Incorrect queue ordering may return inaccurate values
+     *
+     * @param owner_ Address that owns the shares
+     * @param maxLoss_ Maximum acceptable loss in basis points (0-10000)
+     * @param strategiesArray_ Custom withdrawal queue (empty = use default)
+     * @return max Maximum redeemable shares
      */
     function maxRedeem(
         address owner_,
@@ -1161,45 +1689,62 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Preview the amount of shares that would be redeemed for a withdraw.
-     * @param assets_ The amount of assets to withdraw.
-     * @return The amount of shares that would be redeemed.
+     * @notice Previews shares that would be burned for an asset withdrawal
+     * @dev Uses ROUND_UP (favors vault, user burns slightly more shares)
+     * @param assets_ Amount of assets to withdraw
+     * @return shares Amount of shares that would be burned
      */
     function previewWithdraw(uint256 assets_) external view override returns (uint256) {
         return _convertToShares(assets_, Rounding.ROUND_UP);
     }
 
     /**
-     * @notice Preview the amount of assets that would be withdrawn for a redeem.
-     * @param shares_ The amount of shares to redeem.
-     * @return The amount of assets that would be withdrawn.
+     * @notice Previews assets that would be withdrawn for a share redemption
+     * @dev Uses ROUND_DOWN (favors vault, user receives slightly less assets)
+     *      Actual withdrawal may be less if losses occur
+     * @param shares_ Amount of shares to redeem
+     * @return assets Amount of assets that would be withdrawn
      */
     function previewRedeem(uint256 shares_) external view override returns (uint256) {
         return _convertToAssets(shares_, Rounding.ROUND_DOWN);
     }
 
+    // ============================================
+    // VIEW FUNCTIONS - VAULT METADATA
+    // ============================================
+
     /**
-     * @notice Address of the factory that deployed the vault.
-     * @dev Is used to retrieve the protocol fees.
-     * @return Address of the vault factory.
+     * @notice Returns the factory address that deployed this vault
+     * @dev Used to query protocol fee configuration
+     * @return factory Address of MultistrategyVaultFactory
      */
     function FACTORY() external view override returns (address) {
         return _factory;
     }
 
     /**
-     * @notice Get the API version of the vault.
-     * @return The API version of the vault.
+     * @notice Returns the API version of this vault implementation
+     * @dev Based on Yearn V3 vault versioning
+     * @return version API version string (e.g., "3.0.4")
      */
     function apiVersion() external pure override returns (string memory) {
         return API_VERSION;
     }
 
+    // ============================================
+    // VIEW FUNCTIONS - STRATEGY QUERIES
+    // ============================================
+
     /**
-     * @notice Assess the share of unrealised losses that a strategy has.
-     * @param strategy_ The address of the strategy.
-     * @param assetsNeeded_ The amount of assets needed to be withdrawn.
-     * @return The share of unrealised losses that the strategy has.
+     * @notice Calculates the unrealized losses for a withdrawal from strategy
+     * @dev Compares strategy's actual asset value vs recorded debt
+     *      If strategy is underwater, user takes proportional share of loss
+     *
+     *      Formula: loss = assetsNeeded - (assetsNeeded * strategyAssets / currentDebt)
+     *
+     * @param strategy_ Address of the strategy
+     * @param assetsNeeded_ Amount of assets to withdraw from strategy
+     * @return loss User's share of unrealized losses
      */
     function assessShareOfUnrealisedLosses(address strategy_, uint256 assetsNeeded_) external view returns (uint256) {
         uint256 currentDebt = _strategies[strategy_].currentDebt;
@@ -1208,39 +1753,54 @@ contract MultistrategyVault is IMultistrategyVault {
         return _assessShareOfUnrealisedLosses(strategy_, currentDebt, assetsNeeded_);
     }
 
+    // ============================================
+    // VIEW FUNCTIONS - PROFIT LOCKING
+    // ============================================
+
     /**
-     * @notice Gets the current time profits are set to unlock over.
-     * @return The current profit max unlock time.
+     * @notice Returns the configured profit unlocking duration
+     * @dev Time period over which new profits are gradually released
+     * @return duration Unlock duration in seconds (0-31556952, max 1 year)
      */
     function profitMaxUnlockTime() external view override returns (uint256) {
         return _profitMaxUnlockTime;
     }
 
     /**
-     * @notice Gets the timestamp at which all profits will be unlocked.
-     * @return The full profit unlocking timestamp
+     * @notice Returns when all currently locked profits will be fully unlocked
+     * @dev Unix timestamp. Returns 0 if no profits are locked
+     * @return timestamp Unix timestamp in seconds (0 = no active unlocking)
      */
     function fullProfitUnlockDate() external view override returns (uint256) {
         return _fullProfitUnlockDate;
     }
 
     /**
-     * @notice The per second rate at which profits are unlocking.
-     * @dev This is denominated in EXTENDED_BPS decimals.
-     * @return The current profit unlocking rate.
+     * @notice Returns the per-second profit unlock rate
+     * @dev Denominated in MAX_BPS_EXTENDED precision (1e12)
+     *      Rate = (totalLockedShares * MAX_BPS_EXTENDED) / unlockPeriod
+     * @return rate Shares unlocked per second (in 1e12 precision)
      */
     function profitUnlockingRate() external view override returns (uint256) {
         return _profitUnlockingRate;
     }
 
     /**
-     * @notice The timestamp of the last time shares were locked.
-     * @return The last profit update.
+     * @notice Returns when profit unlocking was last updated
+     * @dev Updated whenever shares are locked (during processReport)
+     * @return timestamp Unix timestamp in seconds
      */
     function lastProfitUpdate() external view override returns (uint256) {
         return _lastProfitUpdate;
     }
 
+    /**
+     * @notice Assess the share of unrealised losses that a strategy has.
+     * @param strategy The address of the strategy.
+     * @param currentDebt The current debt of the strategy
+     * @param assetsNeeded The amount of assets needed to be withdrawn
+     * @return The share of unrealised losses that the strategy has
+     */
     function assessShareOfUnrealisedLosses(
         address strategy,
         uint256 currentDebt,
@@ -1268,18 +1828,24 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Get the strategy parameters for a given strategy.
-     * @param strategy_ The address of the strategy.
-     * @return The strategy parameters.
+     * @notice Returns the parameters for a specific strategy
+     * @dev Returns full StrategyParams struct including activation, lastReport, currentDebt, maxDebt
+     * @param strategy_ Address of the strategy to query
+     * @return params Strategy parameters struct
      */
     function strategies(address strategy_) external view returns (StrategyParams memory) {
         return _strategies[strategy_];
     }
 
-    /// SHARE MANAGEMENT ///
-    /// ERC20 ///
+    // ============================================
+    // INTERNAL FUNCTIONS - ERC20
+    // ============================================
+
     /**
      * @dev Spends allowance from owner to spender
+     * @param owner_ Owner of the shares
+     * @param spender_ Address spending the shares
+     * @param amount_ Amount of allowance to spend
      */
     function _spendAllowance(address owner_, address spender_, uint256 amount_) internal {
         // Unlimited approval does nothing (saves an SSTORE)
@@ -1291,7 +1857,10 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @dev Transfers tokens from sender to receiver
+     * @dev Transfers shares from sender to receiver
+     * @param sender_ Address sending shares
+     * @param receiver_ Address receiving shares
+     * @param amount_ Amount of shares to transfer
      */
     function _transfer(address sender_, address receiver_, uint256 amount_) internal virtual {
         uint256 senderBalance = _balanceOf[sender_];
@@ -1302,7 +1871,11 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @dev Sets approval of spender for owner's tokens
+     * @dev Sets approval of spender for owner's shares
+     * @param owner_ Owner granting approval
+     * @param spender_ Address being approved
+     * @param amount_ Amount of shares approved
+     * @return success True on success
      */
     function _approve(address owner_, address spender_, uint256 amount_) internal returns (bool) {
         allowance[owner_][spender_] = amount_;
@@ -1312,6 +1885,14 @@ contract MultistrategyVault is IMultistrategyVault {
 
     /**
      * @dev Implementation of the permit function (EIP-2612)
+     * @param owner_ Owner granting approval
+     * @param spender_ Address being approved
+     * @param amount_ Amount of shares approved
+     * @param deadline_ Expiration timestamp
+     * @param v_ Signature v component
+     * @param r_ Signature r component
+     * @param s_ Signature s component
+     * @return success True on success
      */
     function _permit(
         address owner_,
@@ -1332,8 +1913,8 @@ contract MultistrategyVault is IMultistrategyVault {
                 keccak256(abi.encode(PERMIT_TYPE_HASH, owner_, spender_, amount_, nonce, deadline_))
             )
         );
-        address recoveredAddress = ecrecover(digest, v_, r_, s_);
-        require(recoveredAddress != address(0) && recoveredAddress == owner_, InvalidSignature());
+        (address recoveredAddress, , ) = ECDSA.tryRecover(digest, v_, r_, s_);
+        require(recoveredAddress == owner_, InvalidSignature());
 
         allowance[owner_][spender_] = amount_;
         nonces[owner_] = nonce + 1;
@@ -1343,6 +1924,8 @@ contract MultistrategyVault is IMultistrategyVault {
 
     /**
      * @dev Burns shares from an account
+     * @param shares_ Amount of shares to burn
+     * @param owner_ Address to burn shares from
      */
     function _burnShares(uint256 shares_, address owner_) internal {
         _balanceOf[owner_] -= shares_;
@@ -1351,7 +1934,8 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @dev Returns the amount of shares that have been unlocked
+     * @dev Calculates amount of profit shares that have unlocked since last update
+     * @return unlockedSharesAmount Amount of shares unlocked
      */
     function _unlockedShares() internal view returns (uint256) {
         uint256 fullProfitUnlockDateVar = _fullProfitUnlockDate;
@@ -1369,7 +1953,8 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @dev Returns the total supply accounting for unlocked shares
+     * @dev Returns circulating supply excluding locked shares
+     * @return supply Total supply minus unlocked shares
      */
     function _totalSupply() internal view returns (uint256) {
         // Need to account for the shares issued to the vault that have unlocked.
@@ -1377,14 +1962,18 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @dev Returns the total assets (idle + debt)
+     * @dev Returns total assets under management
+     * @return assets Sum of idle and debt
      */
     function _totalAssets() internal view returns (uint256) {
         return _totalIdle + _totalDebt;
     }
 
     /**
-     * @dev Converts shares to assets
+     * @dev Converts shares to assets with rounding control
+     * @param shares_ Amount of shares to convert
+     * @param rounding_ Rounding direction (ROUND_UP or ROUND_DOWN)
+     * @return assets Equivalent amount of assets
      */
     function _convertToAssets(uint256 shares_, Rounding rounding_) internal view returns (uint256) {
         if (shares_ == type(uint256).max || shares_ == 0) {
@@ -1408,7 +1997,10 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @dev Converts assets to shares
+     * @dev Converts assets to shares with rounding control
+     * @param assets_ Amount of assets to convert
+     * @param rounding_ Rounding direction (ROUND_UP or ROUND_DOWN)
+     * @return shares Equivalent amount of shares
      */
     function _convertToShares(uint256 assets_, Rounding rounding_) internal view returns (uint256) {
         if (assets_ == type(uint256).max || assets_ == 0) {
@@ -1440,7 +2032,9 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @dev Issues shares to a recipient
+     * @dev Mints shares to a recipient
+     * @param shares_ Amount of shares to mint
+     * @param recipient_ Address to receive shares
      */
     function _issueShares(uint256 shares_, address recipient_) internal {
         _balanceOf[recipient_] += shares_;
@@ -1448,10 +2042,14 @@ contract MultistrategyVault is IMultistrategyVault {
         emit Transfer(address(0), recipient_, shares_);
     }
 
-    /// ERC4626 ///
+    // ============================================
+    // INTERNAL FUNCTIONS - ERC4626
+    // ============================================
 
     /**
-     * @dev Returns the maximum deposit possible for a receiver
+     * @dev Calculates maximum deposit possible for a receiver
+     * @param receiver_ Address that would receive shares
+     * @return max Maximum deposit amount
      */
     function _maxDeposit(address receiver_) internal view returns (uint256) {
         if (receiver_ == address(0) || receiver_ == address(this)) {
@@ -1480,7 +2078,11 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @dev Returns the maximum amount an owner can withdraw
+     * @dev Calculates maximum withdrawal possible for an owner
+     * @param owner_ Address that owns shares
+     * @param maxLoss_ Maximum acceptable loss in basis points
+     * @param strategiesParam_ Custom withdrawal queue
+     * @return max Maximum withdrawable assets
      */
     function _maxWithdraw(
         address owner_,
@@ -1581,7 +2183,10 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @dev Handles deposit logic
+     * @dev Handles deposit logic with idle tracking and auto-allocation
+     * @param recipient_ Address to receive shares
+     * @param assets_ Amount of assets to deposit
+     * @param shares_ Amount of shares to mint
      */
     function _deposit(address recipient_, uint256 assets_, uint256 shares_) internal {
         require(assets_ <= _maxDeposit(recipient_), ExceedDepositLimit());
@@ -1608,7 +2213,11 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @dev Returns share of unrealized losses
+     * @dev Calculates user's share of unrealized losses from a strategy
+     * @param strategy_ Strategy address
+     * @param strategyCurrentDebt_ Strategy's recorded debt
+     * @param assetsNeeded_ Amount to withdraw
+     * @return loss User's proportional share of losses
      */
     function _assessShareOfUnrealisedLosses(
         address strategy_,
@@ -1632,9 +2241,14 @@ contract MultistrategyVault is IMultistrategyVault {
         return usersShareOfLoss;
     }
 
-    /// STRATEGY MANAGEMENT ///
+    // ============================================
+    // INTERNAL FUNCTIONS - STRATEGY MANAGEMENT
+    // ============================================
+
     /**
-     * @dev Adds a new strategy
+     * @dev Adds and initializes a new strategy
+     * @param newStrategy_ Strategy address to add
+     * @param addToQueue_ Whether to add to default queue
      */
     function _addStrategy(address newStrategy_, bool addToQueue_) internal {
         // Validate the strategy
@@ -1664,7 +2278,15 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @dev Redeems shares from strategies
+     * @dev Handles redemption logic including strategy withdrawals
+     * @param sender_ Caller initiating redemption
+     * @param receiver_ Address to receive assets
+     * @param owner_ Address whose shares are burned
+     * @param assets_ Target amount of assets
+     * @param shares_ Amount of shares to burn
+     * @param maxLoss_ Maximum acceptable loss in basis points
+     * @param strategiesParam_ Custom withdrawal queue
+     * @return withdrawn Actual amount of assets withdrawn
      */
     function _redeem(
         address sender_,
@@ -1867,7 +2489,9 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @dev Revokes a strategy
+     * @dev Revokes a strategy and handles loss accounting if forced
+     * @param strategy Strategy address to revoke
+     * @param force Whether to force revoke with debt
      */
     function _revokeStrategy(address strategy, bool force) internal {
         require(_strategies[strategy].activation != 0, StrategyNotActive());
@@ -1918,14 +2542,17 @@ contract MultistrategyVault is IMultistrategyVault {
         emit StrategyChanged(strategy, StrategyChangeType.REVOKED);
     }
 
-    /// ERC20 SAFE OPERATIONS ///
+    // ============================================
+    // INTERNAL FUNCTIONS - SAFE ERC20 OPERATIONS
+    // ============================================
 
     /**
-     * @dev Safely transfer ERC20 tokens from one address to another, handling non-standard implementations
-     * @param token The token to transfer
-     * @param sender The address to transfer from
-     * @param receiver The address to transfer to
-     * @param amount The amount to transfer
+     * @dev Safely transfers ERC20 tokens handling non-standard implementations
+     * @dev Handles tokens that don't return bool (e.g., USDT)
+     * @param token Token address
+     * @param sender Address to transfer from
+     * @param receiver Address to transfer to
+     * @param amount Amount to transfer
      */
     function _safeTransferFrom(address token, address sender, address receiver, uint256 amount) internal {
         (bool success, bytes memory data) = token.call(
@@ -1935,10 +2562,11 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @dev Safely transfer ERC20 tokens, handling non-standard implementations
-     * @param token The token to transfer
-     * @param receiver The address to transfer to
-     * @param amount The amount to transfer
+     * @dev Safely transfers ERC20 tokens handling non-standard implementations
+     * @dev Handles tokens that don't return bool (e.g., USDT)
+     * @param token Token address
+     * @param receiver Address to transfer to
+     * @param amount Amount to transfer
      */
     function _safeTransfer(address token, address receiver, uint256 amount) internal {
         (bool success, bytes memory data) = token.call(

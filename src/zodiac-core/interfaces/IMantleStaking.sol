@@ -1,8 +1,10 @@
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: MIT
 pragma solidity >=0.8.18;
 
 /**
  * @title IMantleStaking
+ * @author [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
  * @notice Interface for the Mantle staking contract
  */
 interface IMantleStaking {

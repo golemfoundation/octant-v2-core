@@ -1,5 +1,55 @@
 
 
+## [0.9.0-develop.0](https://github.com/golemfoundation/octant-v2-core/compare/v0.8.0-develop.0...v0.9.0-develop.0) (2025-12-05)
+
+
+### Features
+
+* add centralized network-aware address registry ([3901fa4](https://github.com/golemfoundation/octant-v2-core/commit/3901fa4264fb32541ed9de14ff64d41a14c231de))
+* add deployment logic for all contracts ([401e1b8](https://github.com/golemfoundation/octant-v2-core/commit/401e1b817f858bc59b7b0b5adbfb358a00f7c130))
+
+
+### Bug Fixes
+
+* **scripts:** patch the multisend contract addres for safe tx batching ([e96904e](https://github.com/golemfoundation/octant-v2-core/commit/e96904e8d98bf56905d3b1b29a6976c82cceb85c))
+
+## [0.8.0](https://github.com/golemfoundation/octant-v2-core/compare/v0.1.2...v0.8.0) (2025-11-20)
+
+
+### Features
+
+* add cancelRegenGovernance ([45c936b](https://github.com/golemfoundation/octant-v2-core/commit/45c936b00f587cfa6cccd6f5959a801f9c6ba9ac))
+* add cancelRegenGovernance to IMultistrategyLockedVault ([b2e535e](https://github.com/golemfoundation/octant-v2-core/commit/b2e535efca4e461aec506b9f0122fea93e08152c))
+* add ERC1271 support to TAM (Cantina 125) ([#287](https://github.com/golemfoundation/octant-v2-core/issues/287)) ([c0ca82e](https://github.com/golemfoundation/octant-v2-core/commit/c0ca82eb22bebb416c9dc992679daebcaffa74bb))
+* **regen:** enable withdrawals when paused for user protection ([#307](https://github.com/golemfoundation/octant-v2-core/issues/307)) ([456b7a4](https://github.com/golemfoundation/octant-v2-core/commit/456b7a43cb81c70d11e4a15d3dab21535179cd7d))
+
+
+### Bug Fixes
+
+* add maxLoss parameters to Morpho freeFund (Cantina 336) ([#264](https://github.com/golemfoundation/octant-v2-core/issues/264)) ([b3c8fb3](https://github.com/golemfoundation/octant-v2-core/commit/b3c8fb3928a8a9fa9dee46830b8e0c0702de2eb3))
+* **cantina-259:** disable delegation in RegenStakerWithoutDelegateSurrogateVotes ([#291](https://github.com/golemfoundation/octant-v2-core/issues/291)) ([651d96b](https://github.com/golemfoundation/octant-v2-core/commit/651d96bb34a92ff42d10ccd4243295083edfff54)), closes [#259](https://github.com/golemfoundation/octant-v2-core/issues/259)
+* expose reward schedule metadata (Cantina 359) ([#300](https://github.com/golemfoundation/octant-v2-core/issues/300)) ([7602b06](https://github.com/golemfoundation/octant-v2-core/commit/7602b069d9b5df64e001265ff09768c62313f0d6))
+* **factory:** use Clones library for deterministic deploys ([e05ebfd](https://github.com/golemfoundation/octant-v2-core/commit/e05ebfdf81ad04da418ed9e6c6d4cac012101e2b))
+* **guards:** initialize ownable state in anti loophole guard ([12aa730](https://github.com/golemfoundation/octant-v2-core/commit/12aa730d0f3389229471428fda4dd3bc5d6e67e8))
+* **multistrategy:** add two-step governance transfer ([03487b1](https://github.com/golemfoundation/octant-v2-core/commit/03487b1d5f8871b46e0fe62c5f1015077955a852))
+* **multistrategy:** enforce grace window for cooldown cancellation ([8b03ba3](https://github.com/golemfoundation/octant-v2-core/commit/8b03ba36d6dc7f5c57d934d9a76261fab74005ca))
+* pause regen rewards when pool idle (Cantina 283 Option 1) ([#280](https://github.com/golemfoundation/octant-v2-core/issues/280)) ([0ef749f](https://github.com/golemfoundation/octant-v2-core/commit/0ef749f495a978d075df6813b1121591dcb79369))
+* **permits:** leverage OpenZeppelin ECDSA helper ([534f959](https://github.com/golemfoundation/octant-v2-core/commit/534f959857c44f1b27a89250d2b474818b6c713d))
+* prevent DoS in MultiStrategyVault when YieldSkimming strategy is insolvent ([96ebf6d](https://github.com/golemfoundation/octant-v2-core/commit/96ebf6d9a2ef41ed0cc02c2bfb8fad6284dac770))
+* **regen:** allow zero-deposit signup contributions ([b2e5b50](https://github.com/golemfoundation/octant-v2-core/commit/b2e5b50b9d716059283d6f00772c5f5e5afec446))
+* **regen:** eliminate fee collection to prevent dust accumulation and simplify code ([#283](https://github.com/golemfoundation/octant-v2-core/issues/283)) ([eb1d444](https://github.com/golemfoundation/octant-v2-core/commit/eb1d444579e3804d8c01a15989aa96d7a6f30ceb)), closes [#564](https://github.com/golemfoundation/octant-v2-core/issues/564) [/github.com/golemfoundation/octant-v2-core/pull/283#discussion_r2423688515](https://github.com/golemfoundation//github.com/golemfoundation/octant-v2-core/pull/283/issues/discussion_r2423688515)
+* **regen:** pause bump earning power when halted ([466fdb6](https://github.com/golemfoundation/octant-v2-core/commit/466fdb6a322f6497303543f3649e61fb1f6a2251))
+* **yield-donating:** emit donation events in shares ([62b7132](https://github.com/golemfoundation/octant-v2-core/commit/62b7132bca7ac7b27024c271d052502b6e05b06c))
+
+## [0.7.2-develop.0](https://github.com/golemfoundation/octant-v2-core/compare/v0.7.1-develop.0...v0.7.2-develop.0) (2025-09-25)
+
+## [0.7.1-develop.0](https://github.com/golemfoundation/octant-v2-core/compare/v0.7.0-develop.0...v0.7.1-develop.0) (2025-09-24)
+
+
+### Bug Fixes
+
+* **natspec:** revert to unnamed returns in BaseStrategy and adjust [@return](https://github.com/return) tags accordingly ([40b2c0b](https://github.com/golemfoundation/octant-v2-core/commit/40b2c0ba785c1e648193342a0458e631b07dc20a))
+
 ## [0.7.0-develop.0](https://github.com/golemfoundation/octant-v2-core/compare/v0.6.0-develop.0...v0.7.0-develop.0) (2025-09-09)
 
 

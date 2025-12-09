@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
+import { AccessMode } from "src/constants.sol";
 import { Test } from "forge-std/Test.sol";
 import { RegenStakerWithoutDelegateSurrogateVotes } from "src/regen/RegenStakerWithoutDelegateSurrogateVotes.sol";
+import { RegenStakerBase } from "src/regen/RegenStakerBase.sol";
 import { RegenEarningPowerCalculator } from "src/regen/RegenEarningPowerCalculator.sol";
 import { MockERC20Staking } from "test/mocks/MockERC20Staking.sol";
 import { MockERC20 } from "test/mocks/MockERC20.sol";
-import { Whitelist } from "src/utils/Whitelist.sol";
+import { AddressSet } from "src/utils/AddressSet.sol";
+import { IAddressSet } from "src/utils/IAddressSet.sol";
 import { Staker } from "staker/Staker.sol";
 
 /**
@@ -28,9 +31,14 @@ contract REG007WithdrawalLockupDemoTest is Test {
         address admin = makeAddr("admin");
         MockERC20 rewardToken = new MockERC20(18);
         stakeToken = new MockERC20Staking(18);
-        Whitelist stakerWhitelist = new Whitelist();
-        Whitelist earningPowerWhitelist = new Whitelist();
-        RegenEarningPowerCalculator calc = new RegenEarningPowerCalculator(address(this), earningPowerWhitelist);
+        AddressSet stakerAllowset = new AddressSet();
+        AddressSet earningPowerAllowset = new AddressSet();
+        RegenEarningPowerCalculator calc = new RegenEarningPowerCalculator(
+            address(this),
+            earningPowerAllowset,
+            IAddressSet(address(0)),
+            AccessMode.ALLOWSET
+        );
 
         regenStaker = new RegenStakerWithoutDelegateSurrogateVotes(
             rewardToken,
@@ -40,14 +48,14 @@ contract REG007WithdrawalLockupDemoTest is Test {
             admin,
             30 days,
             0,
-            0,
-            stakerWhitelist,
-            new Whitelist(),
-            new Whitelist()
+            stakerAllowset,
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            new AddressSet()
         );
 
-        stakerWhitelist.addToWhitelist(user);
-        earningPowerWhitelist.addToWhitelist(user);
+        stakerAllowset.add(user);
+        earningPowerAllowset.add(user);
         stakeToken.mint(user, STAKE_AMOUNT);
     }
 

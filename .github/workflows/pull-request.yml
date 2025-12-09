@@ -22,8 +22,6 @@ jobs:
 
   build:
     name: Build
-    needs:
-      - lint-and-format
     runs-on: general
     container:
       image: ${{ vars.GCP_DOCKER_IMAGE_REGISTRY }}/node-extended:f4f41461
@@ -44,7 +42,6 @@ jobs:
 
   test:
     name: Test suite
-    needs: build
     runs-on: general
     container:
       image: ${{ vars.GCP_DOCKER_IMAGE_REGISTRY }}/node-extended:f4f41461
@@ -82,8 +79,9 @@ jobs:
           path: reports/junit.xml
 
       - name: Prepare test report
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@v2
         if: success() || failure()        # run this step even if previous step failed
+        continue-on-error: true
         with:
           artifact: test-results            # artifact name
           name: Tests results                # Name of the check run which will be created
@@ -92,8 +90,6 @@ jobs:
 
   coverage:
     name: Code Coverage
-    needs:
-      - build
     runs-on: general
     container:
       image: ${{ vars.GCP_DOCKER_IMAGE_REGISTRY }}/node-extended:f4f41461

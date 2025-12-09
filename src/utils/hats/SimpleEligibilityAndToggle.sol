@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.19;
 
 import { IHatsEligibility } from "src/utils/hats/interfaces/IHatsEligibility.sol";
@@ -6,6 +6,8 @@ import { IHatsToggle } from "src/utils/hats/interfaces/IHatsToggle.sol";
 
 /**
  * @title SimpleEligibilityAndToggle
+ * @author [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
  * @notice A simple pass-through implementation of IHatsEligibility and IHatsToggle
  * @dev Always returns true for both eligibility and toggle checks
  */

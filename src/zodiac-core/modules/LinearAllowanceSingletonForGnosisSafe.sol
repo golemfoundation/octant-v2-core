@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.0;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -17,23 +17,61 @@ interface ISafe {
     ) external returns (bool success);
 }
 
-/// @title LinearAllowanceSingletonForGnosisSafe
-/// @author [Golem Foundation](https://golem.foundation)
-/// @notice See ILinearAllowanceSingletonForGnosisSafe
+/**
+ * @title LinearAllowanceSingletonForGnosisSafe
+ * @author [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
+ * @notice Singleton contract managing linear allowances for Gnosis Safes
+ * @dev Enables Safes to grant delegates time-based spending allowances that accrue linearly
+ *
+ *      LINEAR ALLOWANCE MECHANISM:
+ *      - Safe sets dripRatePerDay for delegate + token pair
+ *      - Allowance accrues at dripRatePerDay / 86400 per second
+ *      - Delegate can spend up to accrued amount via executeAllowanceTransfer()
+ *      - Unspent allowance carries over (totalUnspent tracks balance)
+ *
+ *      EXAMPLE:
+ *      - Safe sets 100 DAI/day drip rate for delegate
+ *      - After 12 hours: 50 DAI available
+ *      - Delegate spends 30 DAI → 20 DAI unspent
+ *      - After 24 more hours: 20 + 100 = 120 DAI available
+ *
+ *      FEATURES:
+ *      - Multiple delegates per Safe
+ *      - Multiple tokens per delegate
+ *      - Batch operations for gas efficiency
+ *      - ETH support via NATIVE_TOKEN constant
+ *      - Reentrancy protected
+ *
+ *      USE CASES:
+ *      - Recurring payments to contributors
+ *      - Automated treasury operations
+ *      - Streaming payment schedules
+ *
+ *      SECURITY MODEL:
+ *      - Safe has full control (set/revoke allowances)
+ *      - Delegates can only spend within accrued limits
+ *      - Transfers limited by min(accrued, Safe balance)
+ *      - CEI pattern (Checks-Effects-Interactions) enforced
+ *
+ * @custom:security Singleton pattern - one deployment serves all Safes
+ * @custom:security Fee-on-transfer tokens NOT supported (balance checks would fail)
+ */
 contract LinearAllowanceSingletonForGnosisSafe is ILinearAllowanceSingleton, ReentrancyGuard {
     using SafeCast for uint256;
 
-    mapping(address => mapping(address => mapping(address => LinearAllowance))) public allowances; // safe -> delegate -> token -> allowance
+    /// @notice Mapping of allowances per Safe, delegate, and token
+    /// @dev Structure: Safe address → delegate address → token address → LinearAllowance
+    mapping(address => mapping(address => mapping(address => LinearAllowance))) public allowances;
 
-    /// @inheritdoc ILinearAllowanceSingleton
     function setAllowance(address delegate, address token, uint192 dripRatePerDay) external nonReentrant {
         _setAllowance(msg.sender, delegate, token, dripRatePerDay);
     }
 
     /// @notice Set multiple allowances in a single transaction
-    /// @param delegates Array of delegate addresses
-    /// @param tokens Array of token addresses
-    /// @param dripRatesPerDay Array of drip rates per day
+    /// @param delegates Authorized spender addresses
+    /// @param tokens Token addresses (use NATIVE_TOKEN for ETH)
+    /// @param dripRatesPerDay Drip rates in token base units per day
     function setAllowances(
         address[] calldata delegates,
         address[] calldata tokens,
@@ -65,21 +103,19 @@ contract LinearAllowanceSingletonForGnosisSafe is ILinearAllowanceSingleton, Ree
         }
     }
 
-    /// @inheritdoc ILinearAllowanceSingleton
-    /// @param safe The address of the safe which is the source of the allowance
     function executeAllowanceTransfer(
-        address safe,
+        address source,
         address token,
         address payable to
     ) external nonReentrant returns (uint256) {
-        return _executeAllowanceTransfer(safe, msg.sender, token, to);
+        return _executeAllowanceTransfer(source, msg.sender, token, to);
     }
 
     /// @notice Execute multiple allowance transfers in a single transaction
-    /// @param safes Array of safe addresses that are the source of allowances
-    /// @param tokens Array of token addresses to transfer
-    /// @param tos Array of recipient addresses
-    /// @return transferAmounts Array of amounts transferred for each operation
+    /// @param safes Safe addresses that own the allowances
+    /// @param tokens Token addresses to transfer (use NATIVE_TOKEN for ETH)
+    /// @param tos Recipient addresses
+    /// @return transferAmounts Amounts transferred for each operation in token base units
     function executeAllowanceTransfers(
         address[] calldata safes,
         address[] calldata tokens,
@@ -101,17 +137,16 @@ contract LinearAllowanceSingletonForGnosisSafe is ILinearAllowanceSingleton, Ree
     }
 
     /// @inheritdoc ILinearAllowanceSingleton
-    /// @param safe The address of the safe which is the source of the allowance
-    function getTotalUnspent(address safe, address delegate, address token) public view returns (uint256) {
-        LinearAllowance memory allowance = allowances[safe][delegate][token];
+    function getTotalUnspent(address source, address delegate, address token) public view returns (uint256) {
+        LinearAllowance memory allowance = allowances[source][delegate][token];
         uint256 newAccrued = _calculateNewAccrued(allowance);
         return allowance.totalUnspent + newAccrued;
     }
 
     /// @notice Get the token balance of a safe
-    /// @param account The account address
-    /// @param token The token address (use NATIVE_TOKEN for ETH)
-    /// @return balance The token balance
+    /// @param account Account address
+    /// @param token Use NATIVE_TOKEN for ETH, otherwise ERC20 address
+    /// @return balance Token balance in token base units
     function getBalance(address account, address token) public view returns (uint256 balance) {
         if (token == NATIVE_TOKEN) {
             balance = address(account).balance;
@@ -120,22 +155,20 @@ contract LinearAllowanceSingletonForGnosisSafe is ILinearAllowanceSingleton, Ree
         }
     }
 
-    /// @inheritdoc ILinearAllowanceSingleton
-    /// @param safe The address of the safe which is the source of the allowance
-    function getMaxWithdrawableAmount(address safe, address delegate, address token) public view returns (uint256) {
-        uint256 totalUnspent = getTotalUnspent(safe, delegate, token);
+    function getMaxWithdrawableAmount(address source, address delegate, address token) public view returns (uint256) {
+        uint256 totalUnspent = getTotalUnspent(source, delegate, token);
         if (totalUnspent == 0) return 0;
 
-        uint256 safeBalance = getBalance(safe, token);
+        uint256 safeBalance = getBalance(source, token);
 
         return totalUnspent <= safeBalance ? totalUnspent : safeBalance;
     }
 
     /// @notice Internal function to set a single allowance
-    /// @param safe The safe address that is setting the allowance
-    /// @param delegate The delegate address receiving the allowance
-    /// @param token The token address for the allowance
-    /// @param dripRatePerDay The drip rate per day for the allowance
+    /// @param safe Safe address setting the allowance
+    /// @param delegate Authorized spender address
+    /// @param token Use NATIVE_TOKEN for ETH, otherwise ERC20 address
+    /// @param dripRatePerDay Drip rate in token base units per day
     function _setAllowance(address safe, address delegate, address token, uint192 dripRatePerDay) internal {
         // Cache storage struct in memory to save gas
         if (delegate == address(0)) revert AddressZeroForArgument("delegate");
@@ -150,9 +183,9 @@ contract LinearAllowanceSingletonForGnosisSafe is ILinearAllowanceSingleton, Ree
     }
 
     /// @notice Internal function to revoke a single allowance
-    /// @param safe The safe address that is revoking the allowance
-    /// @param delegate The delegate address whose allowance is being revoked
-    /// @param token The token address for the allowance
+    /// @param safe Safe address revoking the allowance
+    /// @param delegate Spender whose allowance is revoked
+    /// @param token Use NATIVE_TOKEN for ETH, otherwise ERC20 address
     function _revokeAllowance(address safe, address delegate, address token) internal {
         if (delegate == address(0)) revert AddressZeroForArgument("delegate");
 
@@ -168,11 +201,11 @@ contract LinearAllowanceSingletonForGnosisSafe is ILinearAllowanceSingleton, Ree
     }
 
     /// @notice Internal function to execute a single allowance transfer
-    /// @param safe The safe address that is the source of the allowance
-    /// @param delegate The delegate address executing the transfer
-    /// @param token The token address to transfer
-    /// @param to The recipient address
-    /// @return transferAmount The amount transferred
+    /// @param safe Safe address that owns the allowance
+    /// @param delegate Authorized spender executing the transfer
+    /// @param token Use NATIVE_TOKEN for ETH, otherwise ERC20 address
+    /// @param to Recipient address
+    /// @return transferAmount Amount transferred in token base units
     function _executeAllowanceTransfer(
         address safe,
         address delegate,
@@ -207,11 +240,11 @@ contract LinearAllowanceSingletonForGnosisSafe is ILinearAllowanceSingleton, Ree
 
     /// @notice Execute a transfer from the safe to the recipient
     /// @dev Uses beneficiary balance to check if the transfer was successful; fee-charging tokens are not supported.
-    /// @param safe The safe address executing the transfer
-    /// @param delegate The delegate executing the transfer (for error reporting)
-    /// @param token The token address to transfer
-    /// @param to The recipient address
-    /// @param amount The amount to transfer
+    /// @param safe Safe address executing the transfer
+    /// @param delegate Spender executing transfer (for error reporting)
+    /// @param token Use NATIVE_TOKEN for ETH, otherwise ERC20 address
+    /// @param to Recipient address
+    /// @param amount Amount to transfer in token base units
     function _executeTransfer(address safe, address delegate, address token, address to, uint256 amount) internal {
         uint256 beneficiaryPreBalance = getBalance(to, token);
 

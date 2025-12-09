@@ -1,17 +1,19 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.0;
 
+import { AccessMode } from "src/constants.sol";
 import { Test } from "forge-std/Test.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { RegenStaker } from "src/regen/RegenStaker.sol";
+import { RegenStakerBase } from "src/regen/RegenStakerBase.sol";
 import { Staker } from "staker/Staker.sol";
 import { MockERC20Staking } from "test/mocks/MockERC20Staking.sol";
 import { MockEarningPowerCalculator } from "test/mocks/MockEarningPowerCalculator.sol";
 import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
 import { OctantQFMechanism } from "src/mechanisms/mechanism/OctantQFMechanism.sol";
 import { AllocationConfig } from "src/mechanisms/BaseAllocationMechanism.sol";
-import { Whitelist } from "src/utils/Whitelist.sol";
-import { IWhitelist } from "src/utils/IWhitelist.sol";
+import { AddressSet } from "src/utils/AddressSet.sol";
+import { IAddressSet } from "src/utils/IAddressSet.sol";
 
 /// @title RegenStakerBase Voting Power Assignment Test
 /// @notice Proves that voting power in allocation mechanisms is assigned to the contributor (msg.sender),
@@ -25,9 +27,9 @@ contract RegenStakerBaseVotingPowerAssignmentTest is Test {
     MockERC20Staking public token;
     MockEarningPowerCalculator public earningPowerCalculator;
     OctantQFMechanism public allocationMechanism;
-    Whitelist public stakerWhitelist;
-    Whitelist public contributionWhitelist;
-    Whitelist public allocationWhitelist;
+    AddressSet public stakerAllowset;
+    AddressSet public contributionAllowset;
+    AddressSet public allocationAllowset;
 
     address public admin = makeAddr("admin");
     address public owner;
@@ -65,20 +67,28 @@ contract RegenStakerBaseVotingPowerAssignmentTest is Test {
             gracePeriod: 100,
             owner: admin
         });
-        allocationMechanism = new OctantQFMechanism(address(impl), cfg, 1, 1, address(0));
+        allocationMechanism = new OctantQFMechanism(
+            address(impl),
+            cfg,
+            1,
+            1,
+            IAddressSet(address(0)), // contributionAllowset
+            IAddressSet(address(0)), // contributionBlockset
+            AccessMode.NONE
+        );
 
-        // Deploy and configure whitelists
+        // Deploy and configure allowsets
         vm.startPrank(admin);
-        stakerWhitelist = new Whitelist();
-        contributionWhitelist = new Whitelist();
-        allocationWhitelist = new Whitelist();
+        stakerAllowset = new AddressSet();
+        contributionAllowset = new AddressSet();
+        allocationAllowset = new AddressSet();
 
-        // Add both owner and claimer to necessary whitelists
-        stakerWhitelist.addToWhitelist(owner);
-        stakerWhitelist.addToWhitelist(claimer);
-        contributionWhitelist.addToWhitelist(owner);
-        contributionWhitelist.addToWhitelist(claimer);
-        allocationWhitelist.addToWhitelist(address(allocationMechanism));
+        // Add both owner and claimer to necessary allowsets
+        stakerAllowset.add(owner);
+        stakerAllowset.add(claimer);
+        contributionAllowset.add(owner);
+        contributionAllowset.add(claimer);
+        allocationAllowset.add(address(allocationMechanism));
         vm.stopPrank();
 
         // Deploy RegenStaker with same token for stake/reward
@@ -90,11 +100,11 @@ contract RegenStakerBaseVotingPowerAssignmentTest is Test {
             0, // maxBumpTip
             admin,
             REWARD_DURATION,
-            0, // maxClaimFee
             1e18, // minimumStakeAmount
-            IWhitelist(address(stakerWhitelist)),
-            IWhitelist(address(contributionWhitelist)),
-            IWhitelist(address(allocationWhitelist))
+            IAddressSet(address(stakerAllowset)),
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            IAddressSet(address(allocationAllowset))
         );
 
         // Fund and create deposit with claimer designation
@@ -149,22 +159,21 @@ contract RegenStakerBaseVotingPowerAssignmentTest is Test {
         assertEq(contributed, CONTRIBUTION_AMOUNT, "Contribution amount mismatch");
 
         // CRITICAL ASSERTION: Owner gets the voting power
-        uint256 ownerVotingPower = TokenizedAllocationMechanism(address(allocationMechanism)).getRemainingVotingPower(
-            owner
-        );
+        uint256 ownerVotingPower = TokenizedAllocationMechanism(address(allocationMechanism)).votingPower(owner);
         assertEq(ownerVotingPower, CONTRIBUTION_AMOUNT, "Owner should have voting power equal to contribution");
 
         // CRITICAL ASSERTION: Claimer has NO voting power
-        uint256 claimerVotingPower = TokenizedAllocationMechanism(address(allocationMechanism)).getRemainingVotingPower(
-            claimer
-        );
+        uint256 claimerVotingPower = TokenizedAllocationMechanism(address(allocationMechanism)).votingPower(claimer);
         assertEq(claimerVotingPower, 0, "Claimer should have no voting power when owner contributes");
     }
 
     /// @notice Test that when CLAIMER contributes, CLAIMER gets voting power (NOT owner)
     /// @dev This proves the intended behavior where voting power follows the contributor
     function testVotingPower_ClaimerContribute_ClaimerGetsVotingPower() public {
-        // Create signature for claimer to contribute
+        // Claimer provides signature and receives voting power (claimer autonomy)
+        // Defense-in-depth: deposit.owner must also be eligible (checked separately)
+
+        // Create signature for claimer (who will receive voting power)
         bytes32 domainSeparator = TokenizedAllocationMechanism(address(allocationMechanism)).DOMAIN_SEPARATOR();
         uint256 nonce = TokenizedAllocationMechanism(address(allocationMechanism)).nonces(claimer);
         uint256 deadline = block.timestamp + 1 days;
@@ -193,21 +202,17 @@ contract RegenStakerBaseVotingPowerAssignmentTest is Test {
         // Verify contribution succeeded
         assertEq(contributed, CONTRIBUTION_AMOUNT, "Contribution amount mismatch");
 
-        // CRITICAL ASSERTION: Claimer gets the voting power
-        uint256 claimerVotingPower = TokenizedAllocationMechanism(address(allocationMechanism)).getRemainingVotingPower(
-            claimer
-        );
-        assertEq(claimerVotingPower, CONTRIBUTION_AMOUNT, "Claimer should have voting power equal to contribution");
+        // CRITICAL ASSERTION: Claimer gets the voting power (contributor principle)
+        uint256 claimerVotingPower = TokenizedAllocationMechanism(address(allocationMechanism)).votingPower(claimer);
+        assertEq(claimerVotingPower, CONTRIBUTION_AMOUNT, "Claimer should have voting power as contributor");
 
-        // CRITICAL ASSERTION: Owner has NO voting power (despite rewards coming from their deposit!)
-        uint256 ownerVotingPower = TokenizedAllocationMechanism(address(allocationMechanism)).getRemainingVotingPower(
-            owner
-        );
+        // CRITICAL ASSERTION: Owner has NO voting power
+        uint256 ownerVotingPower = TokenizedAllocationMechanism(address(allocationMechanism)).votingPower(owner);
         assertEq(ownerVotingPower, 0, "Owner should have no voting power when claimer contributes");
     }
 
-    /// @notice Test that both owner and claimer can contribute separately and each gets their own voting power
-    /// @dev This proves voting power accumulates per contributor, regardless of reward source
+    /// @notice Test that both owner and claimer contributions result in each getting their own voting power
+    /// @dev Owner contributes → owner gets voting power, Claimer contributes → claimer gets voting power
     function testVotingPower_BothContribute_EachGetsOwnVotingPower() public {
         uint256 halfContribution = CONTRIBUTION_AMOUNT / 2;
 
@@ -217,23 +222,12 @@ contract RegenStakerBaseVotingPowerAssignmentTest is Test {
         // Second: Claimer contributes the other half
         _contributeAsClaimer(halfContribution);
 
-        // CRITICAL ASSERTIONS: Each has voting power matching their own contribution
-        uint256 ownerVotingPower = TokenizedAllocationMechanism(address(allocationMechanism)).getRemainingVotingPower(
-            owner
-        );
-        uint256 claimerVotingPower = TokenizedAllocationMechanism(address(allocationMechanism)).getRemainingVotingPower(
-            claimer
-        );
+        // CRITICAL ASSERTION: Each contributor gets their own voting power
+        uint256 ownerVotingPower = TokenizedAllocationMechanism(address(allocationMechanism)).votingPower(owner);
+        uint256 claimerVotingPower = TokenizedAllocationMechanism(address(allocationMechanism)).votingPower(claimer);
 
-        assertEq(ownerVotingPower, halfContribution, "Owner voting power should match their contribution");
-        assertEq(claimerVotingPower, halfContribution, "Claimer voting power should match their contribution");
-
-        // Both used the same deposit's rewards, but each got their own voting power
-        assertEq(
-            ownerVotingPower + claimerVotingPower,
-            CONTRIBUTION_AMOUNT,
-            "Total voting power should equal total contributions"
-        );
+        assertEq(ownerVotingPower, halfContribution, "Owner gets voting power from own contribution");
+        assertEq(claimerVotingPower, halfContribution, "Claimer gets voting power from own contribution");
     }
 
     // Helper function to reduce stack depth
@@ -264,6 +258,7 @@ contract RegenStakerBaseVotingPowerAssignmentTest is Test {
 
     // Helper function to reduce stack depth
     function _contributeAsClaimer(uint256 amount) internal {
+        // Claimer provides signature and receives voting power (claimer autonomy)
         bytes32 domainSeparator = TokenizedAllocationMechanism(address(allocationMechanism)).DOMAIN_SEPARATOR();
         uint256 nonce = TokenizedAllocationMechanism(address(allocationMechanism)).nonces(claimer);
         uint256 deadline = block.timestamp + 1 days;
@@ -291,7 +286,7 @@ contract RegenStakerBaseVotingPowerAssignmentTest is Test {
     /// @notice Test that attempting to contribute without proper signature fails
     /// @dev Ensures voting power assignment requires valid authorization
     function testVotingPower_WrongSignature_Reverts() public {
-        // Create signature for owner but try to use it as claimer
+        // Test wrong signature by using an unrelated signer
         bytes32 domainSeparator = TokenizedAllocationMechanism(address(allocationMechanism)).DOMAIN_SEPARATOR();
         uint256 nonce = TokenizedAllocationMechanism(address(allocationMechanism)).nonces(owner);
         uint256 deadline = block.timestamp + 1 days;
@@ -299,22 +294,20 @@ contract RegenStakerBaseVotingPowerAssignmentTest is Test {
         bytes32 typeHash = keccak256(
             bytes("Signup(address user,address payer,uint256 deposit,uint256 nonce,uint256 deadline)")
         );
-        // Sign for owner as user
+        // Sign for owner but with WRONG private key
         bytes32 structHash = keccak256(
             abi.encode(typeHash, owner, address(regenStaker), CONTRIBUTION_AMOUNT, nonce, deadline)
         );
         bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(ownerPk, digest);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(claimerPk, digest); // Wrong signer!
 
-        // Claimer tries to contribute but passes owner's signature - should fail
+        // Try to contribute with wrong signature - should fail
         vm.prank(claimer);
         vm.expectRevert(); // Will revert due to signature mismatch
         regenStaker.contribute(depositId, address(allocationMechanism), CONTRIBUTION_AMOUNT, deadline, v, r, s);
 
         // Verify no voting power was assigned
-        uint256 claimerVotingPower = TokenizedAllocationMechanism(address(allocationMechanism)).getRemainingVotingPower(
-            claimer
-        );
-        assertEq(claimerVotingPower, 0, "Claimer should have no voting power after failed contribution");
+        uint256 ownerVotingPower = TokenizedAllocationMechanism(address(allocationMechanism)).votingPower(owner);
+        assertEq(ownerVotingPower, 0, "Owner should have no voting power after failed contribution");
     }
 }

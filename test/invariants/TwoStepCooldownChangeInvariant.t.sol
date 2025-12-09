@@ -174,7 +174,7 @@ contract TwoStepCooldownChangeInvariantTest is Test {
         vm.stopPrank();
     }
 
-    function invariant_OnlyGovernanceCanFinalize() public {
+    function invariant_AnyoneCanFinalize() public {
         uint256 newPeriod = 14 days;
 
         vm.startPrank(gov);
@@ -184,14 +184,8 @@ contract TwoStepCooldownChangeInvariantTest is Test {
         // Fast forward past delay
         vm.warp(block.timestamp + CHANGE_DELAY + 1);
 
-        // Non-governance cannot finalize
+        // Anyone can finalize (including non-governance)
         vm.startPrank(nonGov);
-        vm.expectRevert(IMultistrategyLockedVault.NotRegenGovernance.selector);
-        vault.finalizeRageQuitCooldownPeriodChange();
-        vm.stopPrank();
-
-        // Governance can finalize
-        vm.startPrank(gov);
         vault.finalizeRageQuitCooldownPeriodChange();
         vm.stopPrank();
 

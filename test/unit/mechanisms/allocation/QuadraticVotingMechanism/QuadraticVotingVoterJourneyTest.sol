@@ -319,6 +319,6 @@ contract QuadraticVotingVoterJourneyTest is Test {
         // Verify vote records
         assertTrue(mechanism.hasVoted(pid1, alice));
         assertTrue(mechanism.hasVoted(pid2, alice));
-        assertEq(_tokenized(address(mechanism)).getRemainingVotingPower(alice), 1000 ether - 200);
+        assertEq(_tokenized(address(mechanism)).votingPower(alice), 1000 ether - 200);
     }
 }

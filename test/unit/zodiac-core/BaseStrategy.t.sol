@@ -8,6 +8,7 @@ import { DragonTokenizedStrategy } from "src/zodiac-core/vaults/DragonTokenizedS
 
 import { Unauthorized, TokenizedStrategy__NotKeeperOrManagement, TokenizedStrategy__NotManagement, TokenizedStrategy__NotOperator } from "src/errors.sol";
 import { ITokenizedStrategy } from "src/zodiac-core/interfaces/ITokenizedStrategy.sol";
+import { NATIVE_TOKEN } from "src/constants.sol";
 
 contract BaseStrategyTest is BaseTest {
     address keeper = makeAddr("keeper");
@@ -25,19 +26,17 @@ contract BaseStrategyTest is BaseTest {
     string public name = "Test Mock Strategy";
     uint256 public maxReportDelay = 9;
 
-    address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE; // using this address to represent native ETH
-
     function setUp() public {
         _configure(true, "eth");
 
         moduleImplementation = new MockStrategy();
-        yieldSource = new MockYieldSource(ETH);
+        yieldSource = new MockYieldSource(NATIVE_TOKEN);
         tokenizedStrategyImplementation = new DragonTokenizedStrategy();
         temps = _testTemps(
             address(moduleImplementation),
             abi.encode(
                 address(tokenizedStrategyImplementation),
-                ETH,
+                NATIVE_TOKEN,
                 address(yieldSource),
                 management,
                 keeper,

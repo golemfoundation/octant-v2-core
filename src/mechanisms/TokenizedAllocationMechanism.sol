@@ -1,28 +1,29 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.20;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import { IERC1271 } from "@openzeppelin/contracts/interfaces/IERC1271.sol";
 
 /// @notice Interface for base allocation mechanism strategy implementations
 /// @dev Follows Yearn V3 pattern where shared implementation calls base strategy via interface
 interface IBaseAllocationStrategy {
-    /// @dev Hook to allow or block registration
+    /// @notice Hook to allow or block registration
     function beforeSignupHook(address user) external returns (bool);
 
-    /// @dev Hook to allow or block proposal creation
+    /// @notice Hook to allow or block proposal creation
     function beforeProposeHook(address proposer) external view returns (bool);
 
-    /// @dev Hook to calculate new voting power on registration
+    /// @notice Hook to calculate new voting power on registration
     function getVotingPowerHook(address user, uint256 deposit) external view returns (uint256);
 
-    /// @dev Hook to validate existence and integrity of a proposal ID
+    /// @notice Hook to validate existence and integrity of a proposal ID
     function validateProposalHook(uint256 pid) external view returns (bool);
 
-    /// @dev Hook to process a vote
+    /// @notice Hook to process a vote
     function processVoteHook(
         uint256 pid,
         address voter,
@@ -31,19 +32,19 @@ interface IBaseAllocationStrategy {
         uint256 oldPower
     ) external returns (uint256 newPower);
 
-    /// @dev Check if proposal met quorum requirement
+    /// @notice Check if proposal met quorum requirement
     function hasQuorumHook(uint256 pid) external view returns (bool);
 
-    /// @dev Hook to convert final vote tallies into vault shares to mint
+    /// @notice Hook to convert final vote tallies into vault shares to mint
     function convertVotesToShares(uint256 pid) external view returns (uint256 sharesToMint);
 
-    /// @dev Hook to modify the behavior of finalizeVoteTally
+    /// @notice Hook to modify the behavior of finalizeVoteTally
     function beforeFinalizeVoteTallyHook() external returns (bool);
 
-    /// @dev Hook to fetch the recipient address for a proposal
+    /// @notice Hook to fetch the recipient address for a proposal
     function getRecipientAddressHook(uint256 pid) external view returns (address recipient);
 
-    /// @dev Hook to perform custom distribution of shares when a proposal is queued
+    /// @notice Hook to perform custom distribution of shares when a proposal is queued
     /// @dev If this returns (true, assetsTransferred), default share minting is skipped and totalAssets is updated
     /// @param recipient Address of the recipient for the proposal
     /// @param sharesToMint Number of shares to distribute/mint to the recipient
@@ -54,17 +55,69 @@ interface IBaseAllocationStrategy {
         uint256 sharesToMint
     ) external returns (bool handled, uint256 assetsTransferred);
 
-    /// @dev Hook to get the available withdraw limit for a share owner
+    /// @notice Hook to get the available withdraw limit for a share owner
     function availableWithdrawLimit(address shareOwner) external view returns (uint256);
 
-    /// @dev Hook to calculate total assets including any matching pools or custom logic
+    /// @notice Hook to calculate total assets including any matching pools or custom logic
     function calculateTotalAssetsHook() external view returns (uint256);
 }
 
-/// @title Tokenized Allocation Mechanism - Shared Implementation
-/// @notice Provides the shared implementation for all allocation mechanisms following the Yearn V3 pattern
-/// @dev This contract handles all standard allocation logic, storage, and state management
-contract TokenizedAllocationMechanism is ReentrancyGuard {
+/**
+ * @title TokenizedAllocationMechanism
+ * @author [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
+ * @notice Shared implementation for allocation/voting mechanisms (Yearn V3 pattern)
+ * @dev Handles all standard voting logic via delegatecall from mechanism proxies
+ *
+ *      PROPOSAL STATE MACHINE:
+ *      ═══════════════════════════════════
+ *      Pending → Active → Tallying → Defeated/Succeeded → Queued → Redeemable → Expired
+ *             ↓
+ *          Canceled
+ *
+ *      STATE DESCRIPTIONS:
+ *      - Pending: Proposal created, waiting for votingDelay
+ *      - Active: Voting period active, users can cast votes
+ *      - Tallying: Voting ended, waiting for finalization
+ *      - Defeated: Voting ended, failed quorum
+ *      - Succeeded: Voting ended, passed quorum
+ *      - Queued: Shares minted, waiting for timelock
+ *      - Redeemable: Timelock passed, within grace period
+ *      - Expired: Grace period passed, redemptions closed
+ *      - Canceled: Proposer canceled (terminal state)
+ *
+ *      LIFECYCLE TIMELINE:
+ *      ═══════════════════════════════════
+ *      T0: Proposal created (Pending)
+ *      T0 + votingDelay: Voting opens (Active)
+ *      T0 + votingDelay + votingPeriod: Voting closes (Tallying)
+ *      Anyone calls finalizeVoteTally(): Defeated or Succeeded
+ *      If Succeeded, anyone calls queue(): Queued (shares minted)
+ *      Queued + timelockDelay: Redeemable (redemptions allowed)
+ *      Redeemable + gracePeriod: Expired (redemptions closed)
+ *
+ *      VOTING MECHANICS:
+ *      ═══════════════════════════════════
+ *      1. Users signup (deposit assets, get voting power)
+ *      2. Proposals created during registration period
+ *      3. Users cast votes (Against/For/Abstain)
+ *      4. Votes finalized after votingPeriod
+ *      5. Successful proposals get shares minted
+ *      6. Recipients redeem shares for assets
+ *
+ *      SECURITY FEATURES:
+ *      ═══════════════════════════════════
+ *      - Timelock: Delay before redemptions (security buffer)
+ *      - Grace Period: Limited redemption window
+ *      - Quorum: Minimum votes required
+ *      - EIP-712: Gasless signups and votes
+ *      - Reentrancy protection
+ *      - Pausability
+ *
+ * @custom:security State machine enforces proper proposal progression
+ * @custom:security Timelock provides security delay before fund distribution
+ */
+contract TokenizedAllocationMechanism is IERC20 {
     using SafeERC20 for IERC20;
     using SafeERC20 for ERC20;
     using Math for uint256;
@@ -77,184 +130,340 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
     error ZeroTimelockDelay();
     error ZeroGracePeriod();
     error ZeroStartBlock();
+    /// @param startTime Proposed start timestamp in seconds
+    /// @param currentTime Current block timestamp in seconds
     error InvalidStartTime(uint256 startTime, uint256 currentTime);
     error EmptyName();
     error EmptySymbol();
+    /// @param user Address attempting to register
     error RegistrationBlocked(address user);
+    /// @param currentTime Current block timestamp in seconds
+    /// @param endTime Voting end timestamp in seconds
     error VotingEnded(uint256 currentTime, uint256 endTime);
+    /// @param user Address that is already registered
     error AlreadyRegistered(address user);
+    /// @param deposit Deposit amount in asset base units (token decimals)
+    /// @param maxAllowed Maximum allowed deposit in asset base units
     error DepositTooLarge(uint256 deposit, uint256 maxAllowed);
+    /// @param votingPower Voting power in shares units in share base units
+    /// @param maxAllowed Maximum allowed voting power in share base units
     error VotingPowerTooLarge(uint256 votingPower, uint256 maxAllowed);
+    /// @param deposit Deposit amount in asset base units (token decimals)
     error InsufficientDeposit(uint256 deposit);
+    /// @param proposer Address attempting to propose
     error ProposeNotAllowed(address proposer);
+    /// @param recipient Invalid recipient address
     error InvalidRecipient(address recipient);
+    /// @param user Invalid user address
     error InvalidUser(address user);
+    /// @param recipient Recipient with an active proposal
     error RecipientUsed(address recipient);
+    /// @param pid Proposal id
+    /// @param expected Expected recipient address
+    /// @param actual Provided recipient address
     error RecipientMismatch(uint256 pid, address expected, address actual);
+    /// @param pid Proposal id
     error DescriptionMismatch(uint256 pid);
     error EmptyDescription();
+    /// @param length Provided description length in bytes
+    /// @param maxLength Maximum allowed length in bytes
     error DescriptionTooLong(uint256 length, uint256 maxLength);
+    /// @param currentTime Current block timestamp in seconds
+    /// @param endTime Voting end timestamp in seconds
     error VotingNotEnded(uint256 currentTime, uint256 endTime);
     error TallyAlreadyFinalized();
     error FinalizationBlocked();
     error TallyNotFinalized();
+    /// @param pid Invalid proposal id
     error InvalidProposal(uint256 pid);
+    /// @param pid Canceled proposal id
     error ProposalCanceledError(uint256 pid);
+    /// @param pid Proposal id
+    /// @param forVotes Total for votes in share base units
+    /// @param againstVotes Total against votes in share base units
+    /// @param required Quorum threshold in shares in share base units
     error NoQuorum(uint256 pid, uint256 forVotes, uint256 againstVotes, uint256 required);
+    /// @param pid Proposal id
     error AlreadyQueued(uint256 pid);
     error QueueingClosedAfterRedemption();
+    /// @param pid Proposal id
+    /// @param sharesToMint Calculated shares to mint in share base units
     error NoAllocation(uint256 pid, uint256 sharesToMint);
+    /// @param requested Assets requested in base units (token decimals)
+    /// @param available Available assets in base units (token decimals)
     error InsufficientAssets(uint256 requested, uint256 available);
+    /// @param currentTime Current block timestamp in seconds
+    /// @param startTime Voting start timestamp in seconds
+    /// @param endTime Voting end timestamp in seconds
     error VotingClosed(uint256 currentTime, uint256 startTime, uint256 endTime);
+    /// @param weight Vote weight in shares in share base units
+    /// @param votingPower Voter's voting power in shares in share base units
     error InvalidWeight(uint256 weight, uint256 votingPower);
+    /// @param weight Vote weight in shares in share base units
+    /// @param maxAllowed Maximum allowed weight in shares in share base units
     error WeightTooLarge(uint256 weight, uint256 maxAllowed);
+    /// @param oldPower Previous voting power in shares in share base units
+    /// @param newPower New voting power in shares in share base units
     error PowerIncreased(uint256 oldPower, uint256 newPower);
+    /// @param caller Caller address
+    /// @param proposer Expected proposer address
     error NotProposer(address caller, address proposer);
+    /// @param pid Proposal id
     error AlreadyCanceled(uint256 pid);
     error Unauthorized();
     error AlreadyInitialized();
     error PausedError();
+    error ReentrantCall();
+    /// @param deadline Signature deadline timestamp in seconds
+    /// @param currentTime Current block timestamp in seconds
     error ExpiredSignature(uint256 deadline, uint256 currentTime);
     error InvalidSignature();
+    /// @param recovered Address recovered from signature
+    /// @param expected Expected signer address
     error InvalidSigner(address recovered, address expected);
 
-    /// @notice Maximum safe value for mathematical operations
+    /// @notice Maximum safe value for internal math to avoid overflows
+    /// @dev Capped at uint128.max to keep intermediate operations within safe bounds
     uint256 public constant MAX_SAFE_VALUE = type(uint128).max;
 
-    /// @notice Storage slot for allocation mechanism data (EIP-1967 pattern)
+    /// @notice Storage slot for allocation mechanism data (EIP-1967-like deterministic slot)
+    /// @dev Calculated as keccak256("tokenized.allocation.storage") - 1 to minimize collision risk
     bytes32 private constant ALLOCATION_STORAGE_SLOT = bytes32(uint256(keccak256("tokenized.allocation.storage")) - 1);
 
-    /// @notice EIP712 Domain separator typehash per EIP-2612
+    /// @notice EIP-712 Domain separator typehash
+    /// @dev Used to compute domain separator for structured data signing
     bytes32 private constant TYPE_HASH =
         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
 
-    /// @notice Signup typehash for EIP712 structured data
+    /// @notice Signup typehash for EIP-712 structured data
+    /// @dev Typed data: Signup(user, payer, deposit, nonce, deadline)
     bytes32 private constant SIGNUP_TYPEHASH =
         keccak256("Signup(address user,address payer,uint256 deposit,uint256 nonce,uint256 deadline)");
 
-    /// @notice CastVote typehash for EIP712 structured data
+    /// @notice CastVote typehash for EIP-712 structured data
+    /// @dev Typed data: CastVote(voter, proposalId, choice, weight, expectedRecipient, nonce, deadline)
     bytes32 private constant CAST_VOTE_TYPEHASH =
         keccak256(
             "CastVote(address voter,uint256 proposalId,uint8 choice,uint256 weight,address expectedRecipient,uint256 nonce,uint256 deadline)"
         );
 
-    /// @notice EIP712 version for domain separator
+    /// @notice EIP-712 version string used in domain separator
+    /// @dev Update only with extreme caution; changing breaks signature domain
     string private constant EIP712_VERSION = "1";
 
-    /// @notice Vote types: Against, For, Abstain
+    // ============================================
+    // ENUMS
+    // ============================================
+
+    /**
+     * @notice Vote types for proposal voting
+     * @dev Used in castVote() to indicate vote direction
+     */
     enum VoteType {
+        /// @notice Vote against the proposal
         Against,
+        /// @notice Vote in favor of the proposal
         For,
+        /// @notice Abstain from voting (recorded but doesn't affect outcome)
         Abstain
     }
 
+    /**
+     * @notice Proposal lifecycle states
+     * @dev State machine progression enforced by contract logic
+     */
     enum ProposalState {
+        /// @notice Created, waiting for votingDelay to pass
         Pending,
+        /// @notice Voting period active, can cast votes
         Active,
+        /// @notice Proposer canceled, terminal state
         Canceled,
+        /// @notice Voting ended, awaiting finalization
         Tallying,
+        /// @notice Finalized, failed quorum (terminal)
         Defeated,
+        /// @notice Finalized, passed quorum, ready to queue
         Succeeded,
+        /// @notice Shares minted, waiting for timelock
         Queued,
+        /// @notice Timelock passed, in grace period (can redeem)
         Redeemable,
+        /// @notice Grace period ended (redemptions closed)
         Expired
     }
 
+    /**
+     * @notice Core proposal data used throughout the allocation mechanism
+     * @dev Stores immutable metadata for a proposal; dynamic tallies are kept elsewhere
+     */
     struct Proposal {
+        /// @notice Number of shares requested if proposal succeeds in share base units
         uint256 sharesRequested;
+        /// @notice Address that created the proposal
         address proposer;
+        /// @notice Intended recipient of minted shares upon queue
         address recipient;
+        /// @notice Human-readable description or rationale for the proposal
         string description;
+        /// @notice True if the proposer canceled the proposal (terminal state)
         bool canceled;
     }
 
     /// @notice Main storage struct containing all allocation mechanism state
+    /// @dev Stored at a deterministic slot; see {ALLOCATION_STORAGE_SLOT}
     struct AllocationStorage {
         // Basic information
+        /// @notice ERC20 name for the shares token
         string name;
+        /// @notice ERC20 symbol for the shares token
         string symbol;
+        /// @notice Underlying ERC20 asset used for deposits and redemptions
         IERC20 asset;
         // Configuration (immutable after initialization)
+        /// @notice Block number at initialization for legacy compatibility (blocks)
         uint256 startBlock;
+        /// @notice Voting delay after start before voting opens (seconds)
         uint256 votingDelay;
+        /// @notice Voting duration once opened (seconds)
         uint256 votingPeriod;
+        /// @notice Timelock duration after queue before redemptions (seconds)
         uint256 timelockDelay;
+        /// @notice Grace period during which redemptions are allowed (seconds)
         uint256 gracePeriod;
+        /// @notice Quorum threshold in shares required for success in share base units
         uint256 quorumShares;
-        uint256 startTime; // Start timestamp for the mechanism
-        uint256 votingStartTime; // startTime + votingDelay (when voting can begin)
-        uint256 votingEndTime; // startTime + votingDelay + votingPeriod (when voting ends)
-        uint256 tallyFinalizedTime; // when finalizeVoteTally() was called
+        /// @notice Mechanism start timestamp (seconds)
+        uint256 startTime;
+        /// @notice Timestamp when voting opens (startTime + votingDelay) (seconds)
+        uint256 votingStartTime;
+        /// @notice Timestamp when voting ends (startTime + votingDelay + votingPeriod) (seconds)
+        uint256 votingEndTime;
+        /// @notice Timestamp when {finalizeVoteTally} was called (seconds)
+        uint256 tallyFinalizedTime;
         // Access control
+        /// @notice Current contract owner authorized to manage configuration
         address owner;
+        /// @notice Pending owner waiting to accept ownership
         address pendingOwner;
+        /// @notice Global pause flag to disable mutating actions
         bool paused;
+        /// @notice True once {initialize} has been successfully called
         bool initialized;
+        // Reentrancy protection
+        /// @notice Reentrancy guard flag (1 = NOT_ENTERED, 2 = ENTERED)
+        uint8 reentrancyStatus;
         // Voting state
+        /// @notice True if vote tally is finalized (post-voting)
         bool tallyFinalized;
+        /// @notice Monotonic counter used to assign new proposal ids
         uint256 proposalIdCounter;
-        uint256 globalRedemptionStart; // Global timestamp when all redemptions and transfers can begin
-        uint256 globalRedemptionEndTime; // Global timestamp when redemption period ends
+        /// @notice Global timestamp when all redemptions and transfers can begin (seconds)
+        uint256 globalRedemptionStart;
+        /// @notice Global timestamp when the redemption period ends (seconds)
+        uint256 globalRedemptionEndTime;
         // Allocation Mechanism Vault Storage (merged from DistributionMechanism)
-        mapping(address => uint256) nonces; // Mapping of nonces used for permit functions
-        mapping(address => uint256) balances; // Mapping to track current balances for each account that holds shares
-        mapping(address => mapping(address => uint256)) allowances; // Mapping to track the allowances for the strategies shares
-        uint256 totalSupply; // The total amount of shares currently issued
-        uint256 totalAssets; // We manually track `totalAssets` to prevent PPS manipulation through airdrops
+        /// @notice Per-address sequential nonces for EIP-712 signatures
+        mapping(address => uint256) nonces;
+        /// @notice Share balances per account in share base units
+        mapping(address => uint256) balances;
+        /// @notice Allowances mapping for share spenders in share base units
+        mapping(address => mapping(address => uint256)) allowances;
+        /// @notice Total number of shares in circulation in share base units
+        uint256 totalSupply;
+        /// @notice Total assets under management in underlying base units
+        /// @dev Manually tracked to prevent PPS manipulation through airdrops
+        uint256 totalAssets;
         // Strategy Management
-        address keeper; // Address given permission to call {report} and {tend}
-        address management; // Main address that can set all configurable variables
-        address emergencyAdmin; // Address to act in emergencies as well as `management`
-        uint8 decimals; // The amount of decimals that `asset` and strategy use
+        /// @notice Address permitted to perform keeper operations
+        address keeper;
+        /// @notice Management address authorized to update configuration
+        address management;
+        /// @notice Decimals used by asset and this shares token
+        uint8 decimals;
         // Mappings
+        /// @notice Mapping from proposal id to stored {Proposal}
         mapping(uint256 => Proposal) proposals;
-        mapping(address => bool) recipientUsed;
+        /// @notice Tracks active proposal id for a given recipient (if any)
+        mapping(address => uint256) activeProposalByRecipient;
+        /// @notice Voting power per user in shares in share base units
         mapping(address => uint256) votingPower;
+        /// @notice Shares allocated to each proposal in share base units
         mapping(uint256 => uint256) proposalShares;
         // EIP712 storage
+        /// @notice Cached EIP-712 domain separator for signatures
         bytes32 domainSeparator; // Cached domain separator
+        /// @notice Chain id used in domain separator to provide fork protection
         uint256 initialChainId; // Chain ID at deployment for fork protection
     }
 
     // ---------- Storage Access for Hooks ----------
 
     /// @notice Emitted when a user completes registration
+    /// @param user Address of the registered user
+    /// @param votingPower Voting power granted (shares, 18 decimals)
     event UserRegistered(address indexed user, uint256 votingPower);
     /// @notice Emitted when a new proposal is created
+    /// @param pid Newly assigned proposal id
+    /// @param proposer Address that created the proposal
+    /// @param recipient Intended recipient of minted shares upon queue
+    /// @param description Human-readable proposal description
     event ProposalCreated(uint256 indexed pid, address indexed proposer, address indexed recipient, string description);
     /// @notice Emitted when a vote is cast
+    /// @param voter Address casting the vote
+    /// @param pid Proposal id being voted on
+    /// @param weight Vote weight used (shares, 18 decimals)
     event VotesCast(address indexed voter, uint256 indexed pid, uint256 weight);
     /// @notice Emitted when vote tally is finalized
     event VoteTallyFinalized();
     /// @notice Emitted when a proposal is queued and shares minted
+    /// @param pid Proposal id being queued
+    /// @param eta Timestamp when timelock elapses and redemptions can begin (seconds)
+    /// @param shareAmount Number of shares minted/allocated in share base units
     event ProposalQueued(uint256 indexed pid, uint256 eta, uint256 shareAmount);
     /// @notice Emitted when a proposal is canceled
+    /// @param pid Proposal id that was canceled
+    /// @param proposer Address of the canceling proposer
     event ProposalCanceled(uint256 indexed pid, address indexed proposer);
     /// @notice Emitted when ownership transfer is initiated
+    /// @param currentOwner Current owner address
+    /// @param pendingOwner Address nominated to become the new owner
     event OwnershipTransferInitiated(address indexed currentOwner, address indexed pendingOwner);
     /// @notice Emitted when ownership transfer is canceled
+    /// @param currentOwner Current owner address
+    /// @param canceledPendingOwner Previously pending owner whose transfer was canceled
     event OwnershipTransferCanceled(address indexed currentOwner, address indexed canceledPendingOwner);
     /// @notice Emitted when ownership is transferred
+    /// @param previousOwner Address of the previous owner
+    /// @param newOwner Address of the new owner
     event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);
     /// @notice Emitted when keeper is updated
+    /// @param previousKeeper Old keeper address
+    /// @param newKeeper New keeper address
     event KeeperUpdated(address indexed previousKeeper, address indexed newKeeper);
     /// @notice Emitted when management is updated
+    /// @param previousManagement Old management address
+    /// @param newManagement New management address
     event ManagementUpdated(address indexed previousManagement, address indexed newManagement);
-    /// @notice Emitted when emergency admin is updated
-    event EmergencyAdminUpdated(address indexed previousEmergencyAdmin, address indexed newEmergencyAdmin);
     /// @notice Emitted when contract is paused/unpaused
+    /// @param paused True if paused, false if unpaused
     event PausedStatusChanged(bool paused);
     /// @notice Emitted when global redemption period is set
+    /// @param redemptionStart Timestamp when global redemptions can begin (seconds)
+    /// @param redemptionEnd Timestamp when global redemptions end (seconds)
     event GlobalRedemptionPeriodSet(uint256 redemptionStart, uint256 redemptionEnd);
     /// @notice Emitted when tokens are swept after grace period
+    /// @param token Token address that was swept
+    /// @param receiver Recipient of swept tokens
+    /// @param amount Amount swept in token base units
     event Swept(address indexed token, address indexed receiver, uint256 amount);
 
     // Additional events from DistributionMechanism
-    /// @notice Emitted when the allowance of a `spender` for an `owner` is set by a call to {approve}. `value` is the new allowance.
-    event Approval(address indexed owner, address indexed spender, uint256 value);
-    /// @notice Emitted when `value` tokens are moved from one account (`from`) to another (`to`).
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    /// @notice Emitted when the `caller` has exchanged `owner`s `shares` for `assets`, and transferred those `assets` to `receiver`.
+    /// @param caller Address initiating the redemption
+    /// @param receiver Address receiving the underlying assets
+    /// @param owner Owner of the shares being redeemed
+    /// @param assets Amount of underlying assets transferred (asset base units)
+    /// @param shares Amount of shares burned in share base units
     event Withdraw(
         address indexed caller,
         address indexed receiver,
@@ -266,7 +475,7 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
     // ---------- Storage Access ----------
 
     /// @notice Get the storage struct from the predefined slot
-    /// @return s The storage struct containing all mutable state
+    /// @return s Storage struct containing all mutable state
     function _getStorage() internal pure returns (AllocationStorage storage s) {
         bytes32 slot = ALLOCATION_STORAGE_SLOT;
         assembly {
@@ -278,6 +487,7 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
     constructor() {
         AllocationStorage storage s = _getStorage();
         s.initialized = true; // Prevent initialization on the library contract
+        s.reentrancyStatus = 1; // Initialize reentrancy guard to NOT_ENTERED
     }
 
     /// @notice Returns the domain separator, updating it if chain ID changed (fork protection)
@@ -321,10 +531,28 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
         _;
     }
 
+    modifier nonReentrant() {
+        AllocationStorage storage s = _getStorage();
+        if (s.reentrancyStatus == 2) revert ReentrantCall();
+        s.reentrancyStatus = 2;
+        _;
+        s.reentrancyStatus = 1;
+    }
+
     // ---------- Initialization ----------
 
     /// @notice Initialize the allocation mechanism with configuration
-    /// @dev Can only be called once by the strategy contract
+    /// @dev Can only be called once by the strategy/clone proxy; subsequent calls revert
+    /// @param _owner Address that will become the owner and management
+    /// @param _asset Underlying ERC20 asset used for deposits/redemptions
+    /// @param _name ERC20 name for the shares token
+    /// @param _symbol ERC20 symbol for the shares token
+    /// @param _votingDelay Delay before voting opens (seconds)
+    /// @param _votingPeriod Duration of the voting phase (seconds)
+    /// @param _quorumShares Quorum threshold (shares, 18 decimals)
+    /// @param _timelockDelay Delay after queueing before redemptions (seconds)
+    /// @param _gracePeriod Duration of redemption window (seconds)
+    /// @custom:security Initialization guarded by `AlreadyInitialized` check
     function initialize(
         address _owner,
         IERC20 _asset,
@@ -350,6 +578,16 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
     }
 
     /// @notice Internal allocation mechanism initialization
+    /// @dev Shared initializer used by {initialize}
+    /// @param _owner Address that will become the owner and management
+    /// @param _asset Underlying ERC20 asset used for deposits/redemptions
+    /// @param _name ERC20 name for the shares token
+    /// @param _symbol ERC20 symbol for the shares token
+    /// @param _votingDelay Delay before voting opens (seconds)
+    /// @param _votingPeriod Duration of the voting phase (seconds)
+    /// @param _quorumShares Quorum threshold (shares, 18 decimals)
+    /// @param _timelockDelay Delay after queueing before redemptions (seconds)
+    /// @param _gracePeriod Duration of redemption window (seconds)
     function _initializeAllocation(
         address _owner,
         IERC20 _asset,
@@ -387,6 +625,7 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
         s.gracePeriod = _gracePeriod;
         s.startBlock = block.number; // Keep for legacy getter compatibility
         s.initialized = true;
+        s.reentrancyStatus = 1; // Initialize reentrancy guard to NOT_ENTERED
 
         // Set timestamp-based timeline starting from deployment time
         s.startTime = block.timestamp;
@@ -396,7 +635,6 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
         // Set management roles to owner
         s.management = _owner;
         s.keeper = _owner;
-        s.emergencyAdmin = _owner;
         s.decimals = ERC20(address(_asset)).decimals();
 
         // Initialize EIP712 domain separator
@@ -409,19 +647,21 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
     // ---------- Registration ----------
 
     /// @notice Register to gain voting power by depositing underlying tokens
-    /// @param deposit Amount of underlying to deposit (may be zero)
+    /// @param deposit Amount of underlying to deposit (asset base units, may be zero)
+    /// @custom:security Reentrancy protected; callable only when not paused
     function signup(uint256 deposit) external nonReentrant whenNotPaused {
         _executeSignup(msg.sender, deposit, msg.sender);
     }
 
-    /// @notice Register on behalf of another user using EIP-2612 style signature
+    /// @notice Register on behalf of another user using EIP-712 signature
     /// @param user Address of the user signing up
-    /// @param deposit Amount of underlying to deposit
-    /// @param deadline Expiration timestamp for the signature
+    /// @param deposit Amount of underlying to deposit (asset base units)
+    /// @param deadline Expiration timestamp for the signature (seconds)
     /// @param v Signature parameter
     /// @param r Signature parameter
     /// @param s Signature parameter
-    /// @dev The deposit will be taken from msg.sender, not the user
+    /// @dev The deposit will be taken from msg.sender, not the user. Increments `nonces[user]`.
+    /// @custom:security Reentrancy protected; callable only when not paused
     function signupOnBehalfWithSignature(
         address user,
         uint256 deposit,
@@ -441,14 +681,15 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
         _executeSignup(user, deposit, msg.sender);
     }
 
-    /// @notice Register with voting power using EIP-2612 style signature
+    /// @notice Register with voting power using EIP-712 signature
     /// @param user Address of the user signing up
-    /// @param deposit Amount of underlying to deposit
-    /// @param deadline Expiration timestamp for the signature
+    /// @param deposit Amount of underlying to deposit (asset base units)
+    /// @param deadline Expiration timestamp for the signature (seconds)
     /// @param v Signature parameter
     /// @param r Signature parameter
     /// @param s Signature parameter
-    /// @dev The deposit will be taken from the user themselves
+    /// @dev The deposit will be taken from the user themselves. Increments `nonces[user]`.
+    /// @custom:security Reentrancy protected; callable only when not paused
     function signupWithSignature(
         address user,
         uint256 deposit,
@@ -468,7 +709,7 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
         _executeSignup(user, deposit, user);
     }
 
-    /// @dev Validates signature parameters
+    /// @dev Validates signature parameters with ERC1271 support for contract signers
     function _validateSignature(
         address expectedSigner,
         bytes32 structHash,
@@ -480,10 +721,33 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
         // Check deadline
         if (block.timestamp > deadline) revert ExpiredSignature(deadline, block.timestamp);
 
-        // Recover signer
-        address recoveredAddress = _recover(structHash, v, r, s);
-        if (recoveredAddress == address(0)) revert InvalidSignature();
-        if (recoveredAddress != expectedSigner) revert InvalidSigner(recoveredAddress, expectedSigner);
+        // Compute EIP712 digest
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR(), structHash));
+
+        // Try ECDSA recovery first
+        (address recovered, , ) = ECDSA.tryRecover(digest, v, r, s);
+
+        // If ECDSA recovery matches expected signer, we're done
+        if (recovered == expectedSigner) {
+            return;
+        }
+
+        // If expectedSigner is a contract, try ERC1271 validation
+        if (expectedSigner.code.length > 0) {
+            // Pack signature components for ERC1271
+            bytes memory signature = abi.encodePacked(r, s, v);
+
+            try IERC1271(expectedSigner).isValidSignature(digest, signature) returns (bytes4 magicValue) {
+                if (magicValue == 0x1626ba7e) {
+                    return; // Valid ERC1271 signature
+                }
+            } catch {
+                // Fall through to revert
+            }
+        }
+
+        // Neither ECDSA nor ERC1271 validation succeeded
+        revert InvalidSigner(recovered, expectedSigner);
     }
 
     /// @dev Internal signup execution logic
@@ -518,18 +782,13 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
         emit UserRegistered(user, newPower);
     }
 
-    /// @dev Recovers signer address from signature
-    function _recover(bytes32 structHash, uint8 v, bytes32 r, bytes32 s) private returns (address) {
-        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", DOMAIN_SEPARATOR(), structHash));
-        return ecrecover(digest, v, r, s);
-    }
-
     // ---------- Proposal Creation ----------
 
     /// @notice Create a new proposal targeting `recipient`
     /// @param recipient Address to receive allocated vault shares upon queue
-    /// @param description Description or rationale for the proposal
+    /// @param description Human-readable description or rationale for the proposal
     /// @return pid Unique identifier for the new proposal
+    /// @custom:security Reentrancy protected; callable only when not paused; subject to strategy hook
     function propose(
         address recipient,
         string calldata description
@@ -548,14 +807,16 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
             revert VotingEnded(block.timestamp, s.votingEndTime);
         }
 
-        if (s.recipientUsed[recipient]) revert RecipientUsed(recipient);
+        if (s.activeProposalByRecipient[recipient] != 0) {
+            revert RecipientUsed(recipient);
+        }
         if (bytes(description).length == 0) revert EmptyDescription();
         if (bytes(description).length > 1000) revert DescriptionTooLong(bytes(description).length, 1000);
 
         pid = ++s.proposalIdCounter;
 
         s.proposals[pid] = Proposal(0, proposer, recipient, description, false);
-        s.recipientUsed[recipient] = true;
+        s.activeProposalByRecipient[recipient] = pid;
 
         emit ProposalCreated(pid, proposer, recipient, description);
     }
@@ -565,8 +826,9 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
     /// @notice Cast a vote on a proposal
     /// @param pid Proposal ID
     /// @param choice VoteType (Against, For, Abstain)
-    /// @param weight Amount of voting power to apply
+    /// @param weight Amount of voting power to apply (shares, 18 decimals)
     /// @param expectedRecipient Expected recipient address to prevent reorganization attacks
+    /// @custom:security Reentrancy protected; callable only when not paused; only during voting window
     function castVote(
         uint256 pid,
         VoteType choice,
@@ -576,16 +838,17 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
         _executeCastVote(msg.sender, pid, choice, weight, expectedRecipient);
     }
 
-    /// @notice Cast vote using EIP-2612 style signature
+    /// @notice Cast vote using EIP-712 signature
     /// @param voter Address of the voter
     /// @param pid Proposal ID
     /// @param choice Vote choice (Against, For, Abstain)
-    /// @param weight Voting weight to use
+    /// @param weight Voting weight to use (shares, 18 decimals)
     /// @param expectedRecipient Expected recipient address for the proposal
-    /// @param deadline Expiration timestamp for the signature
+    /// @param deadline Expiration timestamp for the signature (seconds)
     /// @param v Signature parameter
     /// @param r Signature parameter
     /// @param s Signature parameter
+    /// @custom:security Reentrancy protected; callable only when not paused; only during voting window
     function castVoteWithSignature(
         address voter,
         uint256 pid,
@@ -636,8 +899,9 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
         uint256 votingEnd = s.votingEndTime;
 
         // Check voting window
-        if (block.timestamp < votingStart || block.timestamp > votingEnd)
+        if (block.timestamp < votingStart || block.timestamp > votingEnd) {
             revert VotingClosed(block.timestamp, votingStart, votingEnd);
+        }
 
         uint256 oldPower = s.votingPower[voter];
         if (weight == 0) revert InvalidWeight(weight, oldPower);
@@ -661,6 +925,7 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
     // ---------- Vote Tally Finalization ----------
 
     /// @notice Finalize vote tally once voting period has ended
+    /// @custom:security Only owner; reentrancy protected
     function finalizeVoteTally() external onlyOwner nonReentrant {
         AllocationStorage storage s = _getStorage();
 
@@ -688,6 +953,7 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
 
     /// @notice Queue proposal and trigger share distribution
     /// @param pid Proposal ID to queue
+    /// @custom:security Reentrancy protected; callable only after tally finalized and before redemption
     function queueProposal(uint256 pid) external nonReentrant {
         AllocationStorage storage s = _getStorage();
 
@@ -798,15 +1064,14 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
         if (p.canceled) revert AlreadyCanceled(pid);
 
         p.canceled = true;
+        uint256 trackedPid = s.activeProposalByRecipient[p.recipient];
+        if (trackedPid == pid) {
+            delete s.activeProposalByRecipient[p.recipient];
+        }
         emit ProposalCanceled(pid, p.proposer);
     }
 
     // ---------- View Functions ----------
-
-    /// @notice Get remaining voting power for an address
-    function getRemainingVotingPower(address voter) external view returns (uint256) {
-        return _getStorage().votingPower[voter];
-    }
 
     /// @notice Get total number of proposals created
     function getProposalCount() external view returns (uint256) {
@@ -814,74 +1079,105 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
     }
 
     // Public getters for storage access
+    /// @notice Returns the mechanism name
     function name() external view returns (string memory) {
         return _getStorage().name;
     }
 
+    /// @notice Returns the mechanism symbol
     function symbol() external view returns (string memory) {
         return _getStorage().symbol;
     }
 
+    /// @notice Returns the underlying asset
     function asset() external view returns (IERC20) {
         return _getStorage().asset;
     }
 
+    /// @notice Returns the current owner
     function owner() external view returns (address) {
         return _getStorage().owner;
     }
 
+    /// @notice Returns the pending owner awaiting acceptance
     function pendingOwner() external view returns (address) {
         return _getStorage().pendingOwner;
     }
 
+    /// @notice Returns whether vote tally has been finalized
     function tallyFinalized() external view returns (bool) {
         return _getStorage().tallyFinalized;
     }
 
+    /// @notice Returns proposal data for a given proposal ID
     function proposals(uint256 pid) external view returns (Proposal memory) {
         return _getStorage().proposals[pid];
     }
 
+    /// @notice Returns the voting power for a user
     function votingPower(address user) external view returns (uint256) {
         return _getStorage().votingPower[user];
     }
 
+    /// @notice Returns allocated shares for a proposal
     function proposalShares(uint256 pid) external view returns (uint256) {
         return _getStorage().proposalShares[pid];
     }
 
     // Configuration getters
+    /// @notice Returns the block number when mechanism was initialized
     function startBlock() external view returns (uint256) {
         return _getStorage().startBlock;
     }
 
+    /// @notice Returns the voting delay period in blocks
     function votingDelay() external view returns (uint256) {
         return _getStorage().votingDelay;
     }
 
+    /// @notice Returns the voting period duration in blocks
     function votingPeriod() external view returns (uint256) {
         return _getStorage().votingPeriod;
     }
 
+    /// @notice Returns the minimum shares required for quorum
     function quorumShares() external view returns (uint256) {
         return _getStorage().quorumShares;
     }
 
+    /// @notice Returns the timelock delay in seconds
     function timelockDelay() external view returns (uint256) {
         return _getStorage().timelockDelay;
     }
 
+    /// @notice Returns the grace period duration in seconds
     function gracePeriod() external view returns (uint256) {
         return _getStorage().gracePeriod;
     }
 
+    /// @notice Returns the global redemption start timestamp
     function globalRedemptionStart() external view returns (uint256) {
         return _getStorage().globalRedemptionStart;
     }
 
+    /// @notice Returns the voting start timestamp
+    function votingStartTime() external view returns (uint256) {
+        return _getStorage().votingStartTime;
+    }
+
+    /// @notice Returns the voting end timestamp
+    function votingEndTime() external view returns (uint256) {
+        return _getStorage().votingEndTime;
+    }
+
+    /// @notice Returns the mechanism start timestamp
+    function startTime() external view returns (uint256) {
+        return _getStorage().startTime;
+    }
+
     /// @notice Returns the current nonce for an address
-    /// @param account The address to check
-    /// @return The current nonce
+    /// @param account Address to check nonce for
+    /// @return Current nonce for permit operations
     function nonces(address account) external view returns (uint256) {
         return _getStorage().nonces[account];
     }
@@ -889,7 +1185,7 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
     // ---------- Emergency Functions ----------
 
     /// @notice Initiate ownership transfer to a new address (step 1 of 2)
-    /// @param newOwner The address to transfer ownership to
+    /// @param newOwner Address to transfer ownership to
     function transferOwnership(address newOwner) external onlyOwner {
         if (newOwner == address(0)) revert Unauthorized();
         AllocationStorage storage s = _getStorage();
@@ -939,15 +1235,6 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
         emit ManagementUpdated(oldManagement, newManagement);
     }
 
-    /// @notice Update emergency admin address
-    function setEmergencyAdmin(address newEmergencyAdmin) external onlyOwner {
-        if (newEmergencyAdmin == address(0)) revert Unauthorized();
-        AllocationStorage storage s = _getStorage();
-        address oldEmergencyAdmin = s.emergencyAdmin;
-        s.emergencyAdmin = newEmergencyAdmin;
-        emit EmergencyAdminUpdated(oldEmergencyAdmin, newEmergencyAdmin);
-    }
-
     /// @notice Emergency pause all operations
     function pause() external onlyOwner {
         AllocationStorage storage s = _getStorage();
@@ -969,8 +1256,8 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
 
     /// @notice Sweep remaining tokens after grace period expires
     /// @dev Can only be called by owner after global grace period ends
-    /// @param token The token to sweep (use address(0) for ETH)
-    /// @param receiver The address to receive the swept tokens
+    /// @param token Token to sweep (use address(0) for ETH)
+    /// @param receiver Address to receive swept tokens
     function sweep(address token, address receiver) external onlyOwner nonReentrant {
         AllocationStorage storage s = _getStorage();
 
@@ -1003,10 +1290,12 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
     /**
      * @notice Redeems exactly `shares` from `shareOwner` and
      * sends `assets` of underlying tokens to `receiver`.
-     * @param shares The amount of shares burnt.
-     * @param receiver The address to receive `assets`.
-     * @param shareOwner The address whose shares are burnt.
-     * @return . The actual amount of underlying withdrawn.
+     * @param shares Amount of shares to burn
+     * @param receiver Address to receive withdrawn assets
+     * @param shareOwner Address whose shares are burned
+     * @return assetsWithdrawn Actual amount of underlying withdrawn in asset base units
+     * @dev Reverts with "ZERO_ASSETS" if shares amount rounds to 0 assets
+     * @dev Reverts with "redeem more than max" if shares > maxRedeem(shareOwner)
      */
     function redeem(uint256 shares, address receiver, address shareOwner) external nonReentrant returns (uint256) {
         // Get the storage slot for all following calls.
@@ -1027,7 +1316,7 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
      *
      * We manually track `totalAssets` to avoid any PPS manipulation.
      *
-     * @return . Total assets the strategy holds.
+     * @return totalAssets_ Total assets the strategy holds.
      */
     function totalAssets() external view returns (uint256) {
         return _totalAssets(_getStorage());
@@ -1042,7 +1331,7 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
      * As more shares slowly unlock the totalSupply will decrease
      * causing the PPS of the strategy to increase.
      *
-     * @return . Total amount of shares outstanding.
+     * @return totalSupply_ Total amount of shares outstanding.
      */
     function totalSupply() external view returns (uint256) {
         return _totalSupply(_getStorage());
@@ -1053,8 +1342,8 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
      *  exchange for the amount of assets provided, in an
      * ideal scenario where all the conditions are met.
      *
-     * @param assets The amount of underlying.
-     * @return . Expected shares that `assets` represents.
+     * @param assets Amount of underlying assets
+     * @return shares_ Expected shares that assets represent
      */
     function convertToShares(uint256 assets) external view returns (uint256) {
         return _convertToShares(_getStorage(), assets, Math.Rounding.Floor);
@@ -1065,8 +1354,8 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
      * exchange for the amount of shares provided, in an
      * ideal scenario where all the conditions are met.
      *
-     * @param shares The amount of the strategies shares.
-     * @return . Expected amount of `asset` the shares represents.
+     * @param shares Amount of strategy shares
+     * @return assets_ Expected assets the shares represent in asset base units
      */
     function convertToAssets(uint256 shares) external view returns (uint256) {
         return _convertToAssets(_getStorage(), shares, Math.Rounding.Floor);
@@ -1078,8 +1367,8 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
      * given current on-chain conditions.
      * @dev This will round down.
      *
-     * @param shares The amount of shares that would be redeemed.
-     * @return . The amount of `asset` that would be returned.
+     * @param shares Amount of shares to redeem
+     * @return assets_ Amount of assets that would be returned in asset base units
      */
     function previewRedeem(uint256 shares) external view returns (uint256) {
         AllocationStorage storage s = _getStorage();
@@ -1101,34 +1390,34 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
      * redeemed from the strategy by `shareOwner`, where `shareOwner`
      * corresponds to the msg.sender of a {redeem} call.
      *
-     * @param shareOwner The owner of the shares.
-     * @return _maxRedeem Max amount of shares that can be redeemed.
+     * @param shareOwner Address that owns the shares
+     * @return _maxRedeem Maximum shares that can be redeemed
      */
     function maxRedeem(address shareOwner) external view returns (uint256) {
         return _maxRedeem(_getStorage(), shareOwner);
     }
 
-    // Additional getters for vault functionality
+    /// @notice Returns the management address
     function management() external view returns (address) {
         return _getStorage().management;
     }
 
+    /// @notice Returns the keeper address
     function keeper() external view returns (address) {
         return _getStorage().keeper;
     }
 
-    function emergencyAdmin() external view returns (address) {
-        return _getStorage().emergencyAdmin;
-    }
-
+    /// @notice Returns the decimals used for the token (always 18)
     function decimals() external pure returns (uint8) {
         return 18;
     }
 
+    /// @notice Returns the balance of an account
     function balanceOf(address account) external view returns (uint256) {
         return _balanceOf(_getStorage(), account);
     }
 
+    /// @notice Returns the allowance of a spender for a token owner
     function allowance(address tokenOwner, address spender) external view returns (uint256) {
         return _allowance(_getStorage(), tokenOwner, spender);
     }
@@ -1295,9 +1584,9 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
      * - `to` cannot be the address of the strategy.
      * - the caller must have a balance of at least `_amount`.
      *
-     * @param to The address shares will be transferred to.
-     * @param amount The amount of shares to be transferred from sender.
-     * @return . a boolean value indicating whether the operation succeeded.
+     * @param to Address receiving the shares
+     * @param amount Amount of shares to transfer
+     * @return success True if operation succeeded
      */
     function transfer(address to, uint256 amount) external returns (bool) {
         _transfer(_getStorage(), msg.sender, to, amount);
@@ -1326,7 +1615,7 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
      *
      * @param spender the address to allow the shares to be moved by.
      * @param amount the amount of shares to allow `spender` to move.
-     * @return . a boolean value indicating whether the operation succeeded.
+     * @return success True if the operation succeeded.
      */
     function approve(address spender, uint256 amount) external returns (bool) {
         _approve(_getStorage(), msg.sender, spender, amount);
@@ -1358,7 +1647,7 @@ contract TokenizedAllocationMechanism is ReentrancyGuard {
      * @param from the address to be moving shares from.
      * @param to the address to be moving shares to.
      * @param amount the quantity of shares to move.
-     * @return . a boolean value indicating whether the operation succeeded.
+     * @return success True if the operation succeeded.
      */
     function transferFrom(address from, address to, uint256 amount) external returns (bool) {
         AllocationStorage storage S = _getStorage();

@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 pragma solidity ^0.8.23;
 
+/**
+ * @title ISafe
+ * @author Gnosis Safe (modified by Golem Foundation)
+ * @custom:security-contact security@golem.foundation
+ * @custom:origin https://github.com/safe-global/safe-smart-account/blob/main/contracts/interfaces/ISafe.sol
+ * @notice Interface for Gnosis Safe module transaction execution
+ * @dev Allows modules to execute transactions on behalf of the Safe
+ */
 interface ISafe {
     /**
      * @dev Allows a Module to execute a Safe transaction without any further confirmations.
@@ -40,6 +48,7 @@ interface ISafe {
     function enableModule(address module) external;
 
     /**
+     * @notice Verifies that signatures are valid for the provided data hash
      * @dev Checks whether the signature provided is valid for the provided data, hash. Will revert otherwise.
      * @param dataHash Hash of the data (could be either a message hash or transaction hash)
      * @param data That should be signed (this is passed to an external validator contract)
@@ -48,8 +57,9 @@ interface ISafe {
     function checkSignatures(bytes32 dataHash, bytes memory data, bytes memory signatures) external view;
 
     /**
+     * @notice Returns the EIP-712 domain separator hash for this Safe
      * @dev Returns the domain separator for this contract, as defined in the EIP-712 standard.
-     * @return bytes32 The domain separator hash.
+     * @return bytes32 Domain separator hash
      */
     function domainSeparator() external view returns (bytes32);
 

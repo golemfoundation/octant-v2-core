@@ -16,13 +16,13 @@ Access to environments is limited to VPN, Kubernetes cluster and CI/CD runners.
 
 ## Endpoints 
 
-| Service                    | Endpoint                                  |
-|----------------------------|-------------------------------------------|
-| RPC node                   | `https://rpc.ov2sm.octant.build/`         |
-| Safe frontend              | `https://safe.ov2sm.octant.build/`        |
-| Safe config service        | `https://cfg.ov2sm.octant.build/`         |
-| Graph node client endpoint | `https://graph.ov2sm.octant.build/`       |
-| Graph node admin endpoint  | `https://graph-admin.ov2sm.octant.build/` |
+| Service                    | Endpoint                                    |
+|----------------------------|---------------------------------------------|
+| RPC node                   | `https://virtual-mainnet.rpc.octant.build/` |
+| Safe frontend              | `https://safe.ov2sm.octant.build/`          |
+| Safe config service        | `https://cfg.ov2sm.octant.build/`           |
+| Graph node client endpoint | `https://graph.ov2sm.octant.build/`         |
+| Graph node admin endpoint  | `https://graph-admin.ov2sm.octant.build/`   |
 
 
 [Tenderly Virtual TestNets]: https://docs.tenderly.co/virtual-testnets

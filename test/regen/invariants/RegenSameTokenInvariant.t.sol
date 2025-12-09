@@ -1,20 +1,22 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.23;
 
+import { AccessMode } from "src/constants.sol";
 import { Test } from "forge-std/Test.sol";
 import { StdInvariant } from "forge-std/StdInvariant.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { RegenStakerWithoutDelegateSurrogateVotes } from "src/regen/RegenStakerWithoutDelegateSurrogateVotes.sol";
+import { RegenStakerBase } from "src/regen/RegenStakerBase.sol";
 import { RegenSameTokenHandler } from "./RegenSameTokenHandler.t.sol";
 import { RegenEarningPowerCalculator } from "src/regen/RegenEarningPowerCalculator.sol";
-import { IWhitelist } from "src/utils/IWhitelist.sol";
-import { Whitelist } from "src/utils/Whitelist.sol";
+import { IAddressSet } from "src/utils/IAddressSet.sol";
+import { AddressSet } from "src/utils/AddressSet.sol";
 import { MockERC20 } from "test/mocks/MockERC20.sol";
 
 contract RegenSameTokenInvariant is StdInvariant, Test {
     RegenStakerWithoutDelegateSurrogateVotes public staker;
     MockERC20 public token;
-    Whitelist public whitelist;
+    AddressSet public allowset;
     RegenEarningPowerCalculator public earningPowerCalculator;
     address public admin = address(0xA);
     address public notifier = address(0xB);
@@ -23,9 +25,14 @@ contract RegenSameTokenInvariant is StdInvariant, Test {
 
     function setUp() public {
         token = new MockERC20(18);
-        whitelist = new Whitelist();
-        whitelist.addToWhitelist(user);
-        earningPowerCalculator = new RegenEarningPowerCalculator(admin, IWhitelist(address(whitelist)));
+        allowset = new AddressSet();
+        allowset.add(user);
+        earningPowerCalculator = new RegenEarningPowerCalculator(
+            admin,
+            IAddressSet(address(allowset)),
+            IAddressSet(address(0)),
+            AccessMode.ALLOWSET
+        );
 
         staker = new RegenStakerWithoutDelegateSurrogateVotes(
             IERC20(address(token)),
@@ -35,10 +42,10 @@ contract RegenSameTokenInvariant is StdInvariant, Test {
             admin,
             30 days,
             0,
-            0,
-            IWhitelist(address(0)),
-            IWhitelist(address(0)),
-            whitelist
+            IAddressSet(address(0)),
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            allowset
         );
 
         vm.prank(admin);

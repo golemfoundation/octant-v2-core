@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.0;
 
 import { BaseStrategy } from "src/core/BaseStrategy.sol";
@@ -7,44 +7,36 @@ import { IYieldSkimmingStrategy } from "src/strategies/yieldSkimming/IYieldSkimm
 import { WadRayMath } from "src/utils/libs/Maths/WadRay.sol";
 
 /**
- *   @title Base Yield Skimming Health Check
- *   @author Octant
- *   @notice This contract can be inherited by any Yield Skimming strategy wishing to implement a health check during
- *   the `harvestAndReport` function in order to prevent any unexpected behavior from being permanently recorded as well
- *   as the `checkHealth` modifier.
- *
- *   A strategist simply needs to inherit this contract. Set
- *   the limit ratios to the desired amounts and then
- *   override `_harvestAndReport()` just as they otherwise
- *  would. If the profit or loss that would be recorded is
- *   outside the acceptable bounds the tx will revert.
- *
- *   The healthcheck does not prevent a strategy from reporting
- *   losses, but rather can make sure manual intervention is
- *   needed before reporting an unexpected loss or profit.
+ * @title Base Yield Skimming Health Check
+ * @author Yearn.finance; modified by [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
+ * @notice Health check for Yield Skimming strategies preventing unexpected profit/loss recording
+ * @dev Adapted for Yield Skimming with exchange rate monitoring. Reverts if profit/loss exceeds
+ *      configured limits during harvestAndReport(). Does not prevent loss reporting, but requires
+ *      manual intervention for unexpected values.
+ * @custom:origin https://github.com/yearn/tokenized-strategy-periphery/blob/master/src/Bases/HealthCheck/BaseHealthCheck.sol
  */
 abstract contract BaseYieldSkimmingHealthCheck is BaseStrategy, IBaseHealthCheck {
     using WadRayMath for uint256;
 
-    // Can be used to determine if a healthcheck should be called.
-    // Defaults to true;
     bool public doHealthCheck = true;
 
     uint256 internal constant MAX_BPS = 10_000;
 
-    // Default profit limit to 100%.
     uint16 private _profitLimitRatio = uint16(MAX_BPS);
 
-    // Defaults loss limit to 0.
     uint16 private _lossLimitRatio;
 
     /// @notice Emitted when the health check flag is updated
+    /// @param doHealthCheck True if health check is enabled
     event HealthCheckUpdated(bool doHealthCheck);
 
     /// @notice Emitted when the profit limit ratio is updated
+    /// @param newProfitLimitRatio New profit limit ratio in basis points
     event ProfitLimitRatioUpdated(uint256 newProfitLimitRatio);
 
     /// @notice Emitted when the loss limit ratio is updated
+    /// @param newLossLimitRatio New loss limit ratio in basis points
     event LossLimitRatioUpdated(uint256 newLossLimitRatio);
 
     constructor(
@@ -72,7 +64,7 @@ abstract contract BaseYieldSkimmingHealthCheck is BaseStrategy, IBaseHealthCheck
     /**
      * @notice Returns the current profit limit ratio.
      * @dev Use a getter function to keep the variable private.
-     * @return . The current profit limit ratio.
+     * @return profitLimitRatio Current profit limit ratio
      */
     function profitLimitRatio() public view returns (uint256) {
         return _profitLimitRatio;
@@ -81,7 +73,7 @@ abstract contract BaseYieldSkimmingHealthCheck is BaseStrategy, IBaseHealthCheck
     /**
      * @notice Returns the current loss limit ratio.
      * @dev Use a getter function to keep the variable private.
-     * @return . The current loss limit ratio.
+     * @return lossLimitRatio Current loss limit ratio
      */
     function lossLimitRatio() public view returns (uint256) {
         return _lossLimitRatio;
@@ -90,7 +82,7 @@ abstract contract BaseYieldSkimmingHealthCheck is BaseStrategy, IBaseHealthCheck
     /**
      * @notice Set the `profitLimitRatio`.
      * @dev Denominated in basis points. I.E. 1_000 == 10%.
-     * @param _newProfitLimitRatio The new profit limit ratio.
+     * @param _newProfitLimitRatio New profit limit ratio
      */
     function setProfitLimitRatio(uint256 _newProfitLimitRatio) external onlyManagement {
         _setProfitLimitRatio(_newProfitLimitRatio);
@@ -99,7 +91,7 @@ abstract contract BaseYieldSkimmingHealthCheck is BaseStrategy, IBaseHealthCheck
     /**
      * @dev Internally set the profit limit ratio. Denominated
      * in basis points. I.E. 1_000 == 10%.
-     * @param _newProfitLimitRatio The new profit limit ratio.
+     * @param _newProfitLimitRatio New profit limit ratio
      */
     function _setProfitLimitRatio(uint256 _newProfitLimitRatio) internal {
         require(_newProfitLimitRatio > 0, "!zero profit");
@@ -110,7 +102,7 @@ abstract contract BaseYieldSkimmingHealthCheck is BaseStrategy, IBaseHealthCheck
 
     /**
      * @notice Returns the current exchange rate in RAY format
-     * @return The current exchange rate in RAY format.
+     * @return Current exchange rate in RAY format
      */
     function getCurrentRateRay() public view returns (uint256) {
         uint256 currentRate = IYieldSkimmingStrategy(address(this)).getCurrentExchangeRate();
@@ -129,7 +121,7 @@ abstract contract BaseYieldSkimmingHealthCheck is BaseStrategy, IBaseHealthCheck
     /**
      * @notice Set the `lossLimitRatio`.
      * @dev Denominated in basis points. I.E. 1_000 == 10%.
-     * @param _newLossLimitRatio The new loss limit ratio.
+     * @param _newLossLimitRatio New loss limit ratio
      */
     function setLossLimitRatio(uint256 _newLossLimitRatio) external onlyManagement {
         _setLossLimitRatio(_newLossLimitRatio);
@@ -138,7 +130,7 @@ abstract contract BaseYieldSkimmingHealthCheck is BaseStrategy, IBaseHealthCheck
     /**
      * @dev Internally set the loss limit ratio. Denominated
      * in basis points. I.E. 1_000 == 10%.
-     * @param _newLossLimitRatio The new loss limit ratio.
+     * @param _newLossLimitRatio New loss limit ratio
      */
     function _setLossLimitRatio(uint256 _newLossLimitRatio) internal {
         require(_newLossLimitRatio < MAX_BPS, "!loss limit");
@@ -157,7 +149,7 @@ abstract contract BaseYieldSkimmingHealthCheck is BaseStrategy, IBaseHealthCheck
     }
 
     /**
-     * @notice OVerrides the default {harvestAndReport} to include a healthcheck.
+     * @notice Overrides the default {harvestAndReport} to include a healthcheck.
      * @return _totalAssets New totalAssets post report.
      */
     function harvestAndReport() external override onlySelf returns (uint256 _totalAssets) {

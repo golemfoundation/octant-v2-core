@@ -1,11 +1,12 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity >=0.8.25;
 
 import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 
 /**
  * @title BaseStrategyFactory
- * @author Octant
+ * @author [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
  * @notice Base contract for strategy factories with deterministic deployment
  * @dev Uses CREATE2 with parameter-based hashing to prevent duplicate deployments
  *
@@ -17,11 +18,11 @@ import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
  */
 abstract contract BaseStrategyFactory {
     /**
-     * @dev Struct to store information about a strategy.
-     * @param deployerAddress The address of the deployer who created the strategy.
-     * @param timestamp The timestamp when the strategy was created.
-     * @param vaultTokenName The name of the vault token associated with the strategy.
-     * @param donationAddress The address where donations from the strategy will be sent.
+     * @dev Struct to store information about a strategy
+     * @param deployerAddress Deployer who created the strategy
+     * @param timestamp Timestamp when the strategy was created (seconds)
+     * @param vaultTokenName Name of the vault token associated with the strategy
+     * @param donationAddress Address where donations from the strategy will be sent
      */
     struct StrategyInfo {
         address deployerAddress;
@@ -30,10 +31,8 @@ abstract contract BaseStrategyFactory {
         address donationAddress;
     }
 
-    /**
-     * @dev Mapping from deployer address to their deployed strategies
-     * Used for tracking deployed strategies
-     */
+    /// @dev Mapping from deployer address to their deployed strategies
+    /// Used for tracking deployed strategies
     mapping(address => StrategyInfo[]) public strategies;
 
     // Custom errors
@@ -46,7 +45,7 @@ abstract contract BaseStrategyFactory {
      * @dev Combines parameter hash with deployer address for deterministic deployment
      * @param _parameterHash Hash of all strategy parameters
      * @param deployer Deployer address
-     * @param bytecode The deployment bytecode (including constructor args)
+     * @param bytecode Deployment bytecode (including constructor args)
      * @return Predicted contract address
      */
     function predictStrategyAddress(
@@ -60,9 +59,9 @@ abstract contract BaseStrategyFactory {
 
     /**
      * @dev Internal function to deploy strategy using CREATE2
-     * @param bytecode The deployment bytecode
+     * @param bytecode Deployment bytecode including constructor args
      * @param _parameterHash Hash of all strategy parameters for deterministic deployment
-     * @return strategyAddress The deployed strategy address
+     * @return strategyAddress Deployed strategy address
      */
     function _deployStrategy(bytes memory bytecode, bytes32 _parameterHash) internal returns (address strategyAddress) {
         bytes32 finalSalt = keccak256(abi.encodePacked(_parameterHash, msg.sender));
@@ -97,8 +96,9 @@ abstract contract BaseStrategyFactory {
     }
 
     /**
+     * @notice Returns all strategies deployed by a specific address
      * @dev Get all strategies deployed by a specific address
-     * @param deployer Address of the deployer
+     * @param deployer Deployer address
      * @return Array of StrategyInfo for all strategies deployed by the address
      */
     function getStrategiesByDeployer(address deployer) external view returns (StrategyInfo[] memory) {

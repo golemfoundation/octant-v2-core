@@ -6,6 +6,8 @@ pragma solidity >=0.8.0 <0.9.0;
  * @notice The guard logic is not required here as this contract doesn't support nested delegate calls
  * @author Stefan George - @Georgi87
  * @author Richard Meissner - @rmeissner
+ * @custom:security-contact security@golem.foundation
+ * @custom:ported-from https://github.com/safe-global/safe-smart-account/blob/main/contracts/libraries/MultiSendCallOnly.sol
  */
 contract MultiSendCallOnly {
     /**

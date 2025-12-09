@@ -256,10 +256,10 @@ contract Setup is Test {
         assertApproxEqAbs(_strategy.balanceOf(address(_strategy)), _buffer, 1, "!Buffer");
     }
 
-    function setupWhitelist(address _address) public {
+    function setupAllowset(address _address) public {
         MockIlliquidStrategy _strategy = MockIlliquidStrategy(payable(address(strategy)));
 
-        _strategy.setWhitelist(true);
+        _strategy.setAllowset(true);
 
         _strategy.allow(_address);
     }

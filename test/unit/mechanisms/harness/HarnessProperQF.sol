@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import { ProperQF } from "src/mechanisms/voting-strategy/ProperQF.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 contract HarnessProperQF is ProperQF {
     // Custom Errors
@@ -10,7 +11,7 @@ contract HarnessProperQF is ProperQF {
 
     // Expose internal functions for testing
     function exposed_sqrt(uint256 x) public pure returns (uint256) {
-        return ProperQF._sqrt(x);
+        return Math.sqrt(x);
     }
 
     function exposed_processVote(uint256 projectId, uint256 contribution, uint256 voteWeight) public {

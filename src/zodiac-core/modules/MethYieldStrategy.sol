@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-3.0
+// SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.25;
 
 import { DragonBaseStrategy } from "src/zodiac-core/vaults/DragonBaseStrategy.sol";
@@ -12,6 +12,8 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 
 /**
  * @title MethYieldStrategy
+ * @author [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
  * @notice A strategy that manages mETH (Mantle liquid staked ETH) and captures yield from its appreciation
  * @dev This strategy tracks the ETH value of mETH deposits and captures yield as mETH appreciates in value.
  *      The strategy works with YieldBearingDragonTokenizedStrategy to properly handle the yield accounting.
@@ -66,7 +68,8 @@ contract MethYieldStrategy is DragonBaseStrategy, IMethYieldStrategy {
     }
 
     /**
-     * @inheritdoc IMethYieldStrategy
+     * @notice Returns the last reported mETH to ETH exchange rate
+     * @return Exchange rate with 18 decimals precision
      */
     function getLastReportedExchangeRate() public view returns (uint256) {
         return lastReportedExchangeRate;
@@ -105,7 +108,7 @@ contract MethYieldStrategy is DragonBaseStrategy, IMethYieldStrategy {
 
     /**
      * @notice Captures yield by calculating the increase in ETH value based on exchange rate changes
-     * @return profitInMeth The profit in mETH terms calculated from exchange rate appreciation
+     * @return profitInMeth Profit in mETH terms calculated from exchange rate appreciation
      * @dev Uses ray math for precise calculations and converts ETH profit to mETH
      */
     function _harvestAndReport() internal virtual override returns (uint256) {
@@ -140,7 +143,7 @@ contract MethYieldStrategy is DragonBaseStrategy, IMethYieldStrategy {
 
     /**
      * @notice Gets the current exchange rate from the Mantle staking contract
-     * @return The current exchange rate (mETH to ETH ratio, scaled by 1e18)
+     * @return Current exchange rate (mETH to ETH ratio, scaled by 1e18)
      * @dev Uses the Mantle staking contract as the authoritative source for exchange rates
      */
     function _getCurrentExchangeRate() internal view virtual returns (uint256) {

@@ -4,10 +4,13 @@ pragma solidity >=0.8.18;
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import { Enum } from "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 
 import { IBaseStrategy } from "src/zodiac-core/interfaces/IBaseStrategy.sol";
 import { IAvatar } from "zodiac/interfaces/IAvatar.sol";
+import { TokenizedStrategy__InvalidSigner } from "src/errors.sol";
+import { NATIVE_TOKEN } from "src/constants.sol";
 
 contract MockTokenizedStrategy {
     using Math for uint256;
@@ -121,8 +124,6 @@ contract MockTokenizedStrategy {
         uint8 entered; // To prevent reentrancy. Use uint8 for gas savings.
         bool shutdown; // Bool that can be used to stop deposits into the strategy.
     }
-
-    address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE; // using this address to represent native ETH
 
     /*//////////////////////////////////////////////////////////////
                             MODIFIERS
@@ -311,7 +312,7 @@ contract MockTokenizedStrategy {
         // Set the Strategy Tokens name.
         S.name = _name;
         // Set decimals based off the `asset`.
-        S.decimals = _asset == ETH ? 18 : ERC20(_asset).decimals();
+        S.decimals = _asset == NATIVE_TOKEN ? 18 : ERC20(_asset).decimals();
 
         S.lastReport = uint96(block.timestamp);
 
@@ -734,7 +735,7 @@ contract MockTokenizedStrategy {
         // Cache storage variables used more than once.
         ERC20 _asset = S.asset;
 
-        if (address(_asset) == ETH) {
+        if (address(_asset) == NATIVE_TOKEN) {
             IAvatar(S.owner).execTransactionFromModule(address(this), assets, "", Enum.Operation.Call);
         } else {
             IAvatar(S.owner).execTransactionFromModule(
@@ -747,7 +748,7 @@ contract MockTokenizedStrategy {
 
         // We can deploy the full loose balance currently held.
         IBaseStrategy(address(this)).deployFunds(
-            address(_asset) == ETH ? address(this).balance : _asset.balanceOf(address(this))
+            address(_asset) == NATIVE_TOKEN ? address(this).balance : _asset.balanceOf(address(this))
         );
 
         // Adjust total Assets.
@@ -781,7 +782,7 @@ contract MockTokenizedStrategy {
         // Cache `asset` since it is used multiple times..
         ERC20 _asset = S.asset;
 
-        uint256 idle = address(_asset) == ETH ? address(this).balance : _asset.balanceOf(address(this));
+        uint256 idle = address(_asset) == NATIVE_TOKEN ? address(this).balance : _asset.balanceOf(address(this));
         uint256 loss;
         // Check if we need to withdraw funds.
         if (idle < assets) {
@@ -791,7 +792,7 @@ contract MockTokenizedStrategy {
             }
 
             // Return the actual amount withdrawn. Adjust for potential under withdraws.
-            idle = address(_asset) == ETH ? address(this).balance : _asset.balanceOf(address(this));
+            idle = address(_asset) == NATIVE_TOKEN ? address(this).balance : _asset.balanceOf(address(this));
 
             // If we didn't get enough out then we have a loss.
             if (idle < assets) {
@@ -813,7 +814,7 @@ contract MockTokenizedStrategy {
 
         _burn(S, _owner, shares);
 
-        if (address(S.asset) == ETH) {
+        if (address(S.asset) == NATIVE_TOKEN) {
             (bool success, ) = receiver.call{ value: assets }("");
             require(success, "Transfer Failed");
         } else {
@@ -838,7 +839,7 @@ contract MockTokenizedStrategy {
         uint256 _oldTotalAssets = S.totalAssets;
         uint256 _newTotalAssets = IBaseStrategy(address(this)).harvestAndReport();
 
-        if (address(S.asset) == ETH) {
+        if (address(S.asset) == NATIVE_TOKEN) {
             (bool success, ) = S.dragonRouter.call{ value: _newTotalAssets - _oldTotalAssets }("");
             require(success, "Transfer Failed");
         } else {
@@ -885,7 +886,7 @@ contract MockTokenizedStrategy {
      */
     function tend() external nonReentrant onlyKeepers {
         ERC20 _asset = _strategyStorage().asset;
-        uint256 balance = address(_asset) == ETH ? address(this).balance : _asset.balanceOf(address(this));
+        uint256 balance = address(_asset) == NATIVE_TOKEN ? address(this).balance : _asset.balanceOf(address(this));
         // Tend the strategy with the current loose balance.
         IBaseStrategy(address(this)).tendThis(balance);
     }
@@ -1387,31 +1388,27 @@ contract MockTokenizedStrategy {
         // Unchecked because the only math done is incrementing
         // the owner's nonce which cannot realistically overflow.
         unchecked {
-            address recoveredAddress = ecrecover(
-                keccak256(
-                    abi.encodePacked(
-                        "\x19\x01",
-                        DOMAIN_SEPARATOR(),
-                        keccak256(
-                            abi.encode(
-                                keccak256(
-                                    "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
-                                ),
-                                _owner,
-                                spender,
-                                value,
-                                _strategyStorage().nonces[_owner]++,
-                                deadline
-                            )
+            bytes32 digest = keccak256(
+                abi.encodePacked(
+                    "\x19\x01",
+                    DOMAIN_SEPARATOR(),
+                    keccak256(
+                        abi.encode(
+                            keccak256(
+                                "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
+                            ),
+                            _owner,
+                            spender,
+                            value,
+                            _strategyStorage().nonces[_owner]++,
+                            deadline
                         )
                     )
-                ),
-                v,
-                r,
-                s
+                )
             );
 
-            require(recoveredAddress != address(0) && recoveredAddress == _owner, "ERC20: INVALID_SIGNER");
+            (address recoveredAddress, , ) = ECDSA.tryRecover(digest, v, r, s);
+            if (recoveredAddress != _owner) revert TokenizedStrategy__InvalidSigner();
 
             _approve(_strategyStorage(), recoveredAddress, spender, value);
         }

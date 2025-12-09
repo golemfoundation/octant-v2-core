@@ -1,6 +1,6 @@
 {
   "name": "@golemfoundation/octant-v2-core",
-  "version": "0.7.0-develop.0",
+  "version": "0.9.0-develop.0",
   "description": "",
   "packageManager": "yarn@4.9.2+sha512.1fc009bc09d13cfd0e19efa44cbfc2b9cf6ca61482725eb35bbc5e257e093ebf4130db6dfe15d604ff4b79efd8e1e8e99b25fa7d0a6197c9f9826358d4d65c3c",
   "repository": {
@@ -28,7 +28,7 @@
     "format:check": "prettier --config .prettierrc --plugin=prettier-plugin-solidity '{script,src,test,verification}/**/*.sol' -c",
     "lint": "solhint './{src,scripts,test}/**/*.sol'",
     "precommit": "lint-staged",
-    "build": "forge clean && forge compile --sizes",
+    "build": "forge clean && forge compile --sizes --skip test --skip script",
     "build:contracts": "forge clean && forge compile --sizes --skip test --skip script && ./scripts/combine-proxy-abis.sh",
     "test": "forge clean && forge test",
     "test:ci": "forge clean && mkdir -p reports && (forge test --junit > reports/junit.xml || forge test --summary)",

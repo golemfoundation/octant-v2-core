@@ -1191,7 +1191,7 @@ contract LidoStrategyTest is Test {
         // 1. Total vault value (in ETH terms) = 250e18 rETH × 1.5 rate = 375e18 ETH
         // 2. Total user debt (what we owe) = 325e18 shares × 1 ETH/share = 325e18 ETH
         // 3. Excess value = 375e18 - 325e18 = 50e18 ETH
-        // 4. Dragon shares minted = 50e18 (1 share = 1 ETH value)
+        // 4. Dragon shares minted = 50e18 (1 share = 1 ETH value, except in case of uncovered loss)
         // 5. Profit reported = 50e18 ETH ÷ 1.5 rate = 33.333e18 rETH
         assertEq(data.profit1, 33333333333333333333, "Should report 33.333e18 profit");
         assertEq(data.loss1, 0, "Should report no loss in first report");

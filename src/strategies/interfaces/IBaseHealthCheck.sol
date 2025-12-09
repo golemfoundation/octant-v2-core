@@ -3,9 +3,10 @@ pragma solidity >=0.8.25;
 
 /**
  * @title IBaseHealthCheck Interface
- * @author Yearn.finance
- * @notice Interface for the BaseHealthCheck contract defining the core functions
- * and events needed for health checking strategy profit/loss reporting.
+ * @author Yearn.finance; adapted by [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
+ * @notice Interface for health checking strategy profit/loss reporting
+ * @custom:origin https://github.com/yearn/tokenized-strategy-periphery/blob/master/src/HealthCheck/BaseHealthCheck.sol
  */
 interface IBaseHealthCheck {
     /*//////////////////////////////////////////////////////////////
@@ -13,20 +14,20 @@ interface IBaseHealthCheck {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Returns whether the health check is currently enabled.
-     * @return Status of the health check.
+     * @notice Returns whether the health check is currently enabled
+     * @return True if health check is enabled
      */
     function doHealthCheck() external view returns (bool);
 
     /**
-     * @notice Returns the current profit limit ratio.
-     * @return The current profit limit ratio in basis points.
+     * @notice Returns the profit limit ratio
+     * @return Profit limit ratio in basis points
      */
     function profitLimitRatio() external view returns (uint256);
 
     /**
-     * @notice Returns the current loss limit ratio.
-     * @return The current loss limit ratio in basis points.
+     * @notice Returns the loss limit ratio
+     * @return Loss limit ratio in basis points
      */
     function lossLimitRatio() external view returns (uint256);
 
@@ -35,23 +36,21 @@ interface IBaseHealthCheck {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @notice Set the `profitLimitRatio`.
-     * @dev Denominated in basis points. I.E. 1_000 == 10%.
-     * @param _newProfitLimitRatio The new profit limit ratio.
+     * @notice Set the profit limit ratio
+     * @param _newProfitLimitRatio New profit limit ratio in basis points
      */
     function setProfitLimitRatio(uint256 _newProfitLimitRatio) external;
 
     /**
-     * @notice Set the `lossLimitRatio`.
-     * @dev Denominated in basis points. I.E. 1_000 == 10%.
-     * @param _newLossLimitRatio The new loss limit ratio.
+     * @notice Set the loss limit ratio
+     * @param _newLossLimitRatio New loss limit ratio in basis points
      */
     function setLossLimitRatio(uint256 _newLossLimitRatio) external;
 
     /**
-     * @notice Turns the healthcheck on and off.
-     * @dev If turned off the next report will auto turn it back on.
-     * @param _doHealthCheck Bool if healthCheck should be done.
+     * @notice Enable or disable health check
+     * @dev If disabled, next report will re-enable it
+     * @param _doHealthCheck Whether health check should be performed
      */
     function setDoHealthCheck(bool _doHealthCheck) external;
 }

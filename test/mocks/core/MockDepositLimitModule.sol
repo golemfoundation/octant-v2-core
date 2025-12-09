@@ -4,8 +4,8 @@ pragma solidity ^0.8.25;
 // Mock for deposit limit module
 contract MockDepositLimitModule {
     uint256 public defaultDepositLimit = type(uint256).max;
-    bool public enforceWhitelist = false;
-    mapping(address => bool) public whitelist;
+    bool public enforceAllowset = false;
+    mapping(address => bool) public allowset;
     // user -> limit
     mapping(address => uint256) public userAlreadyDeposited;
 
@@ -13,12 +13,12 @@ contract MockDepositLimitModule {
         defaultDepositLimit = newLimit;
     }
 
-    function setEnforceWhitelist(bool enforce) external {
-        enforceWhitelist = enforce;
+    function setEnforceAllowset(bool enforce) external {
+        enforceAllowset = enforce;
     }
 
-    function setWhitelist(address account) external {
-        whitelist[account] = true;
+    function setAllowset(address account) external {
+        allowset[account] = true;
     }
 
     function availableDepositLimit(address user) external view returns (uint256) {
@@ -26,7 +26,7 @@ contract MockDepositLimitModule {
             return 0;
         }
 
-        if (enforceWhitelist && !whitelist[user]) {
+        if (enforceAllowset && !allowset[user]) {
             return 0;
         }
 

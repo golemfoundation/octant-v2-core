@@ -104,7 +104,7 @@ The system implements **permissionless proposal queuing**, enabling flexible gov
   - **Security Assumptions**: 
     - CAN be stateful to implement custom registration tracking
     - SHOULD implement consistent eligibility criteria that cannot be gamed
-    - CAN implement mechanism-specific access control (e.g., whitelist validation)
+    - CAN implement mechanism-specific access control (e.g., allowset validation)
   - **Note**: Zero address validation and re-registration handling are performed in `_executeSignup`, not in this hook.
 - **`_beforeProposeHook(address proposer)`** - Validates proposal creation rights
   - **Security Assumptions**:

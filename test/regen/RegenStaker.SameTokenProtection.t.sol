@@ -1,14 +1,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.23;
 
+import { AccessMode } from "src/constants.sol";
 import { Test } from "forge-std/Test.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { RegenStaker } from "src/regen/RegenStaker.sol";
 import { RegenStakerBase } from "src/regen/RegenStakerBase.sol";
 import { RegenEarningPowerCalculator } from "src/regen/RegenEarningPowerCalculator.sol";
 import { MockERC20Staking } from "test/mocks/MockERC20Staking.sol";
-import { IWhitelist } from "src/utils/IWhitelist.sol";
-import { Whitelist } from "src/utils/Whitelist.sol";
+import { IAddressSet } from "src/utils/IAddressSet.sol";
+import { AddressSet } from "src/utils/AddressSet.sol";
 
 /// @title Tests for Same-Token Behavior in RegenStaker
 /// @notice Tests that RegenStaker with surrogates relies on base Staker protection
@@ -17,7 +18,7 @@ contract RegenStakerSameTokenProtectionTest is Test {
     RegenStaker public staker;
     MockERC20Staking public token;
     RegenEarningPowerCalculator public earningPowerCalculator;
-    Whitelist public whitelist;
+    AddressSet public allowset;
 
     address public admin = address(0x1);
     address public notifier = address(0x2);
@@ -32,12 +33,17 @@ contract RegenStakerSameTokenProtectionTest is Test {
         // Deploy token with delegation support
         token = new MockERC20Staking(18);
 
-        // Deploy whitelist
-        whitelist = new Whitelist();
-        whitelist.addToWhitelist(user1);
+        // Deploy allowset
+        allowset = new AddressSet();
+        allowset.add(user1);
 
         // Deploy earning power calculator
-        earningPowerCalculator = new RegenEarningPowerCalculator(admin, IWhitelist(address(whitelist)));
+        earningPowerCalculator = new RegenEarningPowerCalculator(
+            admin,
+            IAddressSet(address(allowset)),
+            IAddressSet(address(0)),
+            AccessMode.ALLOWSET
+        );
 
         // Deploy staker with SAME token for staking and rewards
         staker = new RegenStaker(
@@ -47,11 +53,11 @@ contract RegenStakerSameTokenProtectionTest is Test {
             0, // maxBumpTip
             admin,
             30 days, // rewardDuration
-            0, // maxClaimFee
             0, // minimumStakeAmount
-            IWhitelist(address(0)), // no staker whitelist
-            IWhitelist(address(0)), // no contribution whitelist
-            whitelist // allocation mechanism whitelist
+            IAddressSet(address(0)), // no staker allowset
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            allowset // allocation mechanism allowset
         );
 
         // Setup admin and notifier
@@ -123,10 +129,10 @@ contract RegenStakerSameTokenProtectionTest is Test {
             admin,
             30 days,
             0,
-            0,
-            IWhitelist(address(0)),
-            IWhitelist(address(0)),
-            whitelist
+            IAddressSet(address(0)),
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            allowset
         );
 
         vm.startPrank(admin);

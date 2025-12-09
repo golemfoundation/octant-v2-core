@@ -736,21 +736,21 @@ contract ERC4626Test is Test {
         vault.setDepositLimitModule(address(limitModule), false);
         vm.stopPrank();
 
-        // Enable whitelist and make deposit fail
+        // Enable allowset and make deposit fail
         vm.prank(gov);
-        limitModule.setEnforceWhitelist(true);
+        limitModule.setEnforceAllowset(true);
 
-        assertEq(vault.maxDeposit(fish), 0, "Max deposit should be 0 for non-whitelisted");
+        assertEq(vault.maxDeposit(fish), 0, "Max deposit should be 0 for non-inAllowset");
 
         vm.prank(fish);
         vm.expectRevert(IMultistrategyVault.ExceedDepositLimit.selector);
         vault.deposit(assets, fish);
 
-        // Whitelist fish and make deposit succeed
+        // Allowset fish and make deposit succeed
         vm.prank(gov);
-        limitModule.setWhitelist(fish);
+        limitModule.setAllowset(fish);
 
-        assertEq(vault.maxDeposit(fish), MAX_INT, "Max deposit should be MAX_INT for whitelisted");
+        assertEq(vault.maxDeposit(fish), MAX_INT, "Max deposit should be MAX_INT for inAllowset");
 
         // Now deposit should succeed
         vm.prank(fish);
@@ -778,21 +778,21 @@ contract ERC4626Test is Test {
         vault.setDepositLimitModule(address(limitModule), false);
         vm.stopPrank();
 
-        // Enable whitelist and make mint fail
+        // Enable allowset and make mint fail
         vm.prank(gov);
-        limitModule.setEnforceWhitelist(true);
+        limitModule.setEnforceAllowset(true);
 
-        assertEq(vault.maxMint(fish), 0, "Max mint should be 0 for non-whitelisted");
+        assertEq(vault.maxMint(fish), 0, "Max mint should be 0 for non-inAllowset");
 
         vm.prank(fish);
         vm.expectRevert(IMultistrategyVault.ExceedDepositLimit.selector);
         vault.mint(assets, fish);
 
-        // Whitelist fish and make mint succeed
+        // Allowset fish and make mint succeed
         vm.prank(gov);
-        limitModule.setWhitelist(fish);
+        limitModule.setAllowset(fish);
 
-        assertEq(vault.maxMint(fish), MAX_INT, "Max mint should be MAX_INT for whitelisted");
+        assertEq(vault.maxMint(fish), MAX_INT, "Max mint should be MAX_INT for inAllowset");
 
         // Now mint should succeed
         vm.prank(fish);

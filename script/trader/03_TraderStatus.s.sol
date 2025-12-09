@@ -8,6 +8,7 @@ import "solady/tokens/ERC20.sol";
 
 import { HelperConfig } from "../helpers/HelperConfig.s.sol";
 import { Trader } from "src/utils/routers-transformers/Trader.sol";
+import { NATIVE_TOKEN } from "src/constants.sol";
 
 contract TraderStatus is Script, Test {
     address ETH;
@@ -23,7 +24,7 @@ contract TraderStatus is Script, Test {
         Trader trader = Trader(payable(traderAddress));
         address base = trader.BASE();
         address quote = trader.QUOTE();
-        ETH = trader.ETH();
+        ETH = NATIVE_TOKEN;
         console.log("Selling (base):", getTicker(base), base);
         console.log("Buying (quote):", getTicker(quote), quote);
         uint256 chance = trader.chance();
@@ -57,7 +58,7 @@ contract TraderStatus is Script, Test {
     }
 
     function getTicker(address token) public view returns (string memory result) {
-        if (token == ETH) {
+        if (token == NATIVE_TOKEN) {
             result = "ETH";
         } else {
             result = ERC20(token).symbol();
@@ -65,7 +66,7 @@ contract TraderStatus is Script, Test {
     }
 
     function safeBalanceOf(address token, address owner) private view returns (uint256) {
-        if ((token == ETH) || (token == address(0x0))) {
+        if (token == NATIVE_TOKEN) {
             return owner.balance;
         } else {
             return ERC20(token).balanceOf(owner);

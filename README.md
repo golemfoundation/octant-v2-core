@@ -109,7 +109,7 @@ Impact and regenerative finance functionality:
 - **RegenStaker.sol**: Staking functionality for regenerative finance
 - **interfaces/**: Regen-specific interfaces
   - `IFundingRound.sol`: Funding round interface
-  - `IWhitelistedEarningPowerCalculator.sol`: Whitelist-based earning power
+  - `IAccessControlledEarningPowerCalculator.sol`: Access-controlled earning power
 
 #### Dragon Protocol (`src/zodiac-core/`)
 Advanced Safe integration and cross-protocol operations:
@@ -135,8 +135,8 @@ Advanced Safe integration and cross-protocol operations:
 
 #### Utilities (`src/utils/`)
 Shared utilities and helper contracts:
-- **IWhitelist.sol**: Whitelist interface
-- **Whitelist.sol**: Whitelist implementation
+- **IAddressSet.sol**: Address set interface for access control
+- **AddressSet.sol**: Address set implementation (allowsets and blocksets)
 - **interfaces/**: Utility interfaces
 - **hats/**: Hats protocol integration utilities
   - `AbstractHatsManager.sol`: Abstract base for hat management
@@ -175,7 +175,7 @@ Module-specific focused testing:
 - **factories/**: Factory contract tests
 - **utils/**: Utility contract tests
   - `routers-transformers/`: Trading functionality tests
-  - `whitelist/`: Whitelist functionality tests
+  - `addressset/`: Address set functionality tests
 - **zodiac-core/**: Dragon protocol unit tests
   - `vaults/`: Dragon-specific vault tests
   - `modules/`: Safe module tests

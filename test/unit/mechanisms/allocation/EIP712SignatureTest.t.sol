@@ -224,7 +224,7 @@ contract EIP712SignatureTest is Test {
         r = bytes32(0);
         s = bytes32(0);
 
-        vm.expectRevert(TokenizedAllocationMechanism.InvalidSignature.selector);
+        vm.expectRevert(abi.encodeWithSelector(TokenizedAllocationMechanism.InvalidSigner.selector, address(0), alice));
         _tokenized(address(mechanism)).signupWithSignature(alice, DEPOSIT_AMOUNT, deadline, v, r, s);
     }
 
@@ -435,7 +435,7 @@ contract EIP712SignatureTest is Test {
         r = bytes32(0);
         s = bytes32(0);
 
-        vm.expectRevert(TokenizedAllocationMechanism.InvalidSignature.selector);
+        vm.expectRevert(abi.encodeWithSelector(TokenizedAllocationMechanism.InvalidSigner.selector, address(0), alice));
         _tokenized(address(mechanism)).castVoteWithSignature(
             alice,
             pid,

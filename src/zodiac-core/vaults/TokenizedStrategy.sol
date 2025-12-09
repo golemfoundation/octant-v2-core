@@ -4,6 +4,7 @@ pragma solidity >=0.8.18;
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import { Enum } from "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import { IAvatar } from "zodiac/interfaces/IAvatar.sol";
 import { ZeroAddress, ReentrancyGuard__ReentrantCall, TokenizedStrategy__NotOperator, TokenizedStrategy__NotManagement, TokenizedStrategy__NotKeeperOrManagement, TokenizedStrategy__NotRegenGovernance, TokenizedStrategy__NotEmergencyAuthorized, TokenizedStrategy__AlreadyInitialized, TokenizedStrategy__DepositMoreThanMax, TokenizedStrategy__InvalidMaxLoss, TokenizedStrategy__MintToZeroAddress, TokenizedStrategy__BurnFromZeroAddress, TokenizedStrategy__ApproveFromZeroAddress, TokenizedStrategy__ApproveToZeroAddress, TokenizedStrategy__InsufficientAllowance, TokenizedStrategy__PermitDeadlineExpired, TokenizedStrategy__InvalidSigner, TokenizedStrategy__NotSelf, TokenizedStrategy__TransferFailed, TokenizedStrategy__NotPendingManagement, TokenizedStrategy__StrategyNotInShutdown, TokenizedStrategy__TooMuchLoss, TokenizedStrategy__HatsAlreadyInitialized, TokenizedStrategy__InvalidHatsAddress } from "src/errors.sol";
@@ -15,50 +16,61 @@ import { IERC4626Payable } from "src/zodiac-core/interfaces/IERC4626Payable.sol"
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { IERC20Permit } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Permit.sol";
+import { NATIVE_TOKEN } from "src/constants.sol";
 
+/**
+ * @title TokenizedStrategy (Zodiac Vaults Variant)
+ * @author Yearn.finance (original TokenizedStrategy v3.0.4); modified by [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
+ * @notice Abstract vault-specific tokenized strategy with Zodiac and Hats integration
+ * @dev Golem modifications: Zodiac integration, Hats Protocol, ETH support, regen governance
+ *
+ *      ARCHITECTURE:
+ *      - Core ERC4626 vault logic from Yearn V3 TokenizedStrategy
+ *      - Extended with Zodiac module patterns for Safe integration
+ *      - Adds Hats Protocol role-based access control
+ *      - Supports native ETH alongside ERC20 assets
+ *      - Integrates regen governance for lockup/rage quit mechanics
+ *
+ *      See DragonTokenizedStrategy.sol for complete vault implementation
+ *
+ * @custom:security Zodiac module with Hats Protocol role management
+ * @custom:origin https://github.com/yearn/tokenized-strategy
+ */
 abstract contract TokenizedStrategy is ITokenizedStrategy {
     using Math for uint256;
     using SafeERC20 for ERC20;
-
-    address public constant ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE; // using this address to represent native ETH
 
     /*//////////////////////////////////////////////////////////////
                                CONSTANTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice API version this TokenizedStrategy implements.
+    /// @notice API version this TokenizedStrategy implements
     string internal constant API_VERSION = "1.0.0";
 
-    /// @notice Value to set the `entered` flag to during a call.
+    /// @notice Reentrancy guard state: entered
     uint8 internal constant ENTERED = 2;
-    /// @notice Value to set the `entered` flag to at the end of the call.
+    /// @notice Reentrancy guard state: not entered
     uint8 internal constant NOT_ENTERED = 1;
 
-    /// @notice Used for fee calculations.
+    /// @notice Basis points denominator for fee calculations
     uint256 internal constant MAX_BPS = 10_000;
 
-    /// @notice Minimum and maximum durations for lockup and rage quit periods
+    /// @notice Minimum lockup duration
     uint256 internal constant RANGE_MINIMUM_LOCKUP_DURATION = 30 days;
+    /// @notice Maximum lockup duration
     uint256 internal constant RANGE_MAXIMUM_LOCKUP_DURATION = 3650 days;
+    /// @notice Minimum rage quit cooldown period
     uint256 internal constant RANGE_MINIMUM_RAGE_QUIT_COOLDOWN_PERIOD = 30 days;
+    /// @notice Maximum rage quit cooldown period
     uint256 internal constant RANGE_MAXIMUM_RAGE_QUIT_COOLDOWN_PERIOD = 3650 days;
 
     /**
-     * @dev Custom storage slot that will be used to store the
-     * `StrategyData` struct that holds each strategies
-     * specific storage variables.
-     *
-     * Any storage updates done by the TokenizedStrategy actually update
-     * the storage of the calling contract. This variable points
-     * to the specific location that will be used to store the
-     * struct that holds all that data.
-     *
-     * We use a custom string in order to get a random
-     * storage slot that will allow for strategists to use any
-     * amount of storage in their strategy without worrying
-     * about collisions.
+     * @dev Custom storage slot for StrategyData struct (EIP-1967-style deterministic slot)
+     * @dev Updates delegatecall to this slot in the calling contract's storage
      */
-    bytes32 internal constant BASE_STRATEGY_STORAGE = bytes32(uint256(keccak256("octant.base.strategy.storage")) - 1);
+    bytes32 internal constant BASE_STRATEGY_STORAGE =
+        bytes32(uint256(keccak256("octant.tokenized.strategy.storage")) - 1);
 
     /*//////////////////////////////////////////////////////////////
                             MODIFIERS
@@ -126,14 +138,22 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     //////////////////////////////////////////////////////////////*/
 
     constructor() {
-        _strategyStorage().asset = ERC20(address(1));
+        _strategyStorage().management = address(1);
     }
 
     /*//////////////////////////////////////////////////////////////
                           INITIALIZATION
     //////////////////////////////////////////////////////////////*/
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Initializes the tokenized strategy with configuration parameters
+     * @dev Sets up vault with asset, roles, and governance addresses
+     * @param _asset Address of the underlying ERC20 asset
+     * @param _name Name of the strategy share token
+     * @param _owner Address that will own the strategy (operator)
+     * @param _management Address with management privileges
+     * @param _keeper Address authorized to call report/tend
+     * @param _dragonRouter Address of dragon router for profit distribution
+     * @param _regenGovernance Address of regen governance for lockup controls
      */
     function initialize(
         address _asset,
@@ -153,7 +173,11 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @inheritdoc IERC4626Payable
+     * @notice Deposits assets into the vault and mints shares to receiver
+     * @dev Virtual function to be implemented by derived contracts
+     * @param assets Amount of assets to deposit in asset base units
+     * @param receiver Address to receive the minted shares
+     * @return shares Amount of shares minted in share base units
      */
     function deposit(
         uint256 assets,
@@ -161,7 +185,11 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     ) external payable virtual nonReentrant onlyOperator returns (uint256 shares) {}
 
     /**
-     * @inheritdoc IERC4626Payable
+     * @notice Mints exact amount of shares to receiver by depositing required assets
+     * @dev Virtual function to be implemented by derived contracts
+     * @param shares Amount of shares to mint in share base units
+     * @param receiver Address to receive the minted shares
+     * @return assets Amount of assets deposited in asset base units
      */
     function mint(
         uint256 shares,
@@ -169,13 +197,17 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     ) external payable virtual nonReentrant onlyOperator returns (uint256 assets) {}
 
     /**
-     * @inheritdoc IERC4626Payable
+     * @notice Withdraws exact amount of assets by burning owner's shares
+     * @dev Wrapper that defaults to zero max loss tolerance
+     * @param assets Amount of assets to withdraw in asset base units
+     * @param receiver Address to receive withdrawn assets
+     * @param owner Address whose shares will be burned
+     * @return shares Amount of shares burned in share base units
      */
     function withdraw(uint256 assets, address receiver, address owner) external returns (uint256 shares) {
         return withdraw(assets, receiver, owner, 0);
     }
 
-    /// @inheritdoc IERC4626Payable
     function redeem(uint256 shares, address receiver, address owner) external returns (uint256) {
         // We default to not limiting a potential loss.
         return redeem(shares, receiver, owner, MAX_BPS);
@@ -186,7 +218,10 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Reports profit/loss for the strategy
+     * @dev Virtual function to be implemented by derived contracts. Called by keepers to update vault state
+     * @return profit Profit generated in asset base units
+     * @return loss Loss incurred in asset base units
      */
     function report() external virtual nonReentrant onlyKeepers returns (uint256 profit, uint256 loss) {}
 
@@ -195,11 +230,12 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Performs maintenance operations on the strategy
+     * @dev Tends strategy with current loose balance. Called by keepers between reports
      */
     function tend() external nonReentrant onlyKeepers {
         ERC20 _asset = _strategyStorage().asset;
-        uint256 _balance = address(_asset) == ETH ? address(this).balance : _asset.balanceOf(address(this));
+        uint256 _balance = address(_asset) == NATIVE_TOKEN ? address(this).balance : _asset.balanceOf(address(this));
         // Tend the strategy with the current loose balance.
         IBaseStrategy(address(this)).tendThis(_balance);
     }
@@ -209,7 +245,8 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Shuts down the strategy, preventing further deposits
+     * @dev Can only be called by emergency authorized addresses
      */
     function shutdownStrategy() external onlyEmergencyAuthorized {
         _strategyStorage().shutdown = true;
@@ -218,7 +255,9 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Emergency withdrawal of assets from yield source
+     * @dev Requires strategy to be in shutdown state. Only callable by emergency authorized
+     * @param amount Amount of assets to withdraw in asset base units
      */
     function emergencyWithdraw(uint256 amount) external nonReentrant onlyEmergencyAuthorized {
         // Make sure the strategy has been shutdown.
@@ -233,7 +272,9 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Sets a new pending management address
+     * @dev Pending management must call acceptManagement() to become active
+     * @param _management Address to set as pending management
      */
     function setPendingManagement(address _management) external onlyManagement {
         if (_management == address(0)) revert ZeroAddress();
@@ -243,7 +284,8 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Allows pending management to accept and become active management
+     * @dev Can only be called by the pending management address
      */
     function acceptManagement() external {
         StrategyData storage S = _strategyStorage();
@@ -255,7 +297,9 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Sets a new keeper address
+     * @dev Only callable by management
+     * @param _keeper Address authorized to call report() and tend()
      */
     function setKeeper(address _keeper) external onlyManagement {
         _strategyStorage().keeper = _keeper;
@@ -264,7 +308,9 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Sets a new emergency admin address
+     * @dev Only callable by management
+     * @param _emergencyAdmin Address authorized for emergency operations
      */
     function setEmergencyAdmin(address _emergencyAdmin) external onlyManagement {
         _strategyStorage().emergencyAdmin = _emergencyAdmin;
@@ -273,14 +319,22 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Updates the strategy token name
+     * @dev Only callable by management
+     * @param _name New name for the strategy share token
      */
     function setName(string calldata _name) external virtual onlyManagement {
         _strategyStorage().name = _name;
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Sets up Hats Protocol integration for role management
+     * @dev Can only be called once. Only callable by management
+     * @param _hats Address of Hats Protocol contract
+     * @param _keeperHat Hat ID for keeper role
+     * @param _managementHat Hat ID for management role
+     * @param _emergencyAdminHat Hat ID for emergency admin role
+     * @param _regenGovernanceHat Hat ID for regen governance role
      */
     function setupHatsProtocol(
         address _hats,
@@ -304,7 +358,15 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     }
 
     /**
-     * @inheritdoc IERC20Permit
+     * @notice Approves spender via EIP-2612 permit signature
+     * @dev Implements gasless approval using off-chain signature
+     * @param _owner Address of token owner
+     * @param _spender Address to approve
+     * @param _value Amount to approve in share base units
+     * @param _deadline Signature deadline timestamp
+     * @param _v Signature v parameter
+     * @param _r Signature r parameter
+     * @param _s Signature s parameter
      */
     function permit(
         address _owner,
@@ -320,38 +382,40 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
         // Unchecked because the only math done is incrementing
         // the owner's nonce which cannot realistically overflow.
         unchecked {
-            address recoveredAddress = ecrecover(
-                keccak256(
-                    abi.encodePacked(
-                        "\x19\x01",
-                        DOMAIN_SEPARATOR(),
-                        keccak256(
-                            abi.encode(
-                                keccak256(
-                                    "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
-                                ),
-                                _owner,
-                                _spender,
-                                _value,
-                                _strategyStorage().nonces[_owner]++,
-                                _deadline
-                            )
+            bytes32 digest = keccak256(
+                abi.encodePacked(
+                    "\x19\x01",
+                    DOMAIN_SEPARATOR(),
+                    keccak256(
+                        abi.encode(
+                            keccak256(
+                                "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
+                            ),
+                            _owner,
+                            _spender,
+                            _value,
+                            _strategyStorage().nonces[_owner]++,
+                            _deadline
                         )
                     )
-                ),
-                _v,
-                _r,
-                _s
+                )
             );
 
-            if (recoveredAddress == address(0) || recoveredAddress != _owner) revert TokenizedStrategy__InvalidSigner();
+            (address recoveredAddress, , ) = ECDSA.tryRecover(digest, _v, _r, _s);
+            if (recoveredAddress != _owner) {
+                revert TokenizedStrategy__InvalidSigner();
+            }
 
             _approve(_strategyStorage(), recoveredAddress, _spender, _value);
         }
     }
 
     /**
-     * @inheritdoc IERC20
+     * @notice Approves spender to transfer shares on behalf of msg.sender
+     * @dev Standard ERC20 approve function
+     * @param spender Address to approve
+     * @param amount Amount to approve in share base units
+     * @return True if approval succeeded
      */
     function approve(address spender, uint256 amount) external virtual returns (bool) {
         _approve(_strategyStorage(), msg.sender, spender, amount);
@@ -359,12 +423,21 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     }
 
     /**
-     * @inheritdoc IERC20
+     * @notice Transfers shares from one address to another using allowance
+     * @dev Virtual function to be implemented by derived contracts. Standard ERC20 transferFrom
+     * @param from Address to transfer from
+     * @param to Address to transfer to
+     * @param amount Amount to transfer in share base units
+     * @return True if transfer succeeded
      */
     function transferFrom(address from, address to, uint256 amount) external virtual returns (bool) {}
 
     /**
-     * @inheritdoc IERC20
+     * @notice Transfers shares to another address
+     * @dev Virtual function to be implemented by derived contracts. Standard ERC20 transfer
+     * @param to Address to transfer to
+     * @param amount Amount to transfer in share base units
+     * @return True if transfer succeeded
      */
     function transfer(address to, uint256 amount) external virtual returns (bool) {}
 
@@ -373,94 +446,122 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @inheritdoc IERC4626Payable
+     * @notice Returns total assets managed by the vault
+     * @return Total assets in asset base units
      */
     function totalAssets() external view returns (uint256) {
         return _totalAssets(_strategyStorage());
     }
 
     /**
-     * @inheritdoc IERC20
+     * @notice Returns total supply of strategy shares
+     * @return Total shares in share base units
      */
     function totalSupply() external view returns (uint256) {
         return _totalSupply(_strategyStorage());
     }
 
     /**
-     * @inheritdoc IERC4626Payable
+     * @notice Converts asset amount to equivalent share amount
+     * @param assets Amount of assets in asset base units
+     * @return Equivalent shares in share base units
      */
     function convertToShares(uint256 assets) external view returns (uint256) {
         return _convertToShares(_strategyStorage(), assets, Math.Rounding.Floor);
     }
 
     /**
-     * @inheritdoc IERC4626Payable
+     * @notice Converts share amount to equivalent asset amount
+     * @param shares Amount of shares in share base units
+     * @return Equivalent assets in asset base units
      */
     function convertToAssets(uint256 shares) external view returns (uint256) {
         return _convertToAssets(_strategyStorage(), shares, Math.Rounding.Floor);
     }
 
     /**
-     * @inheritdoc IERC4626Payable
+     * @notice Simulates shares returned for depositing given assets
+     * @param assets Amount of assets to simulate in asset base units
+     * @return Expected shares to be minted in share base units
      */
     function previewDeposit(uint256 assets) external view returns (uint256) {
         return _convertToShares(_strategyStorage(), assets, Math.Rounding.Floor);
     }
 
     /**
-     * @inheritdoc IERC4626Payable
+     * @notice Simulates assets required for minting given shares
+     * @param shares Amount of shares to simulate in share base units
+     * @return Expected assets required in asset base units
      */
     function previewMint(uint256 shares) external view returns (uint256) {
         return _convertToAssets(_strategyStorage(), shares, Math.Rounding.Ceil);
     }
 
     /**
-     * @inheritdoc IERC4626Payable
+     * @notice Simulates shares required for withdrawing given assets
+     * @param assets Amount of assets to simulate in asset base units
+     * @return Expected shares to be burned in share base units
      */
     function previewWithdraw(uint256 assets) external view returns (uint256) {
         return _convertToShares(_strategyStorage(), assets, Math.Rounding.Ceil);
     }
 
     /**
-     * @inheritdoc IERC4626Payable
+     * @notice Simulates assets returned for redeeming given shares
+     * @param shares Amount of shares to simulate in share base units
+     * @return Expected assets to be withdrawn in asset base units
      */
     function previewRedeem(uint256 shares) external view returns (uint256) {
         return _convertToAssets(_strategyStorage(), shares, Math.Rounding.Floor);
     }
 
     /**
-     * @inheritdoc IERC4626Payable
+     * @notice Returns maximum assets that can be deposited by receiver
+     * @param receiver Address that would receive the shares
+     * @return Maximum assets that can be deposited in asset base units
      */
     function maxDeposit(address receiver) external view returns (uint256) {
         return _maxDeposit(_strategyStorage(), receiver);
     }
 
     /**
-     * @inheritdoc IERC4626Payable
+     * @notice Returns maximum shares that can be minted for receiver
+     * @param receiver Address that would receive the shares
+     * @return Maximum shares that can be minted in share base units
      */
     function maxMint(address receiver) external view returns (uint256) {
         return _maxMint(_strategyStorage(), receiver);
     }
 
     /**
-     * @inheritdoc IERC4626Payable
+     * @notice Returns maximum assets that can be withdrawn by owner
+     * @dev Virtual function to be implemented by derived contracts
+     * @param owner Address of share owner
+     * @return Maximum assets that can be withdrawn in asset base units
      */
     function maxWithdraw(address owner) external view virtual returns (uint256) {}
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Returns maximum assets that can be withdrawn by owner with loss tolerance
+     * @dev Virtual function to be implemented by derived contracts
+     * @param owner Address of share owner
+     * @return Maximum assets that can be withdrawn in asset base units
      */
     function maxWithdraw(address owner, uint256 /*maxLoss*/) external view virtual override returns (uint256) {}
 
     /**
-     * @inheritdoc IERC4626Payable
+     * @notice Returns maximum shares that can be redeemed by owner
+     * @param owner Address of share owner
+     * @return Maximum shares that can be redeemed in share base units
      */
     function maxRedeem(address owner) external view returns (uint256) {
         return _maxRedeem(_strategyStorage(), owner);
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Returns maximum shares that can be redeemed by owner with loss tolerance
+     * @param owner Address of share owner
+     * @return Maximum shares that can be redeemed in share base units
      */
     function maxRedeem(address owner, uint256 /*maxLoss*/) external view returns (uint256) {
         return _maxRedeem(_strategyStorage(), owner);
@@ -471,98 +572,112 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @inheritdoc IERC4626Payable
+     * @notice Returns the underlying asset token address
+     * @return Address of the underlying ERC-20 asset
      */
     function asset() external view returns (address) {
         return address(_strategyStorage().asset);
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Returns the current management address
+     * @return Management address
      */
     function management() external view returns (address) {
         return _strategyStorage().management;
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Returns the pending management address
+     * @return Pending management address
      */
     function pendingManagement() external view returns (address) {
         return _strategyStorage().pendingManagement;
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Returns the operator address
+     * @return Operator address
      */
     function operator() external view returns (address) {
         return _strategyStorage().operator;
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Returns the dragon router address
+     * @return Dragon router address
      */
     function dragonRouter() external view returns (address) {
         return _strategyStorage().dragonRouter;
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Returns the keeper address
+     * @return Keeper address
      */
     function keeper() external view returns (address) {
         return _strategyStorage().keeper;
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Returns the emergency admin address
+     * @return Emergency admin address
      */
     function emergencyAdmin() external view returns (address) {
         return _strategyStorage().emergencyAdmin;
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Returns the timestamp of the last report
+     * @return Last report timestamp in seconds
      */
     function lastReport() external view returns (uint256) {
         return uint256(_strategyStorage().lastReport);
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Returns the Hats Protocol address
+     * @return Hats Protocol contract address
      */
     function hats() external view returns (address) {
         return address(_strategyStorage().HATS);
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Returns the keeper hat ID
+     * @return Keeper hat ID
      */
     function keeperHat() external view returns (uint256) {
         return _strategyStorage().KEEPER_HAT;
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Returns the management hat ID
+     * @return Management hat ID
      */
     function managementHat() external view returns (uint256) {
         return _strategyStorage().MANAGEMENT_HAT;
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Returns the emergency admin hat ID
+     * @return Emergency admin hat ID
      */
     function emergencyAdminHat() external view returns (uint256) {
         return _strategyStorage().EMERGENCY_ADMIN_HAT;
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Returns the regen governance hat ID
+     * @return Regen governance hat ID
      */
     function regenGovernanceHat() external view returns (uint256) {
         return _strategyStorage().REGEN_GOVERNANCE_HAT;
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Returns the current price per share
+     * @return Price per share value with asset decimals precision
      */
     function pricePerShare() external view returns (uint256) {
         StrategyData storage S = _strategyStorage();
@@ -570,7 +685,8 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Checks if the strategy is currently shutdown
+     * @return True if the strategy is shutdown, false otherwise
      */
     function isShutdown() external view returns (bool) {
         return _strategyStorage().shutdown;
@@ -581,56 +697,74 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @inheritdoc IERC20Metadata
+     * @notice Returns the name of the strategy token
+     * @return Strategy token name
      */
     function name() external view returns (string memory) {
         return _strategyStorage().name;
     }
 
     /**
-     * @inheritdoc IERC20Metadata
+     * @notice Returns the symbol of the strategy token
+     * @dev Prefixes asset symbol with "dgn" (dragon)
+     * @return Strategy token symbol
      */
     function symbol() external view returns (string memory) {
         return string(abi.encodePacked("dgn", _strategyStorage().asset.symbol()));
     }
 
     /**
-     * @inheritdoc IERC20Metadata
+     * @notice Returns the number of decimals for the strategy token
+     * @return Number of decimals (matches underlying asset)
      */
     function decimals() external view returns (uint8) {
         return _strategyStorage().decimals;
     }
 
     /**
-     * @inheritdoc IERC20
+     * @notice Returns the share balance of an account
+     * @param account Address to query balance for
+     * @return Share balance in share base units
      */
     function balanceOf(address account) external view returns (uint256) {
         return _balanceOf(_strategyStorage(), account);
     }
 
     /**
-     * @inheritdoc IERC20
+     * @notice Returns the allowance of spender for owner's shares
+     * @param _owner Address of token owner
+     * @param _spender Address of spender
+     * @return Allowance in share base units
      */
     function allowance(address _owner, address _spender) external view returns (uint256) {
         return _allowance(_strategyStorage(), _owner, _spender);
     }
 
     /**
-     * @inheritdoc IERC20Permit
+     * @notice Returns the current nonce for EIP-2612 permit
+     * @param _owner Address to query nonce for
+     * @return Current nonce value
      */
     function nonces(address _owner) external view returns (uint256) {
         return _strategyStorage().nonces[_owner];
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Returns the API version of the strategy implementation
+     * @return String representing the API version
      */
     function apiVersion() external pure returns (string memory) {
         return API_VERSION;
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Withdraws exact amount of assets by burning shares with loss tolerance
+     * @dev Virtual function to be implemented by derived contracts
+     * @param assets Amount of assets to withdraw in asset base units
+     * @param receiver Address to receive withdrawn assets
+     * @param owner Address whose shares will be burned
+     * @param maxLoss Maximum acceptable loss in basis points (10000 = 100%)
+     * @return shares Amount of shares burned in share base units
      */
     function withdraw(
         uint256 assets,
@@ -639,7 +773,6 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
         uint256 maxLoss
     ) public virtual nonReentrant returns (uint256 shares) {}
 
-    /// @inheritdoc ITokenizedStrategy
     function redeem(
         uint256 shares,
         address receiver,
@@ -652,7 +785,9 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     //////////////////////////////////////////////////////////////*/
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Checks if the sender is authorized as management
+     * @dev Used by onlyManagement modifier. Checks direct address or Hats Protocol role
+     * @param _sender Address to validate
      */
     function requireManagement(address _sender) public view {
         StrategyData storage S = _strategyStorage();
@@ -662,7 +797,9 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Checks if the sender is authorized as keeper or management
+     * @dev Used by onlyKeepers modifier. Checks direct address or Hats Protocol role
+     * @param _sender Address to validate
      */
     function requireKeeperOrManagement(address _sender) public view {
         StrategyData storage S = _strategyStorage();
@@ -675,7 +812,9 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Checks if the sender is authorized for emergency actions
+     * @dev Used by onlyEmergencyAuthorized modifier. Checks direct address or Hats Protocol role
+     * @param _sender Address to validate
      */
     function requireEmergencyAuthorized(address _sender) public view {
         StrategyData storage S = _strategyStorage();
@@ -688,7 +827,9 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     }
 
     /**
-     * @inheritdoc ITokenizedStrategy
+     * @notice Checks if the sender is authorized as regen governance
+     * @dev Used by onlyRegenGovernance modifier. Checks direct address or Hats Protocol role
+     * @param _sender Address to validate
      */
     function requireRegenGovernance(address _sender) public view {
         StrategyData storage S = _strategyStorage();
@@ -698,7 +839,8 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
     }
 
     /**
-     * @inheritdoc IERC20Permit
+     * @notice Returns the EIP-712 domain separator for permit signatures
+     * @return bytes32 domain separator hash
      */
     function DOMAIN_SEPARATOR() public view returns (bytes32) {
         return
@@ -729,7 +871,7 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
         StrategyData storage S = _strategyStorage();
 
         // Make sure we aren't initialized.
-        if (address(S.asset) != address(0)) revert TokenizedStrategy__AlreadyInitialized();
+        if (S.management != address(0)) revert TokenizedStrategy__AlreadyInitialized();
 
         // Set the strategy's underlying asset.
         S.asset = ERC20(_asset);
@@ -740,7 +882,7 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
         // Set the Strategy Tokens name.
         S.name = _name;
         // Set decimals based off the `asset`.
-        S.decimals = _asset == ETH ? 18 : ERC20(_asset).decimals();
+        S.decimals = _asset == NATIVE_TOKEN ? 18 : ERC20(_asset).decimals();
 
         S.lastReport = uint96(block.timestamp);
 
@@ -861,7 +1003,7 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
 
         if (msg.sender == target || msg.sender == S.operator) {
             uint256 previousBalance;
-            if (address(_asset) == ETH) {
+            if (address(_asset) == NATIVE_TOKEN) {
                 previousBalance = address(this).balance;
                 IAvatar(target).execTransactionFromModule(address(this), assets, "", Enum.Operation.Call);
                 //slither-disable-next-line incorrect-equality
@@ -881,7 +1023,7 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
                 );
             }
         } else {
-            if (address(_asset) == ETH) {
+            if (address(_asset) == NATIVE_TOKEN) {
                 require(msg.value >= assets, TokenizedStrategy__DepositMoreThanMax());
             } else {
                 require(_asset.transferFrom(msg.sender, address(this), assets), TokenizedStrategy__TransferFailed());
@@ -890,7 +1032,7 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
 
         // We can deploy the full loose balance currently held.
         IBaseStrategy(address(this)).deployFunds(
-            address(_asset) == ETH ? address(this).balance : _asset.balanceOf(address(this))
+            address(_asset) == NATIVE_TOKEN ? address(this).balance : _asset.balanceOf(address(this))
         );
 
         // Adjust total Assets.
@@ -931,7 +1073,7 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
         // Cache `asset` since it is used multiple times..
         ERC20 _asset = S.asset;
 
-        uint256 idle = address(_asset) == ETH ? address(this).balance : _asset.balanceOf(address(this));
+        uint256 idle = address(_asset) == NATIVE_TOKEN ? address(this).balance : _asset.balanceOf(address(this));
         uint256 loss = 0;
         // Check if we need to withdraw funds.
         if (idle < assets) {
@@ -941,7 +1083,7 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
             }
 
             // Return the actual amount withdrawn. Adjust for potential under withdraws.
-            idle = address(_asset) == ETH ? address(this).balance : _asset.balanceOf(address(this));
+            idle = address(_asset) == NATIVE_TOKEN ? address(this).balance : _asset.balanceOf(address(this));
 
             // If we didn't get enough out then we have a loss.
             if (idle < assets) {
@@ -963,7 +1105,7 @@ abstract contract TokenizedStrategy is ITokenizedStrategy {
 
         _burn(S, _owner, shares);
 
-        if (address(S.asset) == ETH) {
+        if (address(S.asset) == NATIVE_TOKEN) {
             (bool success, ) = receiver.call{ value: assets }("");
             if (!success) revert TokenizedStrategy__TransferFailed();
         } else {

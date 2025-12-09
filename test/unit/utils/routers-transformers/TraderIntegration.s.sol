@@ -10,6 +10,7 @@ import "script/deploy/DeployTrader.sol";
 import { HelperConfig } from "script/helpers/HelperConfig.s.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IUniswapV3Pool } from "src/utils/vendor/uniswap/IUniswapV3Pool.sol";
+import { NATIVE_TOKEN } from "src/constants.sol";
 
 contract TestTraderIntegrationETH2GLM is Test, TestPlus, DeployTrader {
     HelperConfig config;
@@ -61,7 +62,7 @@ contract TestTraderIntegrationETH2GLM is Test, TestPlus, DeployTrader {
     }
 
     function force_direct_trade(address aBase, uint256 exactIn, address aQuote) public returns (uint256) {
-        if (aBase == ETH) {
+        if (aBase == NATIVE_TOKEN) {
             vm.deal(address(this), exactIn);
         } else {
             deal(aBase, address(this), exactIn, false);
@@ -78,14 +79,14 @@ contract TestTraderIntegrationETH2GLM is Test, TestPlus, DeployTrader {
             })
         );
 
-        if (aBase == ETH) {
+        if (aBase == NATIVE_TOKEN) {
             WETH(payable(wethAddress)).deposit{ value: exactIn }();
             WETH(payable(wethAddress)).approve(address(swapRouter), exactIn);
         } else {
             ERC20(aBase).approve(address(swapRouter), exactIn);
         }
         uint256 result = swapRouter.exactInput(exactInputParams[0]);
-        if (aQuote == ETH) {
+        if (aQuote == NATIVE_TOKEN) {
             WETH(payable(wethAddress)).withdraw(result);
         }
         return result;
@@ -96,7 +97,7 @@ contract TestTraderIntegrationETH2GLM is Test, TestPlus, DeployTrader {
     function test_direct_trading_forward() external {
         vm.deal(address(this), 1 ether);
         uint oldBalance = address(this).balance;
-        force_direct_trade(ETH, 1 ether, glmAddress);
+        force_direct_trade(NATIVE_TOKEN, 1 ether, glmAddress);
         assertEq(oldBalance - 1 ether, address(this).balance);
     }
 
@@ -104,7 +105,7 @@ contract TestTraderIntegrationETH2GLM is Test, TestPlus, DeployTrader {
         uint256 exactIn = 7000 ether;
         deal(glmAddress, address(this), exactIn, false);
         uint oldBalance = ERC20(glmAddress).balanceOf(address(this));
-        force_direct_trade(glmAddress, exactIn, ETH);
+        force_direct_trade(glmAddress, exactIn, NATIVE_TOKEN);
         assertEq(ERC20(glmAddress).balanceOf(address(this)), oldBalance - exactIn);
     }
 
@@ -115,7 +116,7 @@ contract TestTraderIntegrationETH2GLM is Test, TestPlus, DeployTrader {
         IUniswapV3Pool pool = IUniswapV3Pool(0x531b6A4b3F962208EA8Ed5268C642c84BB29be0b);
         uint cardinality = pool.slot0().observationCardinalityNext;
         for (uint i; i < cardinality; i++) {
-            force_direct_trade(glmAddress, 7000 ether, ETH);
+            force_direct_trade(glmAddress, 7000 ether, NATIVE_TOKEN);
             forwardBlocks(1);
         }
         UniV3Swap.InitFlashParams memory params = prepare_trader_params(1 ether);
@@ -138,7 +139,7 @@ contract TestTraderIntegrationETH2GLM is Test, TestPlus, DeployTrader {
         assert(currentQuote > 10 ether); // a very conservative check here
 
         // add a reading by trading
-        force_direct_trade(glmAddress, 7000 ether, ETH);
+        force_direct_trade(glmAddress, 7000 ether, NATIVE_TOKEN);
 
         // check oracle in the same block - quote should be the same
         unscaledAmountsToBeneficiary = oracle.getQuoteAmounts(params.quoteParams);
@@ -157,7 +158,7 @@ contract TestTraderIntegrationETH2GLM is Test, TestPlus, DeployTrader {
         uint currentBlock = block.number;
 
         // someone rapidly moves the price in the beginning of the block
-        force_direct_trade(ETH, 2 ether, glmAddress);
+        force_direct_trade(NATIVE_TOKEN, 2 ether, glmAddress);
 
         // attempt to trade in the same block should fail
         UniV3Swap.InitFlashParams memory params = prepare_trader_params(1 ether);
@@ -176,7 +177,7 @@ contract TestTraderIntegrationETH2GLM is Test, TestPlus, DeployTrader {
         uint currentBlock = block.number;
 
         // someone rapidly moves the price in OTHER direction
-        force_direct_trade(glmAddress, 7000 ether, ETH);
+        force_direct_trade(glmAddress, 7000 ether, NATIVE_TOKEN);
 
         // trade should succeed
         UniV3Swap.InitFlashParams memory params = prepare_trader_params(1 ether);
@@ -278,7 +279,7 @@ contract TestTraderIntegrationETH2GLM is Test, TestPlus, DeployTrader {
 
     function test_transform_wrong_eth_value() external {
         vm.expectRevert(Trader.Trader__ImpossibleConfiguration.selector);
-        trader.transform{ value: 1 ether }(ETH, glmAddress, 2 ether);
+        trader.transform{ value: 1 ether }(NATIVE_TOKEN, glmAddress, 2 ether);
     }
 
     function test_findSaleValue_throws() external {
@@ -324,7 +325,7 @@ contract TestTraderIntegrationGLM2ETH is Test, TestPlus, DeployTrader {
     function test_transform_unexpected_value() external {
         // check if trader will reject unexpected ETH
         vm.expectRevert(Trader.Trader__UnexpectedETH.selector);
-        trader.transform{ value: 1 ether }(glmAddress, ETH, 10 ether);
+        trader.transform{ value: 1 ether }(glmAddress, NATIVE_TOKEN, 10 ether);
     }
 
     function test_transform_wrong_base() external {
@@ -361,7 +362,7 @@ contract TestTraderIntegrationGLM2ETH is Test, TestPlus, DeployTrader {
         assert(saleValue > 0);
 
         // do actual attempt to convert ERC20 to ETH
-        uint256 amountToBeneficiary = trader.transform(glmAddress, ETH, saleValue);
+        uint256 amountToBeneficiary = trader.transform(glmAddress, NATIVE_TOKEN, saleValue);
 
         assert(beneficiary.balance > initialETHBalance);
         assert(beneficiary.balance == initialETHBalance + amountToBeneficiary);

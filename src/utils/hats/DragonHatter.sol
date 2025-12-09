@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.19;
 
 import { AbstractHatsManager } from "./AbstractHatsManager.sol";
@@ -6,6 +6,8 @@ import { Hats__InvalidHat, Hats__DoesNotHaveThisHat, Hats__NotAdminOfHat } from 
 
 /**
  * @title DragonHatter
+ * @author [Golem Foundation](https://golem.foundation)
+ * @custom:security-contact security@golem.foundation
  * @notice Branch hat wearer for Dragon Protocol Vault Management
  * @dev This contract wears the Branch Hat (1.1.1.1) and manages role hats beneath it:
  * 1 (Top Hat)
@@ -25,6 +27,7 @@ contract DragonHatter is AbstractHatsManager {
 
     bool public initialized;
 
+    /// @notice Emitted when branch initialization is complete
     event BranchInitialized();
 
     error AlreadyInitialized();
@@ -80,8 +83,8 @@ contract DragonHatter is AbstractHatsManager {
 
     /**
      * @notice Checks if an address is eligible to wear a specific role hat
-     * @param wearer The address to check
-     * @param hatId The hat ID being checked
+     * @param wearer Address to check
+     * @param hatId Hat ID being checked
      * @return eligible Whether the address can wear the hat
      * @return standing Whether the address is in good standing
      */
@@ -114,8 +117,8 @@ contract DragonHatter is AbstractHatsManager {
 
     /**
      * @notice Get the hat ID for a specific role
-     * @param roleId The role identifier
-     * @return hatId The corresponding hat ID
+     * @param roleId Role identifier
+     * @return hatId Corresponding hat ID
      */
     function getRoleHat(bytes32 roleId) external view returns (uint256) {
         return roleHats[roleId];
@@ -123,9 +126,9 @@ contract DragonHatter is AbstractHatsManager {
 
     /**
      * @notice Check if an address has a specific role
-     * @param account The address to check
-     * @param roleId The role identifier
-     * @return bool Whether the address has the role
+     * @param account Address to check
+     * @param roleId Role identifier (KEEPER_ROLE, MANAGEMENT_ROLE, etc.)
+     * @return Whether the address has the role
      */
     function hasRole(address account, bytes32 roleId) external view returns (bool) {
         uint256 hatId = roleHats[roleId];

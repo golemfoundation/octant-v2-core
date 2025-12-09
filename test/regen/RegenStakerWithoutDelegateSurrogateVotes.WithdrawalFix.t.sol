@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.23;
 
+import { AccessMode } from "src/constants.sol";
 import { Test } from "forge-std/Test.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { RegenStakerWithoutDelegateSurrogateVotes } from "src/regen/RegenStakerWithoutDelegateSurrogateVotes.sol";
+import { RegenStakerBase } from "src/regen/RegenStakerBase.sol";
 import { RegenEarningPowerCalculator } from "src/regen/RegenEarningPowerCalculator.sol";
 import { MockERC20 } from "test/mocks/MockERC20.sol";
-import { IWhitelist } from "src/utils/IWhitelist.sol";
-import { Whitelist } from "src/utils/Whitelist.sol";
+import { IAddressSet } from "src/utils/IAddressSet.sol";
+import { AddressSet } from "src/utils/AddressSet.sol";
 import { Staker } from "staker/Staker.sol";
+import { StakerOnBehalf } from "staker/extensions/StakerOnBehalf.sol";
 
 /// @title Tests for REG-007 Withdrawal Lockup Fix
 /// @notice Validates that the withdrawal lockup vulnerability is properly fixed
@@ -18,8 +21,8 @@ contract RegenStakerWithoutDelegateSurrogateVotesWithdrawalFixTest is Test {
     MockERC20 public stakeToken;
     MockERC20 public rewardToken;
     RegenEarningPowerCalculator public earningPowerCalculator;
-    Whitelist public whitelist;
-    Whitelist public allocationWhitelist;
+    AddressSet public allowset;
+    AddressSet public allocationAllowset;
 
     address public admin = makeAddr("admin");
     address public alice = makeAddr("alice");
@@ -36,15 +39,20 @@ contract RegenStakerWithoutDelegateSurrogateVotesWithdrawalFixTest is Test {
         stakeToken = new MockERC20(18);
         rewardToken = new MockERC20(18);
 
-        // Deploy whitelists
-        whitelist = new Whitelist();
-        whitelist.addToWhitelist(alice);
-        whitelist.addToWhitelist(bob);
+        // Deploy allowsets
+        allowset = new AddressSet();
+        allowset.add(alice);
+        allowset.add(bob);
 
-        allocationWhitelist = new Whitelist();
+        allocationAllowset = new AddressSet();
 
         // Deploy earning power calculator
-        earningPowerCalculator = new RegenEarningPowerCalculator(admin, IWhitelist(address(whitelist)));
+        earningPowerCalculator = new RegenEarningPowerCalculator(
+            admin,
+            IAddressSet(address(allowset)),
+            IAddressSet(address(0)),
+            AccessMode.ALLOWSET
+        );
 
         // Deploy staker
         staker = new RegenStakerWithoutDelegateSurrogateVotes(
@@ -54,11 +62,11 @@ contract RegenStakerWithoutDelegateSurrogateVotesWithdrawalFixTest is Test {
             0, // maxBumpTip
             admin,
             30 days, // rewardDuration
-            0, // maxClaimFee
             MIN_STAKE, // minimumStakeAmount
-            IWhitelist(address(whitelist)), // stakerWhitelist
-            IWhitelist(address(0)), // contributionWhitelist
-            allocationWhitelist // allocationMechanismWhitelist
+            IAddressSet(address(allowset)), // stakerAllowset
+            IAddressSet(address(0)), // stakerBlockset
+            AccessMode.NONE,
+            allocationAllowset // allocationMechanismAllowset
         );
 
         // Setup notifier
@@ -191,11 +199,11 @@ contract RegenStakerWithoutDelegateSurrogateVotesWithdrawalFixTest is Test {
             0,
             admin,
             30 days,
-            0,
             MIN_STAKE,
-            IWhitelist(address(whitelist)),
-            IWhitelist(address(0)),
-            allocationWhitelist
+            IAddressSet(address(allowset)),
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            allocationAllowset
         );
 
         vm.prank(admin);
@@ -338,5 +346,33 @@ contract RegenStakerWithoutDelegateSurrogateVotesWithdrawalFixTest is Test {
         vm.prank(alice);
         vm.expectRevert(RegenStakerWithoutDelegateSurrogateVotes.DelegationNotSupported.selector);
         staker.alterDelegatee(depositId, newDelegatee);
+    }
+
+    /// @notice Test that alterDelegateeOnBehalf reverts since delegation is not supported
+    function test_alterDelegateeOnBehalfReverts() public {
+        // Alice stakes
+        vm.startPrank(alice);
+        stakeToken.approve(address(staker), STAKE_AMOUNT);
+        Staker.DepositIdentifier depositId = staker.stake(STAKE_AMOUNT, alice, alice);
+        vm.stopPrank();
+
+        // With invalid signature, reverts during signature validation (before reaching _alterDelegatee)
+        vm.expectRevert(StakerOnBehalf.StakerOnBehalf__InvalidSignature.selector);
+        staker.alterDelegateeOnBehalf(depositId, bob, alice, block.timestamp + 1000, "");
+    }
+
+    /// @notice Fuzz test that alterDelegateeOnBehalf always reverts regardless of inputs
+    function testFuzz_alterDelegateeOnBehalfAlwaysReverts(address newDelegatee, uint256 deadline) public {
+        vm.assume(deadline > block.timestamp);
+
+        // Alice stakes
+        vm.startPrank(alice);
+        stakeToken.approve(address(staker), STAKE_AMOUNT);
+        Staker.DepositIdentifier depositId = staker.stake(STAKE_AMOUNT, alice, alice);
+        vm.stopPrank();
+
+        // With invalid signature, reverts during signature validation (before reaching _alterDelegatee)
+        vm.expectRevert(StakerOnBehalf.StakerOnBehalf__InvalidSignature.selector);
+        staker.alterDelegateeOnBehalf(depositId, newDelegatee, alice, deadline, "");
     }
 }

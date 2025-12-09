@@ -44,7 +44,8 @@ contract Setup is Test {
     uint256 public minFuzzAmount = 10_000;
     uint256 public profitMaxUnlockTime = 10 days;
 
-    bytes32 public constant BASE_STRATEGY_STORAGE = bytes32(uint256(keccak256("octant.base.strategy.storage")) - 1);
+    bytes32 public constant BASE_STRATEGY_STORAGE =
+        bytes32(uint256(keccak256("octant.tokenized.strategy.storage")) - 1);
 
     function setUp() public virtual {
         // Deploy the mock factory first for deterministic location
@@ -297,10 +298,10 @@ contract Setup is Test {
         assertApproxEqRel(_strategy.balanceOf(address(_strategy)), _buffer, 1e13, "!Buffer");
     }
 
-    function setupWhitelist(address _address) public {
+    function setupAllowset(address _address) public {
         MockIlliquidStrategy _strategy = MockIlliquidStrategy(payable(address(strategy)));
 
-        _strategy.setWhitelist(true);
+        _strategy.setAllowset(true);
 
         _strategy.allow(_address);
     }

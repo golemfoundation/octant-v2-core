@@ -20,7 +20,7 @@ contract BasicPOC_Test is OctantTestBase {
         // - MultistrategyVault with yield strategy
         // - RegenStaker with earning power calculation
         // - AllocationMechanism with quadratic funding
-        // - Configured whitelists and permissions
+        // - Configured allowsets and permissions
         super.setUp();
     }
 
@@ -151,6 +151,6 @@ contract BasicPOC_Test is OctantTestBase {
 
         // Note: Actual contribution requires permit signature parameters
         // For this basic POC, we demonstrate that the system is properly integrated
-        // and allocation mechanisms are whitelisted and accessible
+        // and allocation mechanisms are inAllowset and accessible
     }
 }
