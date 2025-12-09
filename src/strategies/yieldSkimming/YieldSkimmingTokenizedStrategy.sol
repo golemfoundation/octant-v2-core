@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0
+
 pragma solidity ^0.8.18;
 
 import { IBaseStrategy } from "src/core/interfaces/IBaseStrategy.sol";
@@ -13,16 +14,18 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
  * @title YieldSkimmingTokenizedStrategy
  * @author [Golem Foundation](https://golem.foundation)
  * @custom:security-contact security@golem.foundation
- * @notice Specialized TokenizedStrategy for yield-bearing assets (appreciating exchange rate).
+ * @notice Specialized TokenizedStrategy for yield-bearing assets with appreciating exchange rates.
  * @dev Mechanism:
- *      - Tracks value debt separately for users and dragon router (units: value-shares; 1 share = 1 asset value)
- *      - On report(), compares total vault value (assets * rate in RAY) vs total value debt (users + dragon)
- *        • Profit: mints value-shares to dragon and increases dragon value debt
- *        • Loss: burns dragon shares (if enabled and available) and reduces dragon value debt
+ *      - Shares represent ETH value (1 share = 1 ETH value) rather than asset amounts
+ *      - On report(), compares total vault value (assets * rate) vs total outstanding shares
+ *        • Profit: mints dragon shares equal to excess value above total share debt
+ *        • Loss: burns dragon shares (if enabled) up to available balance to cover shortfall
+ *      - Insolvency determination: vault cannot cover user debt (excludes dragon shares as loss buffer)
  *      - Dual conversion modes:
  *        • Solvent: rate-based conversions using current exchange rate (RAY precision)
- *        • Insolvent: proportional distribution using base TokenizedStrategy logic; dragon operations blocked
- *      - Dragon transfers trigger value-debt rebalancing; self-transfers by dragon are disallowed
+ *        • Insolvent: proportional distribution using base TokenizedStrategy logic
+ *      - Dragon solvency protection: prevents dragon operations that would compromise user debt coverage
+ *      - Dragon restrictions: cannot deposit/mint, cannot transfer to self, operations blocked during insolvency
  */
 contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
     using Math for uint256;
@@ -214,7 +217,7 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
 
     /**
      * @notice Get the maximum amount of assets that can be withdrawn by a user
-     * @dev Returns 0 for dragon router during insolvency
+     * @dev Dragon router has restrictions based on solvency protection to ensure user debt coverage
      * @param owner Address whose shares would be burned
      * @return Maximum withdraw amount in asset base units
      */
@@ -236,7 +239,7 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
 
     /**
      * @notice Get the maximum amount of shares that can be redeemed by a user
-     * @dev Returns 0 for dragon router during insolvency
+     * @dev Dragon router has restrictions based on solvency protection to ensure user debt coverage
      * @param owner Address whose shares would be burned
      * @return Maximum redeem amount in shares
      */
@@ -256,11 +259,11 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
     }
 
     /**
-     * @notice Transfer shares with dragon solvency protection and debt rebalancing
+     * @notice Transfer shares with dragon solvency protection
      * @dev Special behaviors for dragon router:
      *      - Dragon cannot transfer to itself (reverts)
-     *      - Dragon transfers trigger value debt rebalancing
-     *      - Dragon can only transfer when vault is solvent
+     *      - Dragon transfers trigger solvency checks to prevent user debt undercoverage
+     *      - Transfers blocked if they would make vault unable to cover user debt
      *      For non-dragon transfers, behaves like standard ERC20 transfer
      * @param to Address receiving shares
      * @param amount Amount of shares to transfer
@@ -283,11 +286,11 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
     }
 
     /**
-     * @notice Transfer shares from one address to another with dragon solvency protection and debt rebalancing
+     * @notice Transfer shares from one address to another with dragon solvency protection
      * @dev Special behaviors for dragon router:
      *      - Dragon cannot transfer to itself (reverts)
-     *      - Dragon transfers trigger value debt rebalancing
-     *      - Dragon can only transfer when vault is solvent
+     *      - Dragon transfers trigger solvency checks to prevent user debt undercoverage
+     *      - Transfers blocked if they would make vault unable to cover user debt
      *      For non-dragon transfers, behaves like standard ERC20 transferFrom
      * @param from Address transferring shares
      * @param to Address receiving shares
@@ -312,18 +315,18 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
     }
 
     /**
-     * @notice Reports yield skimming strategy performance and handles value debt adjustments
-     * @dev Overrides report to handle yield appreciation and loss recovery using value debt approach.
+     * @notice Reports yield skimming strategy performance and handles profit distribution and loss coverage
+     * @dev Overrides report to handle yield appreciation and loss recovery through dragon share minting/burning.
      *
      * Health check effectiveness depends on report() frequency. Exchange rate checks
      * become less effective over time if reports are infrequent, as profit limits may be exceeded.
      * Management should ensure regular reporting or adjust profit/loss ratios based on expected frequency.
      *
      * Key behaviors:
-     * 1. **Value Debt Tracking**: Compares current total value (assets * exchange rate) vs total debt (user debt + dragon router debt combined)
-     * 2. **Profit Capture**: When current value exceeds total debt, mints shares to dragonRouter and increases dragon debt accordingly
-     * 3. **Loss Protection**: When current value is less than total debt, burns dragon shares (up to available balance) and reduces dragon debt
-     * 4. **Insolvency Handling**: If dragon buffer insufficient for losses, remaining shortfall is handled through proportional asset distribution during withdrawals, not by modifying debt balances
+     * 1. **Value Comparison**: Compares current total value (assets * exchange rate) vs total outstanding shares
+     * 2. **Profit Capture**: When current value exceeds total shares, mints dragon shares equal to excess value
+     * 3. **Loss Protection**: When current value is less than total shares, burns dragon shares (if enabled) to cover shortfall
+     * 4. **Insolvency Handling**: If dragon buffer insufficient for losses, remaining shortfall is handled through proportional asset distribution during withdrawals
      *
      * @return profit Profit in assets from underlying value appreciation
      * @return loss Loss in assets from underlying value depreciation
@@ -389,12 +392,11 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
 
     /**
      * @notice Check if the vault is currently insolvent
-     * @return isInsolvent True if vault cannot cover user value debt and dragon router debt
+     * @return isInsolvent True if vault cannot cover user debt (excludes dragon shares as they absorb losses)
      */
     function isVaultInsolvent() external view returns (bool) {
         return _isVaultInsolvent();
     }
-
 
     /**
      * @dev Converts assets to shares using value debt approach with solvency awareness
@@ -517,7 +519,7 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
 
     /**
      * @dev Checks vault solvency after a dragon operation (transfer, redeem, withdraw)
-     * @param from Address shares are coming from (dragon for withdrawals, use address(0) for redemptions)  
+     * @param from Address shares are coming from (dragon for withdrawals, use address(0) for redemptions)
      * @param to Address shares are going to (user for transfers, use address(0) for withdrawals)
      * @param amount Amount of shares being moved
      * @dev Prevents dragon from removing buffer shares that might be needed for solvency
@@ -540,8 +542,10 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
         uint256 currentVaultValue = S.totalAssets.mulDiv(currentRate, WadRayMath.RAY);
 
         if (from == S.dragonRouter) {
-            // Dragon is sending shares - check if vault can remain solvent without this buffer
-            if (currentVaultValue < (S.totalSupply - amount)) {
+            // Dragon is sending shares - user debt will increase by the amount transferred
+            uint256 currentUserDebt = S.totalSupply - _balanceOf(S, S.dragonRouter);
+            uint256 userDebtAfterTransfer = currentUserDebt + amount;
+            if (currentVaultValue < userDebtAfterTransfer) {
                 revert("Transfer would cause vault insolvency");
             }
         } else {

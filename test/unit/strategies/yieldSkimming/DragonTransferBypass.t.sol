@@ -46,9 +46,14 @@ contract DragonTransferBypassTest is Setup {
         //    Since 1,200,000 < 1,500,000, vault is insolvent
         MockStrategySkimming(address(strategy)).updateExchangeRate(12e17); // 1.2 * 1e18
 
+        // Enable burning to activate dragon restrictions
+        vm.prank(management);
+        strategy.setEnableBurning(true);
+        vm.stopPrank();
+
         // 4) Dragon transfer should be blocked during insolvency
         vm.prank(dragon);
-        vm.expectRevert("Dragon cannot operate during insolvency");
+        vm.expectRevert("Transfer would cause vault insolvency");
         IMockStrategy(address(strategy)).transfer(ally, dragonShares);
 
         // 5) Verify dragon still has all shares (transfer was blocked)
