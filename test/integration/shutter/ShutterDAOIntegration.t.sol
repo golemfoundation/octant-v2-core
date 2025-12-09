@@ -23,6 +23,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { IERC20Staking } from "staker/interfaces/IERC20Staking.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
+import { ISafe } from "src/zodiac-core/interfaces/Safe.sol";
 
 /**
  * @title ShutterDAOIntegrationTest
@@ -35,14 +36,13 @@ contract ShutterDAOIntegrationTest is Test {
 
     // === Real Mainnet Addresses ===
     address constant SHUTTER_TREASURY = 0x36bD3044ab68f600f6d3e081056F34f2a58432c4;
+    address constant AZORIUS_MODULE = 0xAA6BfA174d2f803b517026E93DBBEc1eBa26258e;
     address constant SHU_TOKEN = 0xe485E2f1bab389C08721B291f6b59780feC83Fd7;
     address constant USDC_TOKEN = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
 
-    // Factory and Strategy Addresses (per Quentin's source of truth)
     address constant MORPHO_STRATEGY_FACTORY = 0x052d20B0e0b141988bD32772C735085e45F357c1;
     address constant TOKENIZED_STRATEGY_ADDRESS = 0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c;
 
-    // Strategy Name (per Quentin's source of truth)
     string constant STRATEGY_NAME = "SHUGrantPool";
 
     // === Constants ===
@@ -64,6 +64,7 @@ contract ShutterDAOIntegrationTest is Test {
 
     // === Roles ===
     address octantGovernance;
+    address keeperBot;
     address shuHolder1;
     address shuHolder2;
     address shuHolder3;
@@ -81,6 +82,7 @@ contract ShutterDAOIntegrationTest is Test {
         }
 
         octantGovernance = makeAddr("OctantGovernance");
+        keeperBot = makeAddr("KeeperBot");
         shuHolder1 = makeAddr("SHUHolder1");
         shuHolder2 = makeAddr("SHUHolder2");
         shuHolder3 = makeAddr("SHUHolder3");
@@ -107,9 +109,29 @@ contract ShutterDAOIntegrationTest is Test {
         );
     }
 
+    /// @notice Simulates Azorius module executing a transaction through the Safe
+    /// @dev Real call chain: Azorius.executeProposal() → Safe.execTransactionFromModule() → Target
+    ///      From target's perspective, msg.sender = Safe (Treasury)
+    function _executeFromModule(address to, bytes memory data) internal {
+        vm.prank(AZORIUS_MODULE);
+        bool success = ISafe(SHUTTER_TREASURY).execTransactionFromModule(to, 0, data, 0);
+        require(success, "Module execution failed");
+    }
+
+    /// @notice Execute and return data (for calls that return values like factory.createStrategy)
+    function _executeFromModuleReturnData(
+        address to,
+        bytes memory data
+    ) internal returns (bytes memory returnData) {
+        vm.prank(AZORIUS_MODULE);
+        (bool success, bytes memory result) =
+            ISafe(SHUTTER_TREASURY).execTransactionFromModuleReturnData(to, 0, data, 0);
+        require(success, "Module execution failed");
+        return result;
+    }
+
     function _deployVaultAndStrategy() internal {
-        // Donation Splitter (0% ESF, 100% Dragon Pool)
-        // ESF is excluded from payees because PaymentSplitter requires shares > 0
+        // PaymentSplitter configuration: 100% to Dragon Funding Pool
         address[] memory payees = new address[](1);
         payees[0] = makeAddr("DragonFundingPool");
         uint256[] memory shares = new uint256[](1);
@@ -120,48 +142,84 @@ contract ShutterDAOIntegrationTest is Test {
         ERC1967Proxy proxy = new ERC1967Proxy(address(paymentSplitterImpl), initData);
         paymentSplitter = PaymentSplitter(payable(address(proxy)));
 
-        // Deploy Morpho Strategy via Factory (per Quentin's source of truth)
-        // Uses "Simple DAO-centric roles": all roles → SHUTTER_TREASURY
-        MorphoCompounderStrategyFactory factory = MorphoCompounderStrategyFactory(MORPHO_STRATEGY_FACTORY);
-        vm.prank(SHUTTER_TREASURY);
-        address strategyAddress = factory.createStrategy(
-            STRATEGY_NAME,
-            SHUTTER_TREASURY,
-            SHUTTER_TREASURY,
-            SHUTTER_TREASURY,
-            address(paymentSplitter),
-            false,
-            TOKENIZED_STRATEGY_ADDRESS
-        );
-        strategy = MorphoCompounderStrategy(strategyAddress);
-
-        // Deploy Vault
-        vm.startPrank(SHUTTER_TREASURY);
-        dragonVault = MultistrategyVault(
-            vaultFactory.deployNewVault(
-                USDC_TOKEN,
-                "Shutter Dragon Vault",
-                "sdUSDC",
+        // ══════════════════════════════════════════════════════════════════════
+        // TX 1: Deploy Morpho Strategy via Factory (through Azorius → Safe)
+        // ══════════════════════════════════════════════════════════════════════
+        bytes memory createStrategyData = abi.encodeCall(
+            MorphoCompounderStrategyFactory.createStrategy,
+            (
+                STRATEGY_NAME,
                 SHUTTER_TREASURY,
-                PROFIT_MAX_UNLOCK_TIME
+                keeperBot,
+                SHUTTER_TREASURY,
+                address(paymentSplitter),
+                false,
+                TOKENIZED_STRATEGY_ADDRESS
             )
         );
+        bytes memory returnData = _executeFromModuleReturnData(MORPHO_STRATEGY_FACTORY, createStrategyData);
+        address strategyAddress = abi.decode(returnData, (address));
+        strategy = MorphoCompounderStrategy(strategyAddress);
 
-        // Configure Roles (Simple DAO-centric: all roles → Treasury)
-        dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.DEBT_MANAGER);
-        dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
-        dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
-        dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.QUEUE_MANAGER);
-        dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
+        // ══════════════════════════════════════════════════════════════════════
+        // TX 2: Deploy Vault (through Azorius → Safe)
+        // ══════════════════════════════════════════════════════════════════════
+        bytes memory deployVaultData = abi.encodeCall(
+            MultistrategyVaultFactory.deployNewVault,
+            (USDC_TOKEN, "Shutter Dragon Vault", "sdUSDC", SHUTTER_TREASURY, PROFIT_MAX_UNLOCK_TIME)
+        );
+        returnData = _executeFromModuleReturnData(address(vaultFactory), deployVaultData);
+        address vaultAddress = abi.decode(returnData, (address));
+        dragonVault = MultistrategyVault(vaultAddress);
 
-        // Setup Strategy
-        dragonVault.addStrategy(address(strategy), true);
-        dragonVault.updateMaxDebtForStrategy(address(strategy), type(uint256).max);
-        dragonVault.setDepositLimit(type(uint256).max, true);
-        dragonVault.setAutoAllocate(true);
+        // ══════════════════════════════════════════════════════════════════════
+        // TX 3-9: Configure Vault Roles (through Azorius → Safe)
+        // ══════════════════════════════════════════════════════════════════════
+        _executeFromModule(
+            vaultAddress,
+            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER))
+        );
+        _executeFromModule(
+            vaultAddress,
+            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.MAX_DEBT_MANAGER))
+        );
+        _executeFromModule(
+            vaultAddress,
+            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER))
+        );
+        _executeFromModule(
+            vaultAddress,
+            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.QUEUE_MANAGER))
+        );
+        _executeFromModule(
+            vaultAddress,
+            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER))
+        );
+        // DEBT_MANAGER needed for setAutoAllocate
+        _executeFromModule(
+            vaultAddress,
+            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.DEBT_MANAGER))
+        );
+        // Also give keeper DEBT_MANAGER for autonomous debt rebalancing
+        _executeFromModule(
+            vaultAddress,
+            abi.encodeCall(MultistrategyVault.addRole, (keeperBot, IMultistrategyVault.Roles.DEBT_MANAGER))
+        );
 
-        vm.stopPrank();
+        // ══════════════════════════════════════════════════════════════════════
+        // TX 9-12: Setup Strategy (through Azorius → Safe)
+        // ══════════════════════════════════════════════════════════════════════
+        _executeFromModule(
+            vaultAddress, abi.encodeCall(MultistrategyVault.addStrategy, (strategyAddress, true))
+        );
+        _executeFromModule(
+            vaultAddress,
+            abi.encodeCall(MultistrategyVault.updateMaxDebtForStrategy, (strategyAddress, type(uint256).max))
+        );
+        _executeFromModule(
+            vaultAddress, abi.encodeCall(MultistrategyVault.setDepositLimit, (type(uint256).max, true))
+        );
+        _executeFromModule(vaultAddress, abi.encodeCall(MultistrategyVault.setAutoAllocate, (true)));
     }
 
     function _deployRegenStaker() internal {
@@ -195,10 +253,15 @@ contract ShutterDAOIntegrationTest is Test {
 
         uint256 depositAmount = TREASURY_USDC_BALANCE;
 
-        vm.startPrank(SHUTTER_TREASURY);
-        IERC20(USDC_TOKEN).approve(address(dragonVault), depositAmount);
-        dragonVault.deposit(depositAmount, SHUTTER_TREASURY);
-        vm.stopPrank();
+        // TX 13: Approve USDC (through Azorius → Safe)
+        _executeFromModule(
+            USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount))
+        );
+
+        // TX 14: Deposit USDC (through Azorius → Safe)
+        _executeFromModule(
+            address(dragonVault), abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
+        );
 
         assertEq(dragonVault.balanceOf(SHUTTER_TREASURY), depositAmount);
         assertEq(dragonVault.totalAssets(), depositAmount);
@@ -210,15 +273,16 @@ contract ShutterDAOIntegrationTest is Test {
 
         uint256 depositAmount = TREASURY_USDC_BALANCE;
 
-        vm.startPrank(SHUTTER_TREASURY);
-        IERC20(USDC_TOKEN).approve(address(dragonVault), depositAmount);
-        dragonVault.deposit(depositAmount, SHUTTER_TREASURY);
-        vm.stopPrank();
+        // Approve + Deposit through Azorius → Safe
+        _executeFromModule(
+            USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount))
+        );
+        _executeFromModule(
+            address(dragonVault), abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
+        );
 
         // Check funds moved to Strategy (which deployed to Morpho)
-        // Strategy itself should have 0 idle USDC
         assertEq(IERC20(USDC_TOKEN).balanceOf(address(strategy)), 0);
-        // But should track assets
         assertApproxEqAbs(IERC4626(address(strategy)).totalAssets(), depositAmount, 1000);
 
         assertEq(dragonVault.totalDebt(), depositAmount);
@@ -228,22 +292,24 @@ contract ShutterDAOIntegrationTest is Test {
     function test_KeeperTriggeredAllocation() public {
         if (!isForked) return;
 
-        // Disable auto allocate first
-        vm.prank(SHUTTER_TREASURY);
-        dragonVault.setAutoAllocate(false);
+        // Disable auto allocate (through Azorius → Safe)
+        _executeFromModule(address(dragonVault), abi.encodeCall(MultistrategyVault.setAutoAllocate, (false)));
 
         uint256 depositAmount = TREASURY_USDC_BALANCE;
 
-        vm.startPrank(SHUTTER_TREASURY);
-        IERC20(USDC_TOKEN).approve(address(dragonVault), depositAmount);
-        dragonVault.deposit(depositAmount, SHUTTER_TREASURY);
-        vm.stopPrank();
+        // Approve + Deposit through Azorius → Safe
+        _executeFromModule(
+            USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount))
+        );
+        _executeFromModule(
+            address(dragonVault), abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
+        );
 
         assertEq(dragonVault.totalIdle(), depositAmount);
         assertEq(dragonVault.totalDebt(), 0);
 
-        // Treasury (as keeper in DAO-centric model) triggers allocation
-        vm.prank(SHUTTER_TREASURY);
+        // Keeper triggers allocation (operational role - direct call, no governance vote)
+        vm.prank(keeperBot);
         dragonVault.updateDebt(address(strategy), type(uint256).max, 0);
 
         assertEq(dragonVault.totalDebt(), depositAmount);
@@ -256,18 +322,24 @@ contract ShutterDAOIntegrationTest is Test {
 
         uint256 depositAmount = TREASURY_USDC_BALANCE;
 
-        vm.startPrank(SHUTTER_TREASURY);
-        IERC20(USDC_TOKEN).approve(address(dragonVault), depositAmount);
-        dragonVault.deposit(depositAmount, SHUTTER_TREASURY);
-        vm.stopPrank();
+        // Approve + Deposit through Azorius → Safe
+        _executeFromModule(
+            USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount))
+        );
+        _executeFromModule(
+            address(dragonVault), abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
+        );
 
         // Use maxWithdraw to account for precision in underlying vault
         address[] memory strategies = new address[](1);
         strategies[0] = address(strategy);
         uint256 maxWithdrawable = dragonVault.maxWithdraw(SHUTTER_TREASURY, 0, strategies);
 
-        vm.prank(SHUTTER_TREASURY);
-        dragonVault.withdraw(maxWithdrawable, SHUTTER_TREASURY, SHUTTER_TREASURY, 0, strategies);
+        // Withdraw through Azorius → Safe
+        _executeFromModule(
+            address(dragonVault),
+            abi.encodeCall(MultistrategyVault.withdraw, (maxWithdrawable, SHUTTER_TREASURY, SHUTTER_TREASURY, 0, strategies))
+        );
 
         // Verify withdrawal succeeds with minimal precision loss (< 0.01%)
         assertApproxEqRel(IERC20(USDC_TOKEN).balanceOf(SHUTTER_TREASURY), depositAmount, 0.0001e18);
@@ -281,10 +353,13 @@ contract ShutterDAOIntegrationTest is Test {
 
         uint256 depositAmount = TREASURY_USDC_BALANCE;
 
-        vm.startPrank(SHUTTER_TREASURY);
-        IERC20(USDC_TOKEN).approve(address(dragonVault), depositAmount);
-        dragonVault.deposit(depositAmount, SHUTTER_TREASURY);
-        vm.stopPrank();
+        // Approve + Deposit through Azorius → Safe
+        _executeFromModule(
+            USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount))
+        );
+        _executeFromModule(
+            address(dragonVault), abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
+        );
 
         assertEq(dragonVault.totalDebt(), depositAmount);
 
@@ -293,8 +368,11 @@ contract ShutterDAOIntegrationTest is Test {
         strategies[0] = address(strategy);
         uint256 maxWithdrawable = dragonVault.maxWithdraw(SHUTTER_TREASURY, 0, strategies);
 
-        vm.prank(SHUTTER_TREASURY);
-        dragonVault.withdraw(maxWithdrawable, SHUTTER_TREASURY, SHUTTER_TREASURY, 0, strategies);
+        // Withdraw through Azorius → Safe
+        _executeFromModule(
+            address(dragonVault),
+            abi.encodeCall(MultistrategyVault.withdraw, (maxWithdrawable, SHUTTER_TREASURY, SHUTTER_TREASURY, 0, strategies))
+        );
 
         // Verify withdrawal succeeds with minimal precision loss (< 0.01%)
         assertApproxEqRel(IERC20(USDC_TOKEN).balanceOf(SHUTTER_TREASURY), depositAmount, 0.0001e18);
@@ -350,16 +428,21 @@ contract ShutterDAOIntegrationTest is Test {
 
         uint256 depositAmount = TREASURY_USDC_BALANCE;
 
-        vm.startPrank(SHUTTER_TREASURY);
-        IERC20(USDC_TOKEN).approve(address(dragonVault), depositAmount);
-        dragonVault.deposit(depositAmount, SHUTTER_TREASURY);
-        vm.stopPrank();
+        // Approve + Deposit through Azorius → Safe
+        _executeFromModule(
+            USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount))
+        );
+        _executeFromModule(
+            address(dragonVault), abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
+        );
 
         uint256 shares = dragonVault.balanceOf(SHUTTER_TREASURY);
         uint256 halfShares = shares / 2;
 
-        vm.prank(SHUTTER_TREASURY);
-        dragonVault.transfer(shuHolder1, halfShares);
+        // Transfer shares through Azorius → Safe
+        _executeFromModule(
+            address(dragonVault), abi.encodeCall(IERC20.transfer, (shuHolder1, halfShares))
+        );
 
         assertEq(dragonVault.balanceOf(SHUTTER_TREASURY), halfShares);
         assertEq(dragonVault.balanceOf(shuHolder1), halfShares);
@@ -402,6 +485,7 @@ contract ShutterDAOGasProfilingTest is Test {
         if (!isForked) return;
 
         address octantGovernance = makeAddr("OctantGovernance");
+        address keeperBot = makeAddr("KeeperBot");
 
         uint256 gasStart = gasleft();
 
@@ -418,8 +502,7 @@ contract ShutterDAOGasProfilingTest is Test {
 
         PaymentSplitter paymentSplitter;
         {
-            // PaymentSplitter setup (proxy pattern)
-            // ESF is excluded from payees because PaymentSplitter requires shares > 0
+            // PaymentSplitter configuration: 100% to Dragon Funding Pool
             address[] memory payees = new address[](1);
             payees[0] = makeAddr("DragonFundingPool");
             uint256[] memory shares = new uint256[](1);
@@ -433,15 +516,16 @@ contract ShutterDAOGasProfilingTest is Test {
 
         uint256 gasAfterFactoryDeploy = gasleft();
 
-        // TX 1: Deploy Strategy via Factory (per Quentin's source of truth)
-        // Uses "Simple DAO-centric roles": all roles → SHUTTER_TREASURY
+        // TX 1: Deploy Strategy via Factory
+        // Role assignment: management + emergencyAdmin → Treasury (governance-controlled)
+        //                  keeper → Dedicated bot (operational, no governance votes required)
         MorphoCompounderStrategyFactory factory = MorphoCompounderStrategyFactory(MORPHO_STRATEGY_FACTORY);
         vm.prank(SHUTTER_TREASURY);
         address strategyAddress = factory.createStrategy(
             STRATEGY_NAME,
-            SHUTTER_TREASURY,
-            SHUTTER_TREASURY,
-            SHUTTER_TREASURY,
+            SHUTTER_TREASURY, // management
+            keeperBot, // keeper (CRITICAL: enables autonomous harvesting)
+            SHUTTER_TREASURY, // emergencyAdmin
             address(paymentSplitter),
             false,
             TOKENIZED_STRATEGY_ADDRESS
@@ -464,15 +548,20 @@ contract ShutterDAOGasProfilingTest is Test {
 
         uint256 gasAfterVaultDeploy = gasleft();
 
-        // TX 3-6: Configure (Simple DAO-centric: all roles → Treasury)
+        // TX 3-6: Configure Vault Roles
         vm.startPrank(SHUTTER_TREASURY);
 
+        // Strategic roles → Treasury (governance-controlled)
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.QUEUE_MANAGER);
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
+        // DEBT_MANAGER needed for setAutoAllocate
         dragonVault.addRole(SHUTTER_TREASURY, IMultistrategyVault.Roles.DEBT_MANAGER);
+
+        // Also give keeper DEBT_MANAGER for autonomous debt rebalancing
+        dragonVault.addRole(keeperBot, IMultistrategyVault.Roles.DEBT_MANAGER);
 
         dragonVault.addStrategy(address(strategy), true);
         dragonVault.updateMaxDebtForStrategy(address(strategy), type(uint256).max);
