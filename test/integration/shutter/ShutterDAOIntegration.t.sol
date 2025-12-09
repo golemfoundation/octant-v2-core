@@ -21,9 +21,9 @@ import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/Yie
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20Staking } from "staker/interfaces/IERC20Staking.sol";
-import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { ISafe } from "src/zodiac-core/interfaces/Safe.sol";
+import { PaymentSplitterFactory } from "src/factories/PaymentSplitterFactory.sol";
 import { USDC_MAINNET, MORPHO_STRATEGY_FACTORY_MAINNET, YEARN_TOKENIZED_STRATEGY_MAINNET, EIP_7825_TX_GAS_LIMIT } from "src/constants.sol";
 
 /**
@@ -56,6 +56,7 @@ contract ShutterDAOIntegrationTest is Test {
     // === System Contracts ===
     MultistrategyVault vaultImplementation;
     MultistrategyVaultFactory vaultFactory;
+    PaymentSplitterFactory paymentSplitterFactory;
     MultistrategyVault dragonVault;
     MorphoCompounderStrategy strategy;
     PaymentSplitter paymentSplitter;
@@ -109,6 +110,9 @@ contract ShutterDAOIntegrationTest is Test {
             address(vaultImplementation),
             octantGovernance
         );
+
+        vm.prank(octantGovernance);
+        paymentSplitterFactory = new PaymentSplitterFactory();
     }
 
     /// @notice Simulates Azorius module executing a transaction through the Safe
@@ -134,16 +138,22 @@ contract ShutterDAOIntegrationTest is Test {
     }
 
     function _deployVaultAndStrategy() internal {
-        // PaymentSplitter configuration: 100% to Dragon Funding Pool
+        // ══════════════════════════════════════════════════════════════════════
+        // TX 0: Deploy PaymentSplitter via Factory (through Azorius → Safe)
+        // ══════════════════════════════════════════════════════════════════════
         address[] memory payees = new address[](1);
         payees[0] = makeAddr("DragonFundingPool");
+        string[] memory payeeNames = new string[](1);
+        payeeNames[0] = "DragonFundingPool";
         uint256[] memory shares = new uint256[](1);
         shares[0] = 100;
 
-        PaymentSplitter paymentSplitterImpl = new PaymentSplitter();
-        bytes memory initData = abi.encodeCall(PaymentSplitter.initialize, (payees, shares));
-        ERC1967Proxy proxy = new ERC1967Proxy(address(paymentSplitterImpl), initData);
-        paymentSplitter = PaymentSplitter(payable(address(proxy)));
+        bytes memory createSplitterData = abi.encodeCall(
+            PaymentSplitterFactory.createPaymentSplitter,
+            (payees, payeeNames, shares)
+        );
+        bytes memory returnData = _executeFromModuleReturnData(address(paymentSplitterFactory), createSplitterData);
+        paymentSplitter = PaymentSplitter(payable(abi.decode(returnData, (address))));
 
         // ══════════════════════════════════════════════════════════════════════
         // TX 1: Deploy Morpho Strategy via Factory (through Azorius → Safe)
@@ -160,7 +170,7 @@ contract ShutterDAOIntegrationTest is Test {
                 TOKENIZED_STRATEGY_ADDRESS
             )
         );
-        bytes memory returnData = _executeFromModuleReturnData(MORPHO_STRATEGY_FACTORY, createStrategyData);
+        returnData = _executeFromModuleReturnData(MORPHO_STRATEGY_FACTORY, createStrategyData);
         address strategyAddress = abi.decode(returnData, (address));
         strategy = MorphoCompounderStrategy(strategyAddress);
 
@@ -516,7 +526,7 @@ contract ShutterDAOGasProfilingTest is Test {
 
         // === PRE-DEPLOYED BY OCTANT (not part of DAO proposal) ===
         MultistrategyVaultFactory vaultFactory;
-        address paymentSplitterAddr;
+        PaymentSplitterFactory splitterFactory;
         {
             MultistrategyVault vaultImpl = new MultistrategyVault();
             vaultFactory = new MultistrategyVaultFactory(
@@ -524,18 +534,7 @@ contract ShutterDAOGasProfilingTest is Test {
                 address(vaultImpl),
                 makeAddr("OctantGovernance")
             );
-
-            address[] memory payees = new address[](1);
-            payees[0] = makeAddr("DragonFundingPool");
-            uint256[] memory shares = new uint256[](1);
-            shares[0] = 100;
-
-            PaymentSplitter impl = new PaymentSplitter();
-            ERC1967Proxy proxy = new ERC1967Proxy(
-                address(impl),
-                abi.encodeCall(PaymentSplitter.initialize, (payees, shares))
-            );
-            paymentSplitterAddr = address(proxy);
+            splitterFactory = new PaymentSplitterFactory();
         }
 
         uint256 gasStart = gasleft();
@@ -543,6 +542,23 @@ contract ShutterDAOGasProfilingTest is Test {
         // ══════════════════════════════════════════════════════════════════════
         // DAO PROPOSAL TRANSACTIONS START HERE (via Azorius → Safe → Target)
         // ══════════════════════════════════════════════════════════════════════
+
+        // TX 0: Deploy PaymentSplitter via Factory
+        address paymentSplitterAddr;
+        {
+            address[] memory payees = new address[](1);
+            payees[0] = makeAddr("DragonFundingPool");
+            string[] memory payeeNames = new string[](1);
+            payeeNames[0] = "DragonFundingPool";
+            uint256[] memory shares = new uint256[](1);
+            shares[0] = 100;
+
+            bytes memory data = abi.encodeCall(
+                PaymentSplitterFactory.createPaymentSplitter,
+                (payees, payeeNames, shares)
+            );
+            paymentSplitterAddr = abi.decode(_executeFromModuleReturnData(address(splitterFactory), data), (address));
+        }
 
         // TX 1: Deploy Strategy via Factory
         address strategyAddress;
