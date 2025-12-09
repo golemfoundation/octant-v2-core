@@ -34,19 +34,6 @@ contract ShutterDAODelegationTest is ShutterDAOIntegrationTest {
 
         // 2. Additional Stake (same delegatee)
         vm.prank(shuHolder1);
-        // Capture the first deposit ID (should be 0 based on setup, but let's be safe)
-        // Since we can't easily get the ID from the previous tx in this test setup without events,
-        // we'll assume it's the first one for this user.
-        // Actually, stake() returns the ID.
-        // But we can't capture the return value of the previous tx easily here.
-        // However, stakeMore requires the ID.
-        // Wait, the user wants "Persists After Additional Stake".
-        // If they stake AGAIN using stake(), it creates a NEW deposit.
-        // If they use stakeMore(), it adds to existing.
-        // Let's test calling stake() again, as that's the common "add more" pattern if they don't track IDs.
-        // Or stakeMore if they do.
-        // The prompt implies "stake more" logic generally.
-        // Let's test stake() creating a second deposit to the same delegatee.
         regenStaker.stake(additionalStake, delegatee);
 
         // Verify delegation persists and amount increases

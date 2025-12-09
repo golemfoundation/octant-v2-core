@@ -24,6 +24,7 @@ import { IERC20Staking } from "staker/interfaces/IERC20Staking.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { ISafe } from "src/zodiac-core/interfaces/Safe.sol";
+import { USDC_MAINNET, MORPHO_STRATEGY_FACTORY_MAINNET, YEARN_TOKENIZED_STRATEGY_MAINNET, EIP_7825_TX_GAS_LIMIT } from "src/constants.sol";
 
 /**
  * @title ShutterDAOIntegrationTest
@@ -34,14 +35,15 @@ import { ISafe } from "src/zodiac-core/interfaces/Safe.sol";
 contract ShutterDAOIntegrationTest is Test {
     using SafeERC20 for IERC20;
 
-    // === Real Mainnet Addresses ===
+    // === Shutter DAO Specific Addresses ===
     address constant SHUTTER_TREASURY = 0x36bD3044ab68f600f6d3e081056F34f2a58432c4;
     address constant AZORIUS_MODULE = 0xAA6BfA174d2f803b517026E93DBBEc1eBa26258e;
     address constant SHU_TOKEN = 0xe485E2f1bab389C08721B291f6b59780feC83Fd7;
-    address constant USDC_TOKEN = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
 
-    address constant MORPHO_STRATEGY_FACTORY = 0x052d20B0e0b141988bD32772C735085e45F357c1;
-    address constant TOKENIZED_STRATEGY_ADDRESS = 0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c;
+    // === From src/constants.sol ===
+    address constant USDC_TOKEN = USDC_MAINNET;
+    address constant MORPHO_STRATEGY_FACTORY = MORPHO_STRATEGY_FACTORY_MAINNET;
+    address constant TOKENIZED_STRATEGY_ADDRESS = YEARN_TOKENIZED_STRATEGY_MAINNET;
 
     string constant STRATEGY_NAME = "SHUGrantPool";
 
@@ -119,13 +121,14 @@ contract ShutterDAOIntegrationTest is Test {
     }
 
     /// @notice Execute and return data (for calls that return values like factory.createStrategy)
-    function _executeFromModuleReturnData(
-        address to,
-        bytes memory data
-    ) internal returns (bytes memory returnData) {
+    function _executeFromModuleReturnData(address to, bytes memory data) internal returns (bytes memory returnData) {
         vm.prank(AZORIUS_MODULE);
-        (bool success, bytes memory result) =
-            ISafe(SHUTTER_TREASURY).execTransactionFromModuleReturnData(to, 0, data, 0);
+        (bool success, bytes memory result) = ISafe(SHUTTER_TREASURY).execTransactionFromModuleReturnData(
+            to,
+            0,
+            data,
+            0
+        );
         require(success, "Module execution failed");
         return result;
     }
@@ -177,7 +180,10 @@ contract ShutterDAOIntegrationTest is Test {
         // ══════════════════════════════════════════════════════════════════════
         _executeFromModule(
             vaultAddress,
-            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER))
+            abi.encodeCall(
+                MultistrategyVault.addRole,
+                (SHUTTER_TREASURY, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER)
+            )
         );
         _executeFromModule(
             vaultAddress,
@@ -185,7 +191,10 @@ contract ShutterDAOIntegrationTest is Test {
         );
         _executeFromModule(
             vaultAddress,
-            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER))
+            abi.encodeCall(
+                MultistrategyVault.addRole,
+                (SHUTTER_TREASURY, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER)
+            )
         );
         _executeFromModule(
             vaultAddress,
@@ -193,7 +202,10 @@ contract ShutterDAOIntegrationTest is Test {
         );
         _executeFromModule(
             vaultAddress,
-            abi.encodeCall(MultistrategyVault.addRole, (SHUTTER_TREASURY, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER))
+            abi.encodeCall(
+                MultistrategyVault.addRole,
+                (SHUTTER_TREASURY, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER)
+            )
         );
         // DEBT_MANAGER needed for setAutoAllocate
         _executeFromModule(
@@ -209,16 +221,12 @@ contract ShutterDAOIntegrationTest is Test {
         // ══════════════════════════════════════════════════════════════════════
         // TX 9-12: Setup Strategy (through Azorius → Safe)
         // ══════════════════════════════════════════════════════════════════════
-        _executeFromModule(
-            vaultAddress, abi.encodeCall(MultistrategyVault.addStrategy, (strategyAddress, true))
-        );
+        _executeFromModule(vaultAddress, abi.encodeCall(MultistrategyVault.addStrategy, (strategyAddress, true)));
         _executeFromModule(
             vaultAddress,
             abi.encodeCall(MultistrategyVault.updateMaxDebtForStrategy, (strategyAddress, type(uint256).max))
         );
-        _executeFromModule(
-            vaultAddress, abi.encodeCall(MultistrategyVault.setDepositLimit, (type(uint256).max, true))
-        );
+        _executeFromModule(vaultAddress, abi.encodeCall(MultistrategyVault.setDepositLimit, (type(uint256).max, true)));
         _executeFromModule(vaultAddress, abi.encodeCall(MultistrategyVault.setAutoAllocate, (true)));
     }
 
@@ -254,13 +262,12 @@ contract ShutterDAOIntegrationTest is Test {
         uint256 depositAmount = TREASURY_USDC_BALANCE;
 
         // TX 13: Approve USDC (through Azorius → Safe)
-        _executeFromModule(
-            USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount))
-        );
+        _executeFromModule(USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount)));
 
         // TX 14: Deposit USDC (through Azorius → Safe)
         _executeFromModule(
-            address(dragonVault), abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
+            address(dragonVault),
+            abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
         );
 
         assertEq(dragonVault.balanceOf(SHUTTER_TREASURY), depositAmount);
@@ -274,11 +281,10 @@ contract ShutterDAOIntegrationTest is Test {
         uint256 depositAmount = TREASURY_USDC_BALANCE;
 
         // Approve + Deposit through Azorius → Safe
+        _executeFromModule(USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount)));
         _executeFromModule(
-            USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount))
-        );
-        _executeFromModule(
-            address(dragonVault), abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
+            address(dragonVault),
+            abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
         );
 
         // Check funds moved to Strategy (which deployed to Morpho)
@@ -298,11 +304,10 @@ contract ShutterDAOIntegrationTest is Test {
         uint256 depositAmount = TREASURY_USDC_BALANCE;
 
         // Approve + Deposit through Azorius → Safe
+        _executeFromModule(USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount)));
         _executeFromModule(
-            USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount))
-        );
-        _executeFromModule(
-            address(dragonVault), abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
+            address(dragonVault),
+            abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
         );
 
         assertEq(dragonVault.totalIdle(), depositAmount);
@@ -323,11 +328,10 @@ contract ShutterDAOIntegrationTest is Test {
         uint256 depositAmount = TREASURY_USDC_BALANCE;
 
         // Approve + Deposit through Azorius → Safe
+        _executeFromModule(USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount)));
         _executeFromModule(
-            USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount))
-        );
-        _executeFromModule(
-            address(dragonVault), abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
+            address(dragonVault),
+            abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
         );
 
         // Use maxWithdraw to account for precision in underlying vault
@@ -338,7 +342,10 @@ contract ShutterDAOIntegrationTest is Test {
         // Withdraw through Azorius → Safe
         _executeFromModule(
             address(dragonVault),
-            abi.encodeCall(MultistrategyVault.withdraw, (maxWithdrawable, SHUTTER_TREASURY, SHUTTER_TREASURY, 0, strategies))
+            abi.encodeCall(
+                MultistrategyVault.withdraw,
+                (maxWithdrawable, SHUTTER_TREASURY, SHUTTER_TREASURY, 0, strategies)
+            )
         );
 
         // Verify withdrawal succeeds with minimal precision loss (< 0.01%)
@@ -354,11 +361,10 @@ contract ShutterDAOIntegrationTest is Test {
         uint256 depositAmount = TREASURY_USDC_BALANCE;
 
         // Approve + Deposit through Azorius → Safe
+        _executeFromModule(USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount)));
         _executeFromModule(
-            USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount))
-        );
-        _executeFromModule(
-            address(dragonVault), abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
+            address(dragonVault),
+            abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
         );
 
         assertEq(dragonVault.totalDebt(), depositAmount);
@@ -371,7 +377,10 @@ contract ShutterDAOIntegrationTest is Test {
         // Withdraw through Azorius → Safe
         _executeFromModule(
             address(dragonVault),
-            abi.encodeCall(MultistrategyVault.withdraw, (maxWithdrawable, SHUTTER_TREASURY, SHUTTER_TREASURY, 0, strategies))
+            abi.encodeCall(
+                MultistrategyVault.withdraw,
+                (maxWithdrawable, SHUTTER_TREASURY, SHUTTER_TREASURY, 0, strategies)
+            )
         );
 
         // Verify withdrawal succeeds with minimal precision loss (< 0.01%)
@@ -429,20 +438,17 @@ contract ShutterDAOIntegrationTest is Test {
         uint256 depositAmount = TREASURY_USDC_BALANCE;
 
         // Approve + Deposit through Azorius → Safe
+        _executeFromModule(USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount)));
         _executeFromModule(
-            USDC_TOKEN, abi.encodeCall(IERC20.approve, (address(dragonVault), depositAmount))
-        );
-        _executeFromModule(
-            address(dragonVault), abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
+            address(dragonVault),
+            abi.encodeCall(MultistrategyVault.deposit, (depositAmount, SHUTTER_TREASURY))
         );
 
         uint256 shares = dragonVault.balanceOf(SHUTTER_TREASURY);
         uint256 halfShares = shares / 2;
 
         // Transfer shares through Azorius → Safe
-        _executeFromModule(
-            address(dragonVault), abi.encodeCall(IERC20.transfer, (shuHolder1, halfShares))
-        );
+        _executeFromModule(address(dragonVault), abi.encodeCall(IERC20.transfer, (shuHolder1, halfShares)));
 
         assertEq(dragonVault.balanceOf(SHUTTER_TREASURY), halfShares);
         assertEq(dragonVault.balanceOf(shuHolder1), halfShares);
@@ -457,17 +463,18 @@ contract ShutterDAOIntegrationTest is Test {
 contract ShutterDAOGasProfilingTest is Test {
     using SafeERC20 for IERC20;
 
+    // === Shutter DAO Specific ===
     address constant SHUTTER_TREASURY = 0x36bD3044ab68f600f6d3e081056F34f2a58432c4;
-    address constant USDC_TOKEN = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
-
-    // Factory and Strategy Addresses (per Quentin's source of truth)
-    address constant MORPHO_STRATEGY_FACTORY = 0x052d20B0e0b141988bD32772C735085e45F357c1;
-    address constant TOKENIZED_STRATEGY_ADDRESS = 0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c;
     string constant STRATEGY_NAME = "SHUGrantPool";
 
+    // === From src/constants.sol ===
+    address constant USDC_TOKEN = USDC_MAINNET;
+    address constant MORPHO_STRATEGY_FACTORY = MORPHO_STRATEGY_FACTORY_MAINNET;
+    address constant TOKENIZED_STRATEGY_ADDRESS = YEARN_TOKENIZED_STRATEGY_MAINNET;
+
+    // === Test Values ===
     uint256 constant TREASURY_USDC_BALANCE = 1_200_000e6;
     uint256 constant PROFIT_MAX_UNLOCK_TIME = 7 days;
-    uint256 constant EIP_7825_TX_GAS_LIMIT = 16_777_216;
 
     bool isForked;
 
