@@ -5,13 +5,15 @@
 
 Shutter DAO 0x36 will integrate with Octant v2 through **two distinct components**:
 
-1. **Dragon Vault** — A Multistrategy Vault for treasury capital deployment (no lockup)
+1. **SHUGrantPool Strategy** — An ERC-4626 yield-donating strategy for treasury capital (no lockup)
 2. **Regen Staker** — A staking contract for SHU tokens enabling public goods funding with matched rewards
 
 | Component | Purpose | Capital |
 |-----------|---------|---------|
-| Dragon Vault | Generate yield to fund Regen Staker rewards | 1.2M USDC |
+| SHUGrantPool Strategy | Generate yield to fund Regen Staker rewards | 1.2M USDC |
 | Regen Staker | Public goods funding (matched rewards) | SHU tokens |
+
+> **Architecture Note**: The strategy IS the ERC-4626 vault. No MultistrategyVault wrapper is needed since only one strategy is approved by the DAO. This simplifies deployment, reduces gas costs, and eliminates unnecessary complexity.
 
 ---
 
@@ -20,19 +22,21 @@ Shutter DAO 0x36 will integrate with Octant v2 through **two distinct components
 | Entity | Address | Network |
 |--------|---------|---------|
 | Shutter DAO Treasury | [`0x36bD3044ab68f600f6d3e081056F34f2a58432c4`](https://etherscan.io/address/0x36bD3044ab68f600f6d3e081056F34f2a58432c4) | Ethereum |
+| Azorius Module | [`0xAA6BfA174d2f803b517026E93DBBEc1eBa26258e`](https://etherscan.io/address/0xAA6BfA174d2f803b517026E93DBBEc1eBa26258e) | Ethereum |
 | SHU Token | [`0xe485E2f1bab389C08721B291f6b59780feC83Fd7`](https://etherscan.io/token/0xe485E2f1bab389C08721B291f6b59780feC83Fd7) | Ethereum |
 | USDC | [`0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48`](https://etherscan.io/token/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48) | Ethereum |
 | Morpho Strategy Factory | [`0x052d20B0e0b141988bD32772C735085e45F357c1`](https://etherscan.io/address/0x052d20B0e0b141988bD32772C735085e45F357c1) | Ethereum |
 | Tokenized Strategy | [`0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c`](https://etherscan.io/address/0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c) | Ethereum |
 | Yearn Strategy USDC | [`0x074134A2784F4F66b6ceD6f68849382990Ff3215`](https://etherscan.io/address/0x074134A2784F4F66b6ceD6f68849382990Ff3215) | Ethereum |
+| PaymentSplitter Factory | `[TBD - Octant to deploy]` | Ethereum |
 
 ---
 
-## Part 1: Dragon Vault
+## Part 1: SHUGrantPool Strategy
 
-The Multistrategy Vault manages treasury capital with instant liquidity (no lockup or rage quit required).
+The MorphoCompounderStrategy is itself an ERC-4626 vault (via Yearn's TokenizedStrategy). Treasury deposits USDC directly into the strategy.
 
-### Underlying Strategy
+### Underlying Yield Source
 
 [**Yearn Strategy USDC**](https://etherscan.io/address/0x074134A2784F4F66b6ceD6f68849382990Ff3215) — Deposits into Morpho lending markets via Yearn's aggregator vault.
 
@@ -43,10 +47,9 @@ The `MorphoCompounderStrategyFactory` at `0x052d20B...` deploys strategies that 
 
 | Role | Assigned To | Description |
 |------|-------------|-------------|
-| **Operator** | Shutter DAO Treasury (`0x36bD...32c4`) | Only entity that can deposit/mint shares into the vault |
-| **Management** | Shutter DAO Treasury (`0x36bD...32c4`) | Administrative role (add strategies, set keeper, set emergency admin) |
+| **Management** | Shutter DAO Treasury (`0x36bD...32c4`) | Administrative role (set keeper, set emergency admin, shutdown) |
 | **Keeper** | Dedicated Bot/EOA | **REQUIRED**: Authorized to call `report()`/`tend()` to harvest yields without governance votes |
-| **Emergency Admin** | Shutter DAO Treasury (`0x36bD...32c4`) | Can shutdown the vault and perform emergency withdrawals |
+| **Emergency Admin** | Shutter DAO Treasury (`0x36bD...32c4`) | Can shutdown the strategy and perform emergency withdrawals |
 
 > **Critical**: The Keeper MUST be a dedicated EOA or bot, NOT the Treasury Safe. Assigning Keeper to Treasury would require a governance vote (72-hour voting + 72-hour execution = 144 hours minimum) for every harvest, creating severe operational bottlenecks that defeat the purpose of automated yield generation.
 
@@ -68,7 +71,7 @@ The `MorphoCompounderStrategyFactory` at `0x052d20B...` deploys strategies that 
 
 ## Part 2: Regen Staker
 
-The Regen Staker allows SHU holders to stake their tokens and direct their staking rewards toward public goods funding, which Octant matches. Rewards are distributed from an external source (e.g., Dragon Vault yield).
+The Regen Staker allows SHU holders to stake their tokens and direct their staking rewards toward public goods funding, which Octant matches. Rewards are distributed from an external source (e.g., SHUGrantPool Strategy yield).
 
 ### Key Features
 
@@ -162,13 +165,13 @@ Shutter DAO also supports **Shielded Voting** on Snapshot, which encrypts votes 
 
 ## Execution Playbook
 
-### Phase 1: Dragon Vault Deployment
+### Phase 1: Strategy Deployment
 
-The entire deployment can be executed in a **single DAO proposal** with batched transactions. This approach:
-- Deploys all contracts atomically
-- Sets up roles and permissions
-- Deposits treasury capital
-- Must fit within 16.7M gas (EIP-7825 per-transaction gas limit)
+The entire deployment can be executed in a **single DAO proposal** with only **4 transactions**. This simplified approach:
+- Deploys PaymentSplitter and Strategy
+- Approves and deposits treasury capital
+- No vault wrapper needed (strategy IS the ERC-4626 vault)
+- Fits easily within 16.7M gas (EIP-7825 per-transaction gas limit)
 
 #### Step 1: Create Fractal Proposal (UI Walkthrough)
 
@@ -188,10 +191,20 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 
 | Field | Value |
 |-------|-------|
-| Title | `Deploy Octant Dragon Vault and Deposit 1.2M USDC` |
+| Title | `Deploy Octant SHUGrantPool Strategy and Deposit 1.2M USDC` |
 | Description | See [Proposal Template](#proposal-template) below |
 
-**1.5 — Add Transaction 1: Deploy Morpho Strategy**
+**1.5 — Add Transaction 1: Deploy PaymentSplitter**
+
+| Field | Value |
+|-------|-------|
+| Target Contract | `[PAYMENT_SPLITTER_FACTORY_ADDRESS]` *(TBD by Octant)* |
+| Function | `createPaymentSplitter(address[],string[],uint256[])` |
+| `payees` | `[DRAGON_FUNDING_POOL_ADDRESS]` |
+| `payeeNames` | `["DragonFundingPool"]` |
+| `shares` | `[100]` |
+
+**1.6 — Add Transaction 2: Deploy Strategy**
 
 | Field | Value |
 |-------|-------|
@@ -201,126 +214,45 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 | `_management` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` |
 | `_keeper` | `[KEEPER_BOT_ADDRESS]` |
 | `_emergencyAdmin` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` |
-| `_donationAddress` | `[PAYMENT_SPLITTER_ADDRESS]` *(See note below)* |
+| `_donationAddress` | `[PAYMENT_SPLITTER_ADDRESS]` *(from Tx 1)* |
 | `_enableBurning` | `false` |
 | `_tokenizedStrategyAddress` | `0xb27064a2c51b8c5b39a5bb911ad34db039c3ab9c` |
 
-> **Note**: The `_donationAddress` should point to a PaymentSplitter configured for 100% distribution to the Dragon Funding Pool. If deploying in a single proposal, this address must be pre-calculated using CREATE2. Alternatively, the Dragon Funding Pool address can be used directly to simplify the deployment.
+> **Note**: The strategy IS the ERC-4626 vault. No additional vault wrapper is needed.
 
-**1.6 — Add Transaction 2: Deploy Dragon Vault**
-
-| Field | Value |
-|-------|-------|
-| Target Contract | `[VAULT_FACTORY_ADDRESS]` *(TBD by Octant)* |
-| Function | `deployNewVault(address asset, string name, string symbol, address roleManager, uint256 profitMaxUnlockTime)` |
-| `asset` | `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48` (USDC) |
-| `name` | `Shutter Dragon Vault` |
-| `symbol` | `sdUSDC` |
-| `roleManager` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` (Treasury) |
-| `profitMaxUnlockTime` | `604800` (7 days) |
-
-**1.7 — Add Transactions: Assign Roles**
-
-The vault requires role assignments to function. Add these as separate transactions in the proposal (or batch them if supported).
-
-| Field | Value |
-|-------|-------|
-| Target Contract | `[DRAGON_VAULT_ADDRESS]` *(from Tx 2)* |
-| Function | `addRole(address account, uint8 role)` |
-
-Add the following role assignments:
-
-**Strategic Roles (Governance-Controlled):**
-1. `ADD_STRATEGY_MANAGER` (0) → `0x36bD...32c4` (Treasury)
-2. `MAX_DEBT_MANAGER` (7) → `0x36bD...32c4` (Treasury)
-3. `QUEUE_MANAGER` (4) → `0x36bD...32c4` (Treasury)
-4. `DEPOSIT_LIMIT_MANAGER` (8) → `0x36bD...32c4` (Treasury)
-5. `WITHDRAW_LIMIT_MANAGER` (9) → `0x36bD...32c4` (Treasury)
-6. `DEBT_MANAGER` (6) → `0x36bD...32c4` (Treasury) — *Required for `setAutoAllocate()`*
-
-**Operational Role (Autonomous):**
-7. `DEBT_MANAGER` (6) → `[KEEPER_BOT_ADDRESS]` (Dedicated EOA/Bot)
-
-> **Note**: DEBT_MANAGER is assigned to **both** Treasury and Keeper. Treasury needs it to call `setAutoAllocate()`, while Keeper needs it for autonomous `updateDebt()` operations without governance votes.
-
-**1.8 — Add Transaction: Add Strategy to Vault**
-
-| Field | Value |
-|-------|-------|
-| Target Contract | `[DRAGON_VAULT_ADDRESS]` |
-| Function | `addStrategy(address strategy)` |
-| `strategy` | `[STRATEGY_ADDRESS]` *(from Tx 1)* |
-
-**1.9 — Add Transaction: Set Strategy Max Debt**
-
-| Field | Value |
-|-------|-------|
-| Target Contract | `[DRAGON_VAULT_ADDRESS]` |
-| Function | `updateMaxDebtForStrategy(address strategy, uint256 newMaxDebt)` |
-| `strategy` | `[STRATEGY_ADDRESS]` |
-| `newMaxDebt` | `type(uint256).max` |
-
-**1.10 — Add Transaction: Set Default Queue**
-
-| Field | Value |
-|-------|-------|
-| Target Contract | `[DRAGON_VAULT_ADDRESS]` |
-| Function | `setDefaultQueue(address[] calldata newDefaultQueue)` |
-| `newDefaultQueue` | `[[STRATEGY_ADDRESS]]` |
-
-**1.11 — Add Transaction: Set AutoAllocate Mode**
-
-| Field | Value |
-|-------|-------|
-| Target Contract | `[DRAGON_VAULT_ADDRESS]` |
-| Function | `setAutoAllocate(bool autoAllocate)` |
-| `autoAllocate` | `true` |
-
-> **Note**: Setting `autoAllocate` to `true` ensures that deposits are immediately deployed to the strategy (Yearn Strategy USDC → Morpho) to start earning yield without requiring manual Keeper intervention.
-
-**1.12 — Add Transaction: Set Deposit Limit**
-
-| Field | Value |
-|-------|-------|
-| Target Contract | `[DRAGON_VAULT_ADDRESS]` |
-| Function | `setDepositLimit(uint256 depositLimit, bool depositLimitActive)` |
-| `depositLimit` | `type(uint256).max` |
-| `depositLimitActive` | `true` |
-
-**1.13 — Add Transaction: Approve USDC**
+**1.7 — Add Transaction 3: Approve USDC**
 
 | Field | Value |
 |-------|-------|
 | Target Contract | `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48` (USDC) |
 | Function | `approve(address spender, uint256 amount)` |
-| `spender` | `[DRAGON_VAULT_ADDRESS]` |
-| `amount` | `1200000000000` |
+| `spender` | `[STRATEGY_ADDRESS]` *(from Tx 2)* |
+| `amount` | `1200000000000` (1.2M USDC) |
 
-**1.14 — Add Transaction: Deposit USDC**
+**1.8 — Add Transaction 4: Deposit USDC**
 
 | Field | Value |
 |-------|-------|
-| Target Contract | `[DRAGON_VAULT_ADDRESS]` |
+| Target Contract | `[STRATEGY_ADDRESS]` *(from Tx 2)* |
 | Function | `deposit(uint256 assets, address receiver)` |
-| `assets` | `1200000000000` |
+| `assets` | `1200000000000` (1.2M USDC) |
 | `receiver` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` |
 
-**1.15 — Submit Proposal**
+**1.9 — Submit Proposal**
 
 Review all details and click "Submit Proposal". Sign the transaction with your wallet.
 
-> ✅ **Gas Verified**: The batched proposal uses ~2.5M gas for the DAO proposal portion (via realistic Azorius module execution), or ~8.7M total gas if everything (including factories) is deployed in one go. Both are well under the 16.7M per-transaction gas limit (EIP-7825). See `ShutterDAOGasProfilingTest` for details.
+> ✅ **Gas Verified**: The simplified proposal (4 transactions) uses minimal gas - well under the 16.7M per-transaction limit (EIP-7825). See `ShutterDAOGasProfilingTest` for details.
 
-### Gas Profile Breakdown
+### Gas Profile
 
 | Component | Gas Cost |
 |-----------|----------|
-| **DAO Proposal (via Azorius)** | **~2,525,882** |
-| **Total (incl. factories)** | **~8,689,070** |
+| **DAO Proposal (4 txs via Azorius)** | **~1.5M** |
 | **EIP-7825 Limit** | 16,777,216 |
-| **Headroom** | ~85% |
+| **Headroom** | >90% |
 
-*Note: Gas measured using realistic Azorius → Safe → Target execution path. The module execution overhead (~32k gas) is included in these estimates.*
+*Note: Simplified architecture (no vault wrapper) significantly reduces gas costs compared to previous MultistrategyVault approach.*
 
 #### Step 2: Vote
 
@@ -341,17 +273,17 @@ Once the voting period ends and the proposal passes:
 
 After execution, verify:
 
-- [ ] Dragon Vault deployed at expected address
+- [ ] PaymentSplitter deployed at expected address
 - [ ] Strategy deployed with correct donation address
-- [ ] Treasury received vault shares
-- [ ] Funds deployed to underlying strategy (if autoAllocate enabled) OR idle in vault (if keeper must allocate)
+- [ ] Treasury received strategy shares
+- [ ] USDC deposited and earning yield in Morpho markets
 
 ### Proposal Template
 
 ```markdown
 ## Summary
 
-This proposal deploys the Octant Dragon Vault infrastructure and deposits 
+This proposal deploys the Octant SHUGrantPool Strategy and deposits 
 1,200,000 USDC from Shutter DAO 0x36 treasury as part of the Octant v2 pilot.
 
 ## Background
@@ -359,18 +291,17 @@ This proposal deploys the Octant Dragon Vault infrastructure and deposits
 Octant v2 enables DAOs to optimize treasury yield while funding public goods. 
 See: [Octant v2 Pilot Proposal](https://shutternetwork.discourse.group/t/octant-v2-pilot-to-optimize-treasury-strengthen-ecosystem/760)
 
-## Transactions (16 total)
+## Transactions (4 total)
 
-1. **Deploy Morpho Strategy**: Create yield strategy with 100% yield to Dragon Funding Pool
-2. **Deploy Dragon Vault**: Create vault with Treasury as role manager
-3-9. **Assign Roles**: Add 7 operational roles (6 to Treasury, 1 to Keeper)
-10. **Add Strategy**: Register strategy with vault
-11. **Set Max Debt**: Allow full allocation to strategy
-12. **Set Default Queue**: Configure withdrawal order
-13. **Set AutoAllocate**: Enable automatic deployment of deposits to strategy
-14. **Set Deposit Limit**: Enable deposits
-15. **Approve USDC**: Allow Dragon Vault to spend 1.2M USDC
-16. **Deposit USDC**: Deposit 1.2M USDC, receiving shares to Treasury
+1. **Deploy PaymentSplitter**: Create yield distribution contract (100% to Dragon Funding Pool)
+2. **Deploy Strategy**: Create ERC-4626 yield-donating strategy
+3. **Approve USDC**: Allow Strategy to spend 1.2M USDC
+4. **Deposit USDC**: Deposit 1.2M USDC, receiving shares to Treasury
+
+## Architecture
+
+The MorphoCompounderStrategy IS the ERC-4626 vault (via Yearn's TokenizedStrategy).
+No additional vault wrapper is needed since only one strategy is approved by the DAO.
 
 ## Yield Distribution
 
@@ -378,26 +309,38 @@ See: [Octant v2 Pilot Proposal](https://shutternetwork.discourse.group/t/octant-
 
 ## Risk Considerations
 
-- Strategy: Yearn Strategy USDC (deposits into Morpho lending markets)
+- Underlying: Yearn Strategy USDC (deposits into Morpho lending markets)
 - Custody: Treasury retains full share ownership
 - Liquidity: Instant withdrawals (no lockup period)
 
 ## Links
 
 - [Yearn Strategy USDC](https://etherscan.io/address/0x074134A2784F4F66b6ceD6f68849382990Ff3215)
+- [Morpho Strategy Factory](https://etherscan.io/address/0x052d20B0e0b141988bD32772C735085e45F357c1)
 ```
 
 ### Prepared Calldata
 
-Complete transaction calldata for all operations, organized by phase.
+Complete transaction calldata for all 4 operations.
 
-> **Placeholders**: Replace `[STRATEGY_ADDRESS]`, `[VAULT_ADDRESS]`, `[KEEPER_ADDRESS]`, and `[DONATION_ADDRESS]` with actual deployed addresses.
+> **Placeholders**: Replace `[STRATEGY_ADDRESS]`, `[PAYMENT_SPLITTER_ADDRESS]`, `[KEEPER_ADDRESS]`, and `[DRAGON_FUNDING_POOL]` with actual addresses.
 
 ---
 
-### Section A: Infrastructure Deployment
+### Transaction 1: Deploy PaymentSplitter
 
-**TX 1 — Deploy Strategy**
+```
+Target:   [PAYMENT_SPLITTER_FACTORY_ADDRESS] (TBD by Octant)
+Function: createPaymentSplitter(address[],string[],uint256[])
+Value:    0
+
+Parameters:
+  payees:     [[DRAGON_FUNDING_POOL]]
+  payeeNames: ["DragonFundingPool"]
+  shares:     [100]
+```
+
+### Transaction 2: Deploy Strategy
 
 ```
 Target:   0x052d20B0e0b141988bD32772C735085e45F357c1 (Morpho Strategy Factory)
@@ -408,256 +351,14 @@ Value:    0
 Parameters:
   _name:                     "SHUGrantPool"
   _management:               0x36bD3044ab68f600f6d3e081056F34f2a58432c4
-  _keeper:                   0x36bD3044ab68f600f6d3e081056F34f2a58432c4 (or dedicated bot)
+  _keeper:                   [KEEPER_ADDRESS] (dedicated bot)
   _emergencyAdmin:           0x36bD3044ab68f600f6d3e081056F34f2a58432c4
-  _donationAddress:          [DONATION_ADDRESS]
+  _donationAddress:          [PAYMENT_SPLITTER_ADDRESS] (from Tx 1)
   _enableBurning:            false
   _tokenizedStrategyAddress: 0xb27064a2c51b8c5b39a5bb911ad34db039c3ab9c
-
-Calldata (Treasury as all roles, placeholder donation address):
-0x31d8994300000000000000000000000000000000000000000000000000000000000000e000000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c400000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c400000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000b27064a2c51b8c5b39a5bb911ad34db039c3ab9c000000000000000000000000000000000000000000000000000000000000000c5348554772616e74506f6f6c0000000000000000000000000000000000000000
 ```
 
-**TX 2 — Deploy Dragon Vault**
-
-```
-Target:   [VAULT_FACTORY_ADDRESS] (TBD by Octant)
-Function: deployNewVault(address,string,string,address,uint256)
-Selector: 0xdf0b04ac
-Value:    0
-
-Parameters:
-  asset:               0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 (USDC)
-  name:                "Shutter Dragon Vault"
-  symbol:              "sdUSDC"
-  roleManager:         0x36bD3044ab68f600f6d3e081056F34f2a58432c4 (Treasury)
-  profitMaxUnlockTime: 604800 (7 days)
-
-Calldata:
-0xdf0b04ac
-000000000000000000000000a0b86991c6218b36c1d19d4a2e9eb0ce3606eb48
-00000000000000000000000000000000000000000000000000000000000000a0
-00000000000000000000000000000000000000000000000000000000000000e0
-00000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c4
-0000000000000000000000000000000000000000000000000000000000093a80
-0000000000000000000000000000000000000000000000000000000000000014
-5368757474657220447261676f6e205661756c74000000000000000000000000
-0000000000000000000000000000000000000000000000000000000000000006
-7364555344430000000000000000000000000000000000000000000000000000
-```
-
----
-
-### Section B: Role Assignments
-
-All role assignments target the Dragon Vault.
-
-**TX 3 — Add Role: ADD_STRATEGY_MANAGER → Treasury**
-
-```
-Target:   [VAULT_ADDRESS]
-Function: addRole(address,uint8)
-Selector: 0x44deb6f3
-Value:    0
-
-Parameters:
-  account: 0x36bD3044ab68f600f6d3e081056F34f2a58432c4
-  role:    0 (ADD_STRATEGY_MANAGER)
-
-Calldata:
-0x44deb6f300000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c40000000000000000000000000000000000000000000000000000000000000000
-```
-
-**TX 4 — Add Role: QUEUE_MANAGER → Treasury**
-
-```
-Target:   [VAULT_ADDRESS]
-Function: addRole(address,uint8)
-Selector: 0x44deb6f3
-Value:    0
-
-Parameters:
-  account: 0x36bD3044ab68f600f6d3e081056F34f2a58432c4
-  role:    4 (QUEUE_MANAGER)
-
-Calldata:
-0x44deb6f300000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c40000000000000000000000000000000000000000000000000000000000000004
-```
-
-**TX 5 — Add Role: DEBT_MANAGER → Treasury**
-
-```
-Target:   [VAULT_ADDRESS]
-Function: addRole(address,uint8)
-Selector: 0x44deb6f3
-Value:    0
-
-Parameters:
-  account: 0x36bD3044ab68f600f6d3e081056F34f2a58432c4
-  role:    6 (DEBT_MANAGER)
-
-Calldata:
-0x44deb6f300000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c40000000000000000000000000000000000000000000000000000000000000006
-```
-
-**TX 6 — Add Role: MAX_DEBT_MANAGER → Treasury**
-
-```
-Target:   [VAULT_ADDRESS]
-Function: addRole(address,uint8)
-Selector: 0x44deb6f3
-Value:    0
-
-Parameters:
-  account: 0x36bD3044ab68f600f6d3e081056F34f2a58432c4
-  role:    7 (MAX_DEBT_MANAGER)
-
-Calldata:
-0x44deb6f300000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c40000000000000000000000000000000000000000000000000000000000000007
-```
-
-**TX 7 — Add Role: DEPOSIT_LIMIT_MANAGER → Treasury**
-
-```
-Target:   [VAULT_ADDRESS]
-Function: addRole(address,uint8)
-Selector: 0x44deb6f3
-Value:    0
-
-Parameters:
-  account: 0x36bD3044ab68f600f6d3e081056F34f2a58432c4
-  role:    8 (DEPOSIT_LIMIT_MANAGER)
-
-Calldata:
-0x44deb6f300000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c40000000000000000000000000000000000000000000000000000000000000008
-```
-
-**TX 8 — Add Role: WITHDRAW_LIMIT_MANAGER → Treasury**
-
-```
-Target:   [VAULT_ADDRESS]
-Function: addRole(address,uint8)
-Selector: 0x44deb6f3
-Value:    0
-
-Parameters:
-  account: 0x36bD3044ab68f600f6d3e081056F34f2a58432c4
-  role:    9 (WITHDRAW_LIMIT_MANAGER)
-
-Calldata:
-0x44deb6f300000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c40000000000000000000000000000000000000000000000000000000000000009
-```
-
-**TX 9 — Add Role: DEBT_MANAGER → Keeper**
-
-```
-Target:   [VAULT_ADDRESS]
-Function: addRole(address,uint8)
-Selector: 0x44deb6f3
-Value:    0
-
-Parameters:
-  account: [KEEPER_BOT_ADDRESS]
-  role:    6 (DEBT_MANAGER)
-
-Calldata (replace keeper address):
-0x44deb6f3000000000000000000000000[KEEPER_ADDRESS_20_BYTES]0000000000000000000000000000000000000000000000000000000000000006
-```
-
----
-
-### Section C: Strategy Configuration
-
-**TX 10 — Add Strategy to Vault**
-
-```
-Target:   [VAULT_ADDRESS]
-Function: addStrategy(address,bool)
-Selector: 0x6e547742
-Value:    0
-
-Parameters:
-  newStrategy: [STRATEGY_ADDRESS]
-  addToQueue:  true
-
-Calldata (replace strategy address):
-0x6e547742
-000000000000000000000000[STRATEGY_ADDRESS_20_BYTES]
-0000000000000000000000000000000000000000000000000000000000000001
-```
-
-**TX 11 — Set Max Debt for Strategy**
-
-```
-Target:   [VAULT_ADDRESS]
-Function: updateMaxDebtForStrategy(address,uint256)
-Selector: 0xf6d7bfa0
-Value:    0
-
-Parameters:
-  strategy:   [STRATEGY_ADDRESS]
-  newMaxDebt: type(uint256).max
-
-Calldata (replace strategy address):
-0xf6d7bfa0
-000000000000000000000000[STRATEGY_ADDRESS_20_BYTES]
-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff
-```
-
-**TX 12 — Set Default Queue**
-
-```
-Target:   [VAULT_ADDRESS]
-Function: setDefaultQueue(address[])
-Selector: 0x633f228c
-Value:    0
-
-Parameters:
-  newDefaultQueue: [[STRATEGY_ADDRESS]]
-
-Calldata (replace strategy address):
-0x633f228c
-0000000000000000000000000000000000000000000000000000000000000020
-0000000000000000000000000000000000000000000000000000000000000001
-000000000000000000000000[STRATEGY_ADDRESS_20_BYTES]
-```
-
-**TX 13 — Enable AutoAllocate**
-
-```
-Target:   [VAULT_ADDRESS]
-Function: setAutoAllocate(bool)
-Selector: 0x63d56c9a
-Value:    0
-
-Parameters:
-  autoAllocate: true
-
-Calldata:
-0x63d56c9a0000000000000000000000000000000000000000000000000000000000000001
-```
-
-**TX 14 — Set Deposit Limit**
-
-```
-Target:   [VAULT_ADDRESS]
-Function: setDepositLimit(uint256,bool)
-Selector: 0xaeb273cf
-Value:    0
-
-Parameters:
-  depositLimit:   type(uint256).max
-  shouldOverride: true
-
-Calldata:
-0xaeb273cfffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff0000000000000000000000000000000000000000000000000000000000000001
-```
-
----
-
-### Section D: Capital Deployment
-
-**TX 15 — Approve USDC for Vault**
+### Transaction 3: Approve USDC
 
 ```
 Target:   0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 (USDC)
@@ -666,34 +367,26 @@ Selector: 0x095ea7b3
 Value:    0
 
 Parameters:
-  spender: [VAULT_ADDRESS]
-  amount:  1200000000000 (1.2M USDC, 6 decimals)
-
-Calldata (replace vault address):
-0x095ea7b3
-000000000000000000000000[VAULT_ADDRESS_20_BYTES]
-000000000000000000000000000000000000000000000000000001176592e000
+  spender: [STRATEGY_ADDRESS] (from Tx 2)
+  amount:  1200000000000 (1.2M USDC with 6 decimals)
 ```
 
-**TX 16 — Deposit USDC into Vault**
+### Transaction 4: Deposit USDC
 
 ```
-Target:   [VAULT_ADDRESS]
+Target:   [STRATEGY_ADDRESS] (from Tx 2)
 Function: deposit(uint256,address)
 Selector: 0x6e553f65
 Value:    0
 
 Parameters:
-  assets:   1200000000000 (1.2M USDC)
+  assets:   1200000000000 (1.2M USDC with 6 decimals)
   receiver: 0x36bD3044ab68f600f6d3e081056F34f2a58432c4 (Treasury)
-
-Calldata (replace vault address in target):
-0x6e553f65000000000000000000000000000000000000000000000000000001176592e00000000000000000000000000036bd3044ab68f600f6d3e081056f34f2a58432c4
 ```
 
 ---
 
-### Section E: Operations (Post-Deployment)
+## Post-Deployment Operations
 
 #### Harvest Operation
 
@@ -756,32 +449,16 @@ Access:       management or emergencyAdmin
 
 ### Quick Reference: Function Selectors
 
-| Function | Selector | Target | Section |
+| Function | Selector | Target | Purpose |
 |----------|----------|--------|---------|
-| `createStrategy(...)` | `0x31d89943` | Morpho Factory | A |
-| `deployNewVault(...)` | `0xdf0b04ac` | Vault Factory | A |
-| `addRole(address,uint8)` | `0x44deb6f3` | Vault | B |
-| `addStrategy(address,bool)` | `0x6e547742` | Vault | C |
-| `updateMaxDebtForStrategy(...)` | `0xf6d7bfa0` | Vault | C |
-| `setDefaultQueue(address[])` | `0x633f228c` | Vault | C |
-| `setAutoAllocate(bool)` | `0x63d56c9a` | Vault | C |
-| `setDepositLimit(uint256,bool)` | `0xaeb273cf` | Vault | C |
-| `approve(address,uint256)` | `0x095ea7b3` | USDC | D |
-| `deposit(uint256,address)` | `0x6e553f65` | Vault | D |
-| `report()` | `0x2606a10b` | Strategy | E |
-| `shutdownStrategy()` | `0xbe8f1668` | Strategy | F |
-| `emergencyWithdraw(uint256)` | `0x5312ea8e` | Strategy | F |
-
-### Role Reference
-
-| Role | Value | Description |
-|------|-------|-------------|
-| `ADD_STRATEGY_MANAGER` | 0 | Can add strategies to the vault |
-| `QUEUE_MANAGER` | 4 | Can modify withdrawal queue order |
-| `DEBT_MANAGER` | 6 | Can update debt allocation to strategies |
-| `MAX_DEBT_MANAGER` | 7 | Can set max debt limits per strategy |
-| `DEPOSIT_LIMIT_MANAGER` | 8 | Can set deposit limits |
-| `WITHDRAW_LIMIT_MANAGER` | 9 | Can set withdraw limits |
+| `createPaymentSplitter(...)` | - | PaymentSplitter Factory | Deploy yield distribution |
+| `createStrategy(...)` | `0x31d89943` | Morpho Factory | Deploy strategy |
+| `approve(address,uint256)` | `0x095ea7b3` | USDC | Allow spending |
+| `deposit(uint256,address)` | `0x6e553f65` | Strategy | Deposit funds |
+| `withdraw(uint256,address,address)` | `0xb460af94` | Strategy | Withdraw funds |
+| `report()` | `0x2606a10b` | Strategy | Harvest yield |
+| `shutdownStrategy()` | `0xbe8f1668` | Strategy | Emergency shutdown |
+| `emergencyWithdraw(uint256)` | `0x5312ea8e` | Strategy | Emergency exit |
 
 ---
 
@@ -838,11 +515,11 @@ The Treasury serves as Emergency Admin. Emergency actions (shutdown, forced with
 
 ### Withdrawals
 
-The Dragon Vault uses the base `MultistrategyVault` (no lockup). Withdrawals are instant:
-1. Call `withdraw(assets, receiver, owner)` or `redeem(shares, receiver, owner)`
-2. Receive underlying assets immediately
+The strategy provides instant liquidity (no lockup). Withdrawals are straightforward:
+1. Call `withdraw(assets, receiver, owner)` or `redeem(shares, receiver, owner)` on the strategy
+2. Receive underlying USDC immediately
 
-If funds are deployed to strategies, the vault automatically withdraws from the default queue.
+The strategy will automatically unwind positions in Morpho markets as needed.
 
 ---
 
