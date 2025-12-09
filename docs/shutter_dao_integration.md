@@ -173,6 +173,8 @@ The entire deployment can be executed in a **single DAO proposal** with only **4
 - No vault wrapper needed (strategy IS the ERC-4626 vault)
 - Fits easily within 16.7M gas (EIP-7825 per-transaction gas limit)
 
+> **Batching note (MultiSend)**: If you batch any of the following calls via MultiSend, execute MultiSend with `operation=DELEGATECALL` from the Safe (Azorius `execTransactionFromModule(..., operation=1)`). Using CALL makes `msg.sender` the MultiSend contract and will break USDC approvals/deposits.
+
 #### Step 1: Create Fractal Proposal (UI Walkthrough)
 
 **1.1 — Navigate to Shutter DAO on Decent**

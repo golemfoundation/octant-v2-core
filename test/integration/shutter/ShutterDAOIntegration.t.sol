@@ -133,7 +133,10 @@ contract ShutterDAOIntegrationTest is Test {
     /// @notice Execute batched transactions via MultiSend through Azorius → Safe
     function _executeBatchFromModule(bytes memory packedTransactions) internal {
         bytes memory multiSendData = abi.encodeCall(MultiSendCallOnly.multiSend, (packedTransactions));
-        _executeFromModule(address(multiSend), multiSendData);
+        // Must DELEGATECALL MultiSend so subcalls execute from the Safe (Treasury) address.
+        vm.prank(AZORIUS_MODULE);
+        bool success = ISafe(SHUTTER_TREASURY).execTransactionFromModule(address(multiSend), 0, multiSendData, 1);
+        require(success, "Module batch execution failed");
     }
 
     function _deployStrategy() internal {
@@ -361,7 +364,15 @@ contract ShutterDAOGasProfilingTest is Test {
 
     function _executeBatchFromModule(MultiSendCallOnly multiSendContract, bytes memory packedTransactions) internal {
         bytes memory multiSendData = abi.encodeCall(MultiSendCallOnly.multiSend, (packedTransactions));
-        _executeFromModule(address(multiSendContract), multiSendData);
+        // Use DELEGATECALL so batched calls keep msg.sender = Safe (Treasury).
+        vm.prank(AZORIUS_MODULE);
+        bool success = ISafe(SHUTTER_TREASURY).execTransactionFromModule(
+            address(multiSendContract),
+            0,
+            multiSendData,
+            1
+        );
+        require(success, "Module batch execution failed");
     }
 
     function test_SimplifiedProposalGasProfile() public {
