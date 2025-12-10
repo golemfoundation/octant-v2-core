@@ -164,7 +164,7 @@ The entire deployment can be executed in a **single DAO proposal** with **1 batc
 3. Approve USDC to Strategy (uses precomputed Strategy address)
 4. Deposit USDC into Strategy
 
-**Key optimization**: Both factories use CREATE2, allowing address precomputation. This enables batching all 4 operations without waiting for return values.
+**Key optimization**: Both factories use CREATE2, allowing address precomputation. This enables batching all 4 operations without waiting for return values. Run the calldata generator script (`script/shutter/GenerateProposalCalldata.s.sol`) against mainnet to get precomputed addresses.
 
 > **MultiSend requirement**: Execute MultiSend with `operation=DELEGATECALL` (Azorius `execTransactionFromModule(..., operation=1)`). Using CALL makes `msg.sender` the MultiSend contract and will break USDC approvals.
 >
@@ -261,9 +261,9 @@ Review all details and click "Submit Proposal". Sign the transaction with your w
 
 | Component | Gas Cost |
 |-----------|----------|
-| **DAO Proposal (4 txs via Azorius)** | **~1.5M** |
+| **DAO Proposal (3 module calls)** | **~2.1M** |
 | **EIP-7825 Limit** | 16,777,216 |
-| **Headroom** | >90% |
+| **Headroom** | >87% |
 
 *Note: Direct strategy deposits (no vault wrapper) minimize gas costs.*
 
