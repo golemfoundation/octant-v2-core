@@ -498,18 +498,7 @@ Once the Regen Staker is deployed by Octant:
 
 ### Keeper Setup
 
-> ⚠️ **MANDATORY REQUIREMENT**: A dedicated EOA or bot MUST be used for the Keeper role.
-
-**Critical**: Assigning the Treasury Safe as Keeper creates a severe operational bottleneck:
-- Every harvest requires a governance vote (72-hour voting + 72-hour execution = 144 hours minimum)
-- This introduces ~4-12 proposals per year just for routine harvesting
-- Delays yield compounding and defeats the purpose of automated yield generation
-
-A dedicated Keeper address enables:
-- Autonomous, gas-efficient harvesting
-- No governance bottleneck for routine operations
-- Optimal yield compounding
-- Faster response to market conditions
+See [Role Assignments](#role-assignments) for Keeper requirements. A dedicated EOA or bot enables autonomous harvesting without governance votes.
 
 ### AutoAllocate vs Manual Allocation
 
