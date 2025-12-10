@@ -37,9 +37,13 @@ address constant MORPHO_STRATEGY_FACTORY_MAINNET = 0x052d20B0e0b141988bD32772C73
 // EXTERNAL PROTOCOL ADDRESSES (MAINNET)
 // ══════════════════════════════════════════════════════════════════════════════
 
-// Yearn TokenizedStrategy singleton on Ethereum mainnet
+// Yearn TokenizedStrategy singleton on Ethereum mainnet (yield-donating variant)
 // Required parameter for deploying strategies via MorphoCompounderStrategyFactory
-address constant YEARN_TOKENIZED_STRATEGY_MAINNET = 0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c;
+address constant YIELD_DONATING_TOKENIZED_STRATEGY_MAINNET = 0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c;
+
+// Gnosis Safe MultiSendCallOnly canonical deployment on Ethereum mainnet
+// Used for batching multiple transactions in a single Safe execution
+address constant SAFE_MULTISEND_MAINNET = 0x40A2aCCbd92BCA938b02010E17A5b8929b49130D;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // ENUMS

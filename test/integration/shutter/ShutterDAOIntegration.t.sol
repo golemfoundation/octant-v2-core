@@ -21,7 +21,7 @@ import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { ISafe } from "src/zodiac-core/interfaces/Safe.sol";
 import { PaymentSplitterFactory } from "src/factories/PaymentSplitterFactory.sol";
 import { MultiSendCallOnly } from "src/utils/libs/Safe/MultiSendCallOnly.sol";
-import { USDC_MAINNET, MORPHO_STRATEGY_FACTORY_MAINNET, YEARN_TOKENIZED_STRATEGY_MAINNET, EIP_7825_TX_GAS_LIMIT } from "src/constants.sol";
+import { USDC_MAINNET, MORPHO_STRATEGY_FACTORY_MAINNET, YIELD_DONATING_TOKENIZED_STRATEGY_MAINNET, SAFE_MULTISEND_MAINNET, EIP_7825_TX_GAS_LIMIT } from "src/constants.sol";
 
 /**
  * @title ShutterDAOIntegrationTest
@@ -40,7 +40,7 @@ contract ShutterDAOIntegrationTest is Test {
     // === From src/constants.sol ===
     address constant USDC_TOKEN = USDC_MAINNET;
     address constant MORPHO_STRATEGY_FACTORY = MORPHO_STRATEGY_FACTORY_MAINNET;
-    address constant TOKENIZED_STRATEGY_ADDRESS = YEARN_TOKENIZED_STRATEGY_MAINNET;
+    address constant TOKENIZED_STRATEGY_ADDRESS = YIELD_DONATING_TOKENIZED_STRATEGY_MAINNET;
 
     string constant STRATEGY_NAME = "SHUGrantPool";
 
@@ -51,7 +51,6 @@ contract ShutterDAOIntegrationTest is Test {
 
     // === System Contracts ===
     PaymentSplitterFactory paymentSplitterFactory;
-    MultiSendCallOnly multiSend;
     MorphoCompounderStrategy strategy;
     PaymentSplitter paymentSplitter;
 
@@ -98,8 +97,6 @@ contract ShutterDAOIntegrationTest is Test {
     function _deployInfrastructure() internal {
         vm.prank(octantGovernance);
         paymentSplitterFactory = new PaymentSplitterFactory();
-
-        multiSend = new MultiSendCallOnly();
     }
 
     /// @notice Simulates Azorius module executing a transaction through the Safe
@@ -135,7 +132,7 @@ contract ShutterDAOIntegrationTest is Test {
         bytes memory multiSendData = abi.encodeCall(MultiSendCallOnly.multiSend, (packedTransactions));
         // Must DELEGATECALL MultiSend so subcalls execute from the Safe (Treasury) address.
         vm.prank(AZORIUS_MODULE);
-        bool success = ISafe(SHUTTER_TREASURY).execTransactionFromModule(address(multiSend), 0, multiSendData, 1);
+        bool success = ISafe(SHUTTER_TREASURY).execTransactionFromModule(SAFE_MULTISEND_MAINNET, 0, multiSendData, 1);
         require(success, "Module batch execution failed");
     }
 
@@ -323,7 +320,7 @@ contract ShutterDAOGasProfilingTest is Test {
     // === From src/constants.sol ===
     address constant USDC_TOKEN = USDC_MAINNET;
     address constant MORPHO_STRATEGY_FACTORY = MORPHO_STRATEGY_FACTORY_MAINNET;
-    address constant TOKENIZED_STRATEGY_ADDRESS = YEARN_TOKENIZED_STRATEGY_MAINNET;
+    address constant TOKENIZED_STRATEGY_ADDRESS = YIELD_DONATING_TOKENIZED_STRATEGY_MAINNET;
 
     // === Test Values ===
     uint256 constant TREASURY_USDC_BALANCE = 1_200_000e6;
@@ -362,16 +359,11 @@ contract ShutterDAOGasProfilingTest is Test {
         return abi.encodePacked(uint8(0), to, uint256(0), data.length, data);
     }
 
-    function _executeBatchFromModule(MultiSendCallOnly multiSendContract, bytes memory packedTransactions) internal {
+    function _executeBatchFromModule(bytes memory packedTransactions) internal {
         bytes memory multiSendData = abi.encodeCall(MultiSendCallOnly.multiSend, (packedTransactions));
         // Use DELEGATECALL so batched calls keep msg.sender = Safe (Treasury).
         vm.prank(AZORIUS_MODULE);
-        bool success = ISafe(SHUTTER_TREASURY).execTransactionFromModule(
-            address(multiSendContract),
-            0,
-            multiSendData,
-            1
-        );
+        bool success = ISafe(SHUTTER_TREASURY).execTransactionFromModule(SAFE_MULTISEND_MAINNET, 0, multiSendData, 1);
         require(success, "Module batch execution failed");
     }
 
@@ -382,13 +374,13 @@ contract ShutterDAOGasProfilingTest is Test {
 
         // === PRE-DEPLOYED BY OCTANT (not part of DAO proposal) ===
         PaymentSplitterFactory splitterFactory = new PaymentSplitterFactory();
-        MultiSendCallOnly multiSendContract = new MultiSendCallOnly();
 
         uint256 gasStart = gasleft();
 
         // ══════════════════════════════════════════════════════════════════════
         // DAO PROPOSAL: 3 module calls (2 factory deploys + 1 MultiSend batch)
         // No MultistrategyVault needed - Strategy IS the ERC-4626 vault
+        // Factory deploys can't be batched: Strategy needs PaymentSplitter address
         // ══════════════════════════════════════════════════════════════════════
 
         // TX 0: Deploy PaymentSplitter via Factory
@@ -438,7 +430,7 @@ contract ShutterDAOGasProfilingTest is Test {
                 abi.encodeCall(IERC4626.deposit, (TREASURY_USDC_BALANCE, SHUTTER_TREASURY))
             )
         );
-        _executeBatchFromModule(multiSendContract, batchedTxs);
+        _executeBatchFromModule(batchedTxs);
 
         uint256 daoProposalGas = gasStart - gasleft();
 

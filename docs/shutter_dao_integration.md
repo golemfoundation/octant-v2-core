@@ -51,7 +51,7 @@ The `MorphoCompounderStrategyFactory` at `0x052d20B...` deploys strategies that 
 | **Keeper** | Dedicated Bot/EOA | **REQUIRED**: Authorized to call `report()`/`tend()` to harvest yields without governance votes |
 | **Emergency Admin** | Shutter DAO Treasury (`0x36bD...32c4`) | Can shutdown the strategy and perform emergency withdrawals |
 
-> **Critical**: The Keeper MUST be a dedicated EOA or bot, NOT the Treasury Safe. Assigning Keeper to Treasury would require a governance vote (72-hour voting + 72-hour execution = 144 hours minimum) for every harvest, creating severe operational bottlenecks that defeat the purpose of automated yield generation.
+> **Critical**: The Keeper should be a dedicated EOA or bot, NOT the Treasury Safe. Assigning Keeper to Treasury would require a governance vote (72-hour voting + 72-hour execution = 144 hours minimum) for every harvest, creating severe operational bottlenecks that defeat the purpose of automated yield generation.
 
 ### Yield Distribution
 
@@ -59,24 +59,15 @@ The `MorphoCompounderStrategyFactory` at `0x052d20B...` deploys strategies that 
 |-------------|------------|
 | Dragon Funding Pool | 100% |
 
-### Yield Projections (assuming 5% APY)
-
-| Metric | Annual |
-|--------|--------|
-| Gross Yield | 60,000 USDC |
-| To Dragon Funding Pool | 60,000 USDC |
-| Epochs Supported | ~3 per year (~20,000 USDC each) |
-
 ---
 
 ## Part 2: Regen Staker
 
-The Regen Staker allows SHU holders to stake their tokens and direct their staking rewards toward public goods funding, which Octant matches. Rewards are distributed from an external source (e.g., SHUGrantPool Strategy yield).
+The Regen Staker allows SHU holders to stake their tokens and direct their staking rewards toward public goods funding. Rewards are distributed from an external source (e.g., SHUGrantPool Strategy yield).
 
 ### Key Features
 
-- **Public Goods Funding**: Stakers allocate their rewards to projects in Octant funding rounds
-- **Matched Rewards**: Contributions are matched by Octant's matching pool
+- **Public Goods Funding**: Stakers allocate their rewards to projects in funding rounds
 - **Delegation Preserved**: Stakers retain Shutter DAO voting power via delegation surrogates
 
 ### Voting Power (Shutter DAO)
@@ -174,6 +165,8 @@ The entire deployment can be executed in a **single DAO proposal** with only **4
 - Fits easily within 16.7M gas (EIP-7825 per-transaction gas limit)
 
 > **Batching note (MultiSend)**: If you batch any of the following calls via MultiSend, execute MultiSend with `operation=DELEGATECALL` from the Safe (Azorius `execTransactionFromModule(..., operation=1)`). Using CALL makes `msg.sender` the MultiSend contract and will break USDC approvals/deposits.
+>
+> **UI Limitation**: The Safe UI may not support DELEGATECALL directly. If batching is required, use the Transaction Builder or submit raw transactions via the Azorius module.
 
 #### Step 1: Create Fractal Proposal (UI Walkthrough)
 
