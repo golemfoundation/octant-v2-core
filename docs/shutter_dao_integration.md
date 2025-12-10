@@ -158,15 +158,17 @@ Shutter DAO also supports **Shielded Voting** on Snapshot, which encrypts votes 
 
 ### Phase 1: Strategy Deployment
 
-The entire deployment can be executed in a **single DAO proposal** with only **4 transactions**. This simplified approach:
-- Deploys PaymentSplitter and Strategy
-- Approves and deposits treasury capital
-- No vault wrapper needed (strategy IS the ERC-4626 vault)
-- Fits easily within 16.7M gas (EIP-7825 per-transaction gas limit)
+The entire deployment can be executed in a **single DAO proposal** with **1 batched MultiSend** containing 4 operations:
+1. Deploy PaymentSplitter via Factory
+2. Deploy Strategy via Factory (uses precomputed PaymentSplitter address)
+3. Approve USDC to Strategy (uses precomputed Strategy address)
+4. Deposit USDC into Strategy
 
-> **Batching note (MultiSend)**: If you batch any of the following calls via MultiSend, execute MultiSend with `operation=DELEGATECALL` from the Safe (Azorius `execTransactionFromModule(..., operation=1)`). Using CALL makes `msg.sender` the MultiSend contract and will break USDC approvals/deposits.
+**Key optimization**: Both factories use CREATE2, allowing address precomputation. This enables batching all 4 operations without waiting for return values.
+
+> **MultiSend requirement**: Execute MultiSend with `operation=DELEGATECALL` (Azorius `execTransactionFromModule(..., operation=1)`). Using CALL makes `msg.sender` the MultiSend contract and will break USDC approvals.
 >
-> **UI Limitation**: The Safe UI may not support DELEGATECALL directly. If batching is required, use the Transaction Builder or submit raw transactions via the Azorius module.
+> **UI Limitation**: The Safe UI may not support DELEGATECALL directly. Use the Transaction Builder or submit raw transactions via the Azorius module.
 
 #### Step 1: Create Fractal Proposal (UI Walkthrough)
 
