@@ -334,9 +334,23 @@ No additional vault wrapper is needed since only one strategy is approved by the
 
 ### Prepared Calldata
 
-Complete transaction calldata for all 4 operations.
+Complete transaction calldata can be generated programmatically using the provided script:
 
-> **Placeholders**: Replace `[STRATEGY_ADDRESS]`, `[PAYMENT_SPLITTER_ADDRESS]`, `[KEEPER_ADDRESS]`, and `[DRAGON_FUNDING_POOL]` with actual addresses.
+```bash
+forge script script/shutter/GenerateProposalCalldata.s.sol -vvvv
+```
+
+Before running, update the configuration in the script:
+- `PAYMENT_SPLITTER_FACTORY` — Set after Octant deploys
+- `DRAGON_FUNDING_POOL` — Actual Dragon Funding Pool address
+- `KEEPER_BOT` — Dedicated keeper EOA/bot address
+
+The script outputs:
+- Precomputed CREATE2 addresses for PaymentSplitter and Strategy
+- Individual calldata for each transaction (TX 0-3)
+- Batched MultiSend calldata (recommended for single-proposal execution)
+
+> **Manual Reference**: The transaction parameters below can be used for UI-based proposal creation.
 
 ---
 
@@ -499,17 +513,6 @@ Once the Regen Staker is deployed by Octant:
 ### Keeper Setup
 
 See [Role Assignments](#role-assignments) for Keeper requirements. A dedicated EOA or bot enables autonomous harvesting without governance votes.
-
-### AutoAllocate vs Manual Allocation
-
-The vault supports two modes for deploying deposited funds to strategies:
-
-| Mode | Behavior | Use Case |
-|------|----------|----------|
-| **AutoAllocate ON** | Deposits automatically deployed to `defaultQueue[0]` | Set-and-forget, higher gas per deposit |
-| **AutoAllocate OFF** | Deposits remain idle until Keeper calls `updateDebt()` | Lower deposit gas, requires active management |
-
-> **Recommendation**: Enable autoAllocate for simplicity. The Keeper can still call `updateDebt()` to rebalance between strategies.
 
 ### Emergency Admin
 
