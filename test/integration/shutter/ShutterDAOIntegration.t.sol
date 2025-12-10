@@ -66,16 +66,12 @@ contract ShutterDAOIntegrationTest is Test {
     address shuHolder2;
     address shuHolder3;
 
-    bool isForked;
-
     function setUp() public {
-        // Ensure forking is active
+        // Skip all tests if ETH_RPC_URL is not set (shows as "skipped" in test output)
         try vm.envString("ETH_RPC_URL") returns (string memory rpcUrl) {
             vm.createSelectFork(rpcUrl);
-            isForked = true;
         } catch {
-            console2.log("Skipping fork tests: ETH_RPC_URL not set");
-            return;
+            vm.skip(true);
         }
 
         octantGovernance = makeAddr("OctantGovernance");
@@ -137,12 +133,52 @@ contract ShutterDAOIntegrationTest is Test {
         require(success, "Module batch execution failed");
     }
 
+    /// @notice Predict Strategy address using CREATE2 (mirrors script logic)
+    function _predictStrategyAddress(address _paymentSplitter, address _keeper) internal view returns (address) {
+        address ysUsdc = MorphoCompounderStrategyFactory(MORPHO_STRATEGY_FACTORY).YS_USDC();
+        address usdc = MorphoCompounderStrategyFactory(MORPHO_STRATEGY_FACTORY).USDC();
+
+        bytes32 parameterHash = keccak256(
+            abi.encode(
+                ysUsdc,
+                usdc,
+                STRATEGY_NAME,
+                SHUTTER_TREASURY,
+                _keeper,
+                SHUTTER_TREASURY,
+                _paymentSplitter,
+                false,
+                TOKENIZED_STRATEGY_ADDRESS
+            )
+        );
+
+        bytes memory strategyBytecode = abi.encodePacked(
+            type(MorphoCompounderStrategy).creationCode,
+            abi.encode(
+                ysUsdc,
+                usdc,
+                STRATEGY_NAME,
+                SHUTTER_TREASURY,
+                _keeper,
+                SHUTTER_TREASURY,
+                _paymentSplitter,
+                false,
+                TOKENIZED_STRATEGY_ADDRESS
+            )
+        );
+
+        return
+            BaseStrategyFactory(MORPHO_STRATEGY_FACTORY).predictStrategyAddress(
+                parameterHash,
+                SHUTTER_TREASURY,
+                strategyBytecode
+            );
+    }
+
     function _deployStrategy() internal {
         // ══════════════════════════════════════════════════════════════════════
-        // DEPLOY + FUND: Deploy infrastructure, then approve + deposit
-        // Note: Strategy CREATE2 prediction would require bytecode matching the
-        //       mainnet factory's compiled version. Instead, we capture the
-        //       returned address from createStrategy.
+        // DEPLOY + FUND: Single batched MultiSend with 4 operations
+        // Uses CREATE2 prediction for both PaymentSplitter and Strategy addresses
         // ══════════════════════════════════════════════════════════════════════
 
         // --- PaymentSplitter setup ---
@@ -153,49 +189,67 @@ contract ShutterDAOIntegrationTest is Test {
         uint256[] memory shares = new uint256[](1);
         shares[0] = 100;
 
-        // Precompute PaymentSplitter address (CREATE2 deterministic - works because
-        // we deploy the factory locally with matching bytecode)
+        // Precompute PaymentSplitter address (CREATE2 deterministic)
         address predictedPaymentSplitter = paymentSplitterFactory.predictDeterministicAddress(SHUTTER_TREASURY);
 
-        // --- Step 1: Deploy PaymentSplitter ---
-        _executeFromModule(
+        // Precompute Strategy address (CREATE2 deterministic)
+        address predictedStrategyAddress = _predictStrategyAddress(predictedPaymentSplitter, keeperBot);
+
+        // Build 4-operation batch:
+        // TX 0: Deploy PaymentSplitter
+        bytes memory batch = _encodeMultiSendTx(
             address(paymentSplitterFactory),
             abi.encodeCall(PaymentSplitterFactory.createPaymentSplitter, (payees, payeeNames, shares))
         );
-        paymentSplitter = PaymentSplitter(payable(predictedPaymentSplitter));
 
-        // --- Step 2: Deploy Strategy and capture returned address ---
-        bytes memory returnData = _executeFromModuleReturnData(
-            MORPHO_STRATEGY_FACTORY,
-            abi.encodeCall(
-                MorphoCompounderStrategyFactory.createStrategy,
-                (
-                    STRATEGY_NAME,
-                    SHUTTER_TREASURY,
-                    keeperBot,
-                    SHUTTER_TREASURY,
-                    predictedPaymentSplitter,
-                    false,
-                    TOKENIZED_STRATEGY_ADDRESS
+        // TX 1: Deploy Strategy
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                MORPHO_STRATEGY_FACTORY,
+                abi.encodeCall(
+                    MorphoCompounderStrategyFactory.createStrategy,
+                    (
+                        STRATEGY_NAME,
+                        SHUTTER_TREASURY,
+                        keeperBot,
+                        SHUTTER_TREASURY,
+                        predictedPaymentSplitter,
+                        false,
+                        TOKENIZED_STRATEGY_ADDRESS
+                    )
                 )
             )
         );
-        address strategyAddress = abi.decode(returnData, (address));
-        strategy = MorphoCompounderStrategy(strategyAddress);
 
-        // --- Step 3: Batch approve + deposit ---
-        bytes memory fundBatch = _encodeMultiSendTx(
-            USDC_TOKEN,
-            abi.encodeCall(IERC20.approve, (strategyAddress, TREASURY_USDC_BALANCE))
-        );
-        fundBatch = abi.encodePacked(
-            fundBatch,
+        // TX 2: Approve USDC to Strategy
+        batch = abi.encodePacked(
+            batch,
             _encodeMultiSendTx(
-                strategyAddress,
+                USDC_TOKEN,
+                abi.encodeCall(IERC20.approve, (predictedStrategyAddress, TREASURY_USDC_BALANCE))
+            )
+        );
+
+        // TX 3: Deposit USDC into Strategy
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                predictedStrategyAddress,
                 abi.encodeCall(IERC4626.deposit, (TREASURY_USDC_BALANCE, SHUTTER_TREASURY))
             )
         );
-        _executeBatchFromModule(fundBatch);
+
+        // Execute single batched MultiSend
+        _executeBatchFromModule(batch);
+
+        // Store deployed contracts
+        paymentSplitter = PaymentSplitter(payable(predictedPaymentSplitter));
+        strategy = MorphoCompounderStrategy(predictedStrategyAddress);
+
+        // Verify deployments succeeded
+        require(predictedPaymentSplitter.code.length > 0, "PaymentSplitter not deployed");
+        require(predictedStrategyAddress.code.length > 0, "Strategy not deployed");
     }
 
     function _deployRegenStaker() internal {
@@ -225,8 +279,6 @@ contract ShutterDAOIntegrationTest is Test {
     }
 
     function test_TreasuryDepositsUSDCIntoStrategy() public view {
-        if (!isForked) return;
-
         // Deposit already happened in _deployStrategy() via batched MultiSend
         // Verify the deposit succeeded
         uint256 depositAmount = TREASURY_USDC_BALANCE;
@@ -237,8 +289,6 @@ contract ShutterDAOIntegrationTest is Test {
     }
 
     function test_TreasuryCanWithdraw() public {
-        if (!isForked) return;
-
         // Funds already deposited in _deployStrategy() via batched MultiSend
         uint256 depositAmount = TREASURY_USDC_BALANCE;
 
@@ -258,8 +308,6 @@ contract ShutterDAOIntegrationTest is Test {
     }
 
     function test_SHUHoldersCanDelegateVotingPower() public {
-        if (!isForked) return;
-
         uint256 stakeAmount = SHU_HOLDER_BALANCE;
         address delegatee = makeAddr("Delegatee");
         address surrogate = regenStaker.predictSurrogateAddress(delegatee);
@@ -282,8 +330,6 @@ contract ShutterDAOIntegrationTest is Test {
     }
 
     function test_MultipleSHUHoldersCanStake() public {
-        if (!isForked) return;
-
         uint256 stakeAmount = SHU_HOLDER_BALANCE;
 
         vm.startPrank(shuHolder1);
@@ -300,8 +346,6 @@ contract ShutterDAOIntegrationTest is Test {
     }
 
     function test_SharesAreTransferable() public {
-        if (!isForked) return;
-
         // Funds already deposited in _deployStrategy() via batched MultiSend
         uint256 shares = IERC4626(address(strategy)).balanceOf(SHUTTER_TREASURY);
         uint256 halfShares = shares / 2;
@@ -336,14 +380,12 @@ contract ShutterDAOGasProfilingTest is Test {
     // === Test Values ===
     uint256 constant TREASURY_USDC_BALANCE = 1_200_000e6;
 
-    bool isForked;
-
     function setUp() public {
+        // Skip all tests if ETH_RPC_URL is not set (shows as "skipped" in test output)
         try vm.envString("ETH_RPC_URL") returns (string memory rpcUrl) {
             vm.createSelectFork(rpcUrl);
-            isForked = true;
         } catch {
-            return;
+            vm.skip(true);
         }
         deal(USDC_TOKEN, SHUTTER_TREASURY, TREASURY_USDC_BALANCE);
     }
@@ -415,14 +457,26 @@ contract ShutterDAOGasProfilingTest is Test {
         );
     }
 
-    function test_SimplifiedProposalGasProfile() public {
-        if (!isForked) return;
+    /// @notice Predict Strategy address using CREATE2 (mirrors script logic)
+    function _predictStrategyAddress(address _paymentSplitter, address _keeper) internal view returns (address) {
+        (bytes32 parameterHash, bytes memory strategyBytecode) = _buildStrategyParams(_paymentSplitter, _keeper);
+        return
+            BaseStrategyFactory(MORPHO_STRATEGY_FACTORY).predictStrategyAddress(
+                parameterHash,
+                SHUTTER_TREASURY,
+                strategyBytecode
+            );
+    }
 
+    function test_SimplifiedProposalGasProfile() public {
         address keeperBot = makeAddr("KeeperBot");
         PaymentSplitterFactory splitterFactory = new PaymentSplitterFactory();
 
-        // Precompute PaymentSplitter address (local factory has matching bytecode)
+        // Precompute PaymentSplitter address (CREATE2 deterministic)
         address predictedPS = splitterFactory.predictDeterministicAddress(SHUTTER_TREASURY);
+
+        // Precompute Strategy address (CREATE2 deterministic)
+        address predictedStrategy = _predictStrategyAddress(predictedPS, keeperBot);
 
         // --- PaymentSplitter config ---
         address[] memory payees = new address[](1);
@@ -435,56 +489,58 @@ contract ShutterDAOGasProfilingTest is Test {
         uint256 gasStart = gasleft();
 
         // ══════════════════════════════════════════════════════════════════════
-        // REALISTIC DAO EXECUTION: 3 module calls total
-        // Note: Strategy CREATE2 prediction requires bytecode matching the mainnet
-        //       factory, so we capture the return value instead of predicting.
+        // REALISTIC DAO EXECUTION: 1 batched MultiSend with 4 operations
+        // Uses CREATE2 prediction for both PaymentSplitter and Strategy addresses
         // ══════════════════════════════════════════════════════════════════════
 
-        // Step 1: Deploy PaymentSplitter
-        _executeFromModule(
+        // Build 4-operation batch
+        bytes memory batch = _encodeMultiSendTx(
             address(splitterFactory),
             abi.encodeCall(PaymentSplitterFactory.createPaymentSplitter, (payees, payeeNames, shares))
         );
 
-        // Step 2: Deploy Strategy and capture returned address
-        bytes memory returnData = _executeFromModuleReturnData(
-            MORPHO_STRATEGY_FACTORY,
-            abi.encodeCall(
-                MorphoCompounderStrategyFactory.createStrategy,
-                (
-                    STRATEGY_NAME,
-                    SHUTTER_TREASURY,
-                    keeperBot,
-                    SHUTTER_TREASURY,
-                    predictedPS,
-                    false,
-                    TOKENIZED_STRATEGY_ADDRESS
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(
+                MORPHO_STRATEGY_FACTORY,
+                abi.encodeCall(
+                    MorphoCompounderStrategyFactory.createStrategy,
+                    (
+                        STRATEGY_NAME,
+                        SHUTTER_TREASURY,
+                        keeperBot,
+                        SHUTTER_TREASURY,
+                        predictedPS,
+                        false,
+                        TOKENIZED_STRATEGY_ADDRESS
+                    )
                 )
             )
         );
-        address strategyAddress = abi.decode(returnData, (address));
 
-        // Step 3: Batch approve + deposit
-        bytes memory fundBatch = _encodeMultiSendTx(
-            USDC_TOKEN,
-            abi.encodeCall(IERC20.approve, (strategyAddress, TREASURY_USDC_BALANCE))
+        batch = abi.encodePacked(
+            batch,
+            _encodeMultiSendTx(USDC_TOKEN, abi.encodeCall(IERC20.approve, (predictedStrategy, TREASURY_USDC_BALANCE)))
         );
-        fundBatch = abi.encodePacked(
-            fundBatch,
+
+        batch = abi.encodePacked(
+            batch,
             _encodeMultiSendTx(
-                strategyAddress,
+                predictedStrategy,
                 abi.encodeCall(IERC4626.deposit, (TREASURY_USDC_BALANCE, SHUTTER_TREASURY))
             )
         );
-        _executeBatchFromModule(fundBatch);
+
+        // Execute single batched MultiSend
+        _executeBatchFromModule(batch);
 
         uint256 totalGas = gasStart - gasleft();
 
-        emit log_named_uint("=== TOTAL GAS (3 module calls) ===", totalGas);
+        emit log_named_uint("=== TOTAL GAS (1 batched call, 4 operations) ===", totalGas);
         assertLt(totalGas, EIP_7825_TX_GAS_LIMIT, "Gas exceeds 16.7M per-tx limit");
 
         assertGt(predictedPS.code.length, 0, "PaymentSplitter not deployed");
-        assertGt(strategyAddress.code.length, 0, "Strategy not deployed");
-        assertApproxEqAbs(IERC4626(strategyAddress).balanceOf(SHUTTER_TREASURY), TREASURY_USDC_BALANCE, 1000);
+        assertGt(predictedStrategy.code.length, 0, "Strategy not deployed");
+        assertApproxEqAbs(IERC4626(predictedStrategy).balanceOf(SHUTTER_TREASURY), TREASURY_USDC_BALANCE, 1000);
     }
 }

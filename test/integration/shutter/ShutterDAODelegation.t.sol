@@ -3,7 +3,6 @@ pragma solidity ^0.8.25;
 
 import { ShutterDAOIntegrationTest } from "test/integration/shutter/ShutterDAOIntegration.t.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { console2 } from "forge-std/console2.sol";
 
 import { Staker } from "staker/Staker.sol";
 
@@ -14,8 +13,6 @@ import { Staker } from "staker/Staker.sol";
  */
 contract ShutterDAODelegationTest is ShutterDAOIntegrationTest {
     function test_DelegationPersistsAfterAdditionalStake() public {
-        if (!isForked) return;
-
         uint256 initialStake = 10_000e18;
         uint256 additionalStake = 5_000e18;
         address delegatee = makeAddr("Delegatee");
@@ -43,8 +40,6 @@ contract ShutterDAODelegationTest is ShutterDAOIntegrationTest {
     }
 
     function test_DelegationChangeable() public {
-        if (!isForked) return;
-
         uint256 stakeAmount = 10_000e18;
         address delegatee1 = makeAddr("Delegatee1");
         address delegatee2 = makeAddr("Delegatee2");
@@ -74,8 +69,6 @@ contract ShutterDAODelegationTest is ShutterDAOIntegrationTest {
     }
 
     function test_DelegationClearedOnFullWithdrawal() public {
-        if (!isForked) return;
-
         uint256 stakeAmount = 10_000e18;
         address delegatee = makeAddr("Delegatee");
         address surrogate = regenStaker.predictSurrogateAddress(delegatee);
@@ -96,8 +89,6 @@ contract ShutterDAODelegationTest is ShutterDAOIntegrationTest {
     }
 
     function test_SurrogateAddressUniqueness() public {
-        if (!isForked) return;
-
         address delegatee1 = makeAddr("Delegatee1");
         address delegatee2 = makeAddr("Delegatee2");
 
@@ -110,8 +101,6 @@ contract ShutterDAODelegationTest is ShutterDAOIntegrationTest {
     }
 
     function test_CannotStealDelegationOfAnotherStaker() public {
-        if (!isForked) return;
-
         uint256 stake1 = 10_000e18;
         uint256 stake2 = 5_000e18;
         address delegatee = makeAddr("SharedDelegatee");

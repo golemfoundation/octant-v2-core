@@ -17,6 +17,21 @@ Shutter DAO 0x36 will integrate with Octant v2 through **two distinct components
 
 ---
 
+## Prerequisites (Pending Items)
+
+The following items must be resolved before executing the DAO proposal:
+
+| Item | Status | Owner | Notes |
+|------|--------|-------|-------|
+| PaymentSplitter Factory deployment | ⏳ Pending | Octant | Required for strategy deployment |
+| Dragon Funding Pool address | ⏳ Pending | Octant | PaymentSplitter payee |
+| Keeper Bot address | ⏳ Pending | Octant | Strategy keeper for harvesting |
+| Proposal Threshold confirmation | ⏳ Pending | Shutter DAO | Minimum SHU to create proposal |
+
+> ⚠️ **Action Required**: Update this document with actual addresses once Octant completes deployment.
+
+---
+
 ## Verified On-Chain Addresses
 
 | Entity | Address | Network |
@@ -255,17 +270,17 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 
 Review all details and click "Submit Proposal". Sign the transaction with your wallet.
 
-> ✅ **Gas Verified**: The simplified proposal (4 transactions) uses minimal gas - well under the 16.7M per-transaction limit (EIP-7825). See `ShutterDAOGasProfilingTest` for details.
+> ✅ **Gas Verified**: The simplified proposal (1 batched MultiSend with 4 operations) uses minimal gas - well under the 16.7M per-transaction limit (EIP-7825). See `ShutterDAOGasProfilingTest` for details.
 
 ### Gas Profile
 
 | Component | Gas Cost |
 |-----------|----------|
-| **DAO Proposal (3 module calls)** | **~2.1M** |
+| **DAO Proposal (1 batched call, 4 operations)** | **~1.5M** |
 | **EIP-7825 Limit** | 16,777,216 |
-| **Headroom** | >87% |
+| **Headroom** | >91% |
 
-*Note: Direct strategy deposits (no vault wrapper) minimize gas costs.*
+*Note: Direct strategy deposits (no vault wrapper) and batched execution minimize gas costs.*
 
 #### Step 2: Vote
 
@@ -435,7 +450,7 @@ Note: Called by management or keeper to harvest yield. Returns (uint256 profit, 
 
 ---
 
-### Section F: Emergency Operations
+### Emergency Operations
 
 **Shutdown Strategy**
 
