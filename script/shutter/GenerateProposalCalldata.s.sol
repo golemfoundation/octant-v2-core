@@ -16,7 +16,7 @@ import { USDC_MAINNET, MORPHO_STRATEGY_FACTORY_MAINNET, YIELD_DONATING_TOKENIZED
 /**
  * @title GenerateProposalCalldata
  * @notice Generates calldata for Shutter DAO proposal to deploy strategy and deposit funds
- * @dev Run with: forge script script/shutter/GenerateProposalCalldata.s.sol -vvvv
+ * @dev Run with: forge script script/shutter/GenerateProposalCalldata.s.sol --fork-url $ETH_RPC_URL -vvvv
  *
  *      This script outputs ready-to-use calldata for:
  *      - TX 0: Deploy PaymentSplitter via Factory
@@ -24,6 +24,11 @@ import { USDC_MAINNET, MORPHO_STRATEGY_FACTORY_MAINNET, YIELD_DONATING_TOKENIZED
  *      - TX 2: Approve USDC to Strategy
  *      - TX 3: Deposit USDC into Strategy
  *      - BATCHED: All 4 operations via MultiSend (recommended)
+ *
+ *      When placeholder addresses are detected (address(0)), the script runs in TEST MODE:
+ *      - Deploys a temporary PaymentSplitterFactory
+ *      - Uses deterministic test addresses for Keeper and Dragon Pool
+ *      - Outputs valid calldata structure for verification
  */
 contract GenerateProposalCalldata is Script {
     // ══════════════════════════════════════════════════════════════════════════════
@@ -47,108 +52,156 @@ contract GenerateProposalCalldata is Script {
     address constant TOKENIZED_STRATEGY = YIELD_DONATING_TOKENIZED_STRATEGY_MAINNET;
     address constant MULTISEND = SAFE_MULTISEND_MAINNET;
 
-    function run() public view {
+    function run() public {
         console.log(unicode"══════════════════════════════════════════════════════════════════════════════");
         console.log("SHUTTER DAO PROPOSAL CALLDATA GENERATOR");
         console.log(unicode"══════════════════════════════════════════════════════════════════════════════");
         console.log("");
 
-        _logConfiguration();
+        // ══════════════════════════════════════════════════════════════════════════════
+        // RESOLVE ADDRESSES (deploy temp factories if placeholders detected)
+        // ══════════════════════════════════════════════════════════════════════════════
 
-        if (PAYMENT_SPLITTER_FACTORY == address(0) || DRAGON_FUNDING_POOL == address(0) || KEEPER_BOT == address(0)) {
-            console.log(unicode"⚠️  WARNING: Placeholder addresses detected. Update configuration before use.");
+        bool testMode = PAYMENT_SPLITTER_FACTORY == address(0) ||
+            DRAGON_FUNDING_POOL == address(0) ||
+            KEEPER_BOT == address(0);
+
+        if (testMode) {
+            console.log(unicode"🧪 TEST MODE: Placeholder addresses detected. Deploying temporary contracts.");
             console.log("");
         }
 
+        // Resolve PaymentSplitter Factory
+        address paymentSplitterFactoryAddr = PAYMENT_SPLITTER_FACTORY;
+        if (paymentSplitterFactoryAddr == address(0)) {
+            PaymentSplitterFactory tempFactory = new PaymentSplitterFactory();
+            paymentSplitterFactoryAddr = address(tempFactory);
+            console.log("  Deployed temp PaymentSplitterFactory:", paymentSplitterFactoryAddr);
+        }
+
+        // Resolve Keeper Bot
+        address keeperBot = KEEPER_BOT;
+        if (keeperBot == address(0)) {
+            keeperBot = makeAddr("KeeperBot");
+            console.log("  Using test KeeperBot:", keeperBot);
+        }
+
+        // Resolve Dragon Funding Pool
+        address dragonPool = DRAGON_FUNDING_POOL;
+        if (dragonPool == address(0)) {
+            dragonPool = makeAddr("DragonFundingPool");
+            console.log("  Using test DragonFundingPool:", dragonPool);
+        }
+
+        if (testMode) {
+            console.log("");
+            console.log(unicode"⚠️  WARNING: Test addresses used. Update configuration for production.");
+            console.log("");
+        }
+
+        _logConfiguration(paymentSplitterFactoryAddr, dragonPool, keeperBot);
+
         // Build PaymentSplitter configuration
         address[] memory payees = new address[](1);
-        payees[0] = DRAGON_FUNDING_POOL;
+        payees[0] = dragonPool;
         string[] memory payeeNames = new string[](1);
         payeeNames[0] = "DragonFundingPool";
         uint256[] memory shares = new uint256[](1);
         shares[0] = 100;
 
-        // Precompute addresses (requires factory to be deployed)
-        address predictedPS = address(0);
-        address predictedStrategy = address(0);
+        // ══════════════════════════════════════════════════════════════════════════════
+        // PRECOMPUTE ADDRESSES
+        // ══════════════════════════════════════════════════════════════════════════════
 
-        if (PAYMENT_SPLITTER_FACTORY != address(0)) {
-            predictedPS = PaymentSplitterFactory(PAYMENT_SPLITTER_FACTORY).predictDeterministicAddress(
-                SHUTTER_TREASURY
-            );
-            console.log("--- PRECOMPUTED ADDRESSES ---");
-            console.log("PaymentSplitter:", predictedPS);
+        address predictedPS = PaymentSplitterFactory(paymentSplitterFactoryAddr).predictDeterministicAddress(
+            SHUTTER_TREASURY
+        );
+        console.log("--- PRECOMPUTED ADDRESSES ---");
+        console.log("PaymentSplitter:", predictedPS);
 
-            // Build strategy parameters for CREATE2 prediction
-            address ysUsdc = MorphoCompounderStrategyFactory(MORPHO_STRATEGY_FACTORY).YS_USDC();
-            address usdc = MorphoCompounderStrategyFactory(MORPHO_STRATEGY_FACTORY).USDC();
+        // Build strategy parameters for CREATE2 prediction
+        address ysUsdc = MorphoCompounderStrategyFactory(MORPHO_STRATEGY_FACTORY).YS_USDC();
+        address usdc = MorphoCompounderStrategyFactory(MORPHO_STRATEGY_FACTORY).USDC();
 
-            bytes32 parameterHash = keccak256(
-                abi.encode(
-                    ysUsdc,
-                    usdc,
-                    STRATEGY_NAME,
-                    SHUTTER_TREASURY,
-                    KEEPER_BOT,
-                    SHUTTER_TREASURY,
-                    predictedPS,
-                    false,
-                    TOKENIZED_STRATEGY
-                )
-            );
-
-            bytes memory strategyBytecode = abi.encodePacked(
-                type(MorphoCompounderStrategy).creationCode,
-                abi.encode(
-                    ysUsdc,
-                    usdc,
-                    STRATEGY_NAME,
-                    SHUTTER_TREASURY,
-                    KEEPER_BOT,
-                    SHUTTER_TREASURY,
-                    predictedPS,
-                    false,
-                    TOKENIZED_STRATEGY
-                )
-            );
-
-            predictedStrategy = BaseStrategyFactory(MORPHO_STRATEGY_FACTORY).predictStrategyAddress(
-                parameterHash,
+        bytes32 parameterHash = keccak256(
+            abi.encode(
+                ysUsdc,
+                usdc,
+                STRATEGY_NAME,
                 SHUTTER_TREASURY,
-                strategyBytecode
-            );
-            console.log("Strategy:       ", predictedStrategy);
-            console.log("");
-        }
+                keeperBot,
+                SHUTTER_TREASURY,
+                predictedPS,
+                false,
+                TOKENIZED_STRATEGY
+            )
+        );
 
-        // Generate calldata for each transaction
-        _logTx0(payees, payeeNames, shares);
-        _logTx1(predictedPS);
+        bytes memory strategyBytecode = abi.encodePacked(
+            type(MorphoCompounderStrategy).creationCode,
+            abi.encode(
+                ysUsdc,
+                usdc,
+                STRATEGY_NAME,
+                SHUTTER_TREASURY,
+                keeperBot,
+                SHUTTER_TREASURY,
+                predictedPS,
+                false,
+                TOKENIZED_STRATEGY
+            )
+        );
+
+        address predictedStrategy = BaseStrategyFactory(MORPHO_STRATEGY_FACTORY).predictStrategyAddress(
+            parameterHash,
+            SHUTTER_TREASURY,
+            strategyBytecode
+        );
+        console.log("Strategy:       ", predictedStrategy);
+        console.log("");
+
+        // ══════════════════════════════════════════════════════════════════════════════
+        // GENERATE CALLDATA
+        // ══════════════════════════════════════════════════════════════════════════════
+
+        _logTx0(paymentSplitterFactoryAddr, payees, payeeNames, shares);
+        _logTx1(keeperBot, predictedPS);
         _logTx2(predictedStrategy);
         _logTx3(predictedStrategy);
 
         // Generate batched MultiSend calldata
-        if (predictedPS != address(0) && predictedStrategy != address(0)) {
-            _logBatchedMultiSend(payees, payeeNames, shares, predictedPS, predictedStrategy);
-        }
+        _logBatchedMultiSend(
+            paymentSplitterFactoryAddr,
+            keeperBot,
+            payees,
+            payeeNames,
+            shares,
+            predictedPS,
+            predictedStrategy
+        );
     }
 
-    function _logConfiguration() internal pure {
+    function _logConfiguration(address psFactory, address dragonPool, address keeper) internal pure {
         console.log("--- CONFIGURATION ---");
         console.log("Treasury:              ", SHUTTER_TREASURY);
-        console.log("PaymentSplitter Factory:", PAYMENT_SPLITTER_FACTORY);
+        console.log("PaymentSplitter Factory:", psFactory);
         console.log("Strategy Factory:      ", MORPHO_STRATEGY_FACTORY);
-        console.log("Dragon Funding Pool:   ", DRAGON_FUNDING_POOL);
-        console.log("Keeper Bot:            ", KEEPER_BOT);
+        console.log("Dragon Funding Pool:   ", dragonPool);
+        console.log("Keeper Bot:            ", keeper);
         console.log("Deposit Amount:         %s USDC", DEPOSIT_AMOUNT / 1e6);
         console.log("");
     }
 
-    function _logTx0(address[] memory payees, string[] memory payeeNames, uint256[] memory shares) internal pure {
+    function _logTx0(
+        address psFactory,
+        address[] memory payees,
+        string[] memory payeeNames,
+        uint256[] memory shares
+    ) internal pure {
         console.log("--- TX 0: Deploy PaymentSplitter ---");
-        console.log("Target:", PAYMENT_SPLITTER_FACTORY);
+        console.log("Target:", psFactory);
         console.log("Function: createPaymentSplitter(address[],string[],uint256[])");
-        console.log("Selector: 0x31d89943");
+        console.log("Selector: 0x7a0b30f3");
 
         bytes memory callData = abi.encodeCall(
             PaymentSplitterFactory.createPaymentSplitter,
@@ -159,14 +212,14 @@ contract GenerateProposalCalldata is Script {
         console.log("");
     }
 
-    function _logTx1(address paymentSplitter) internal pure {
+    function _logTx1(address keeper, address paymentSplitter) internal pure {
         console.log("--- TX 1: Deploy Strategy ---");
         console.log("Target:", MORPHO_STRATEGY_FACTORY);
         console.log("Function: createStrategy(string,address,address,address,address,bool,address)");
 
         bytes memory callData = abi.encodeCall(
             MorphoCompounderStrategyFactory.createStrategy,
-            (STRATEGY_NAME, SHUTTER_TREASURY, KEEPER_BOT, SHUTTER_TREASURY, paymentSplitter, false, TOKENIZED_STRATEGY)
+            (STRATEGY_NAME, SHUTTER_TREASURY, keeper, SHUTTER_TREASURY, paymentSplitter, false, TOKENIZED_STRATEGY)
         );
         console.log("Calldata:");
         console.logBytes(callData);
@@ -198,6 +251,8 @@ contract GenerateProposalCalldata is Script {
     }
 
     function _logBatchedMultiSend(
+        address psFactory,
+        address keeper,
         address[] memory payees,
         string[] memory payeeNames,
         uint256[] memory shares,
@@ -215,7 +270,7 @@ contract GenerateProposalCalldata is Script {
 
         // Encode individual transactions for MultiSend
         bytes memory tx0 = _encodeMultiSendTx(
-            PAYMENT_SPLITTER_FACTORY,
+            psFactory,
             abi.encodeCall(PaymentSplitterFactory.createPaymentSplitter, (payees, payeeNames, shares))
         );
 
@@ -223,7 +278,7 @@ contract GenerateProposalCalldata is Script {
             MORPHO_STRATEGY_FACTORY,
             abi.encodeCall(
                 MorphoCompounderStrategyFactory.createStrategy,
-                (STRATEGY_NAME, SHUTTER_TREASURY, KEEPER_BOT, SHUTTER_TREASURY, predictedPS, false, TOKENIZED_STRATEGY)
+                (STRATEGY_NAME, SHUTTER_TREASURY, keeper, SHUTTER_TREASURY, predictedPS, false, TOKENIZED_STRATEGY)
             )
         );
 
