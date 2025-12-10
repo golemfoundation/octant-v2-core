@@ -26,7 +26,6 @@ The following items must be resolved before executing the DAO proposal:
 | PaymentSplitter Factory deployment | ⏳ Pending | Octant | Required for strategy deployment |
 | Dragon Funding Pool address | ⏳ Pending | Octant | PaymentSplitter payee |
 | Keeper Bot address | ⏳ Pending | Octant | Strategy keeper for harvesting |
-| Proposal Threshold confirmation | ⏳ Pending | Shutter DAO | Minimum SHU to create proposal |
 
 > ⚠️ **Action Required**: Update this document with actual addresses once Octant completes deployment.
 
@@ -149,14 +148,7 @@ When a proposal passes and is executed, the call flow is:
 
 ### Governance Parameters
 
-| Parameter | Value | Notes |
-|-----------|-------|-------|
-| Voting Period | 72 hours (3 days) | Time window for SHU holders to vote |
-| Quorum | 3% of total supply | Minimum participation required |
-| Execution Period | 72 hours (3 days) | Window to execute after passing |
-| Proposal Threshold | TBD | Minimum SHU to create proposal |
-
-> **Note**: Parameters should be verified on-chain via the Azorius module. Values above are based on typical Fractal deployments.
+See current governance parameters on the [Decent DAO App](https://app.decentdao.org/home?dao=eth%3A0x36bD3044ab68f600f6d3e081056F34f2a58432c4).
 
 ### Voting Platforms
 
@@ -285,15 +277,15 @@ Review all details and click "Submit Proposal". Sign the transaction with your w
 #### Step 2: Vote
 
 1. Share the proposal link on the [Shutter Forum](https://shutternetwork.discourse.group/) for discussion
-2. SHU holders vote during the 72-hour voting period
-3. Proposal passes if quorum (3%) is met and majority votes "For"
+2. SHU holders vote during the voting period
+3. Proposal passes if quorum is met and majority votes "For"
 
 #### Step 3: Execute
 
 Once the voting period ends and the proposal passes:
 
 1. Return to the proposal page on Decent
-2. Click "Execute" (available during the 72-hour execution window)
+2. Click "Execute" (available during the execution window)
 3. Sign the execution transaction
 4. Verify on Etherscan that all transactions succeeded
 
