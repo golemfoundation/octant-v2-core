@@ -170,6 +170,22 @@ The entire deployment can be executed in a **single DAO proposal** with **1 batc
 >
 > **UI Limitation**: The Safe UI may not support DELEGATECALL directly. Use the Transaction Builder or submit raw transactions via the Azorius module.
 
+<details>
+<summary><strong>Fallback: Individual Transactions (if DELEGATECALL batching unavailable)</strong></summary>
+
+If the Decent UI doesn't support DELEGATECALL batching, submit as **4 individual transactions** in a single proposal:
+
+| TX | Target | Function | Notes |
+|----|--------|----------|-------|
+| 0 | PaymentSplitterFactory | `createPaymentSplitter(payees, names, shares)` | Returns PaymentSplitter address |
+| 1 | MorphoCompounderStrategyFactory | `createStrategy(name, mgmt, keeper, admin, donationAddr, false, tokenizedStrategy)` | Use PaymentSplitter address from TX 0 |
+| 2 | USDC | `approve(strategyAddress, amount)` | Use Strategy address from TX 1 |
+| 3 | Strategy | `deposit(amount, treasury)` | Deposits treasury USDC |
+
+Each transaction uses `operation=0` (CALL). The Decent UI should support adding multiple transactions to a single proposal.
+
+</details>
+
 #### Step 1: Create Fractal Proposal (UI Walkthrough)
 
 **1.1 — Navigate to Shutter DAO on Decent**
