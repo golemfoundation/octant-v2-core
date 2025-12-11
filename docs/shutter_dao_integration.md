@@ -23,7 +23,7 @@ The following items must be resolved before executing the DAO proposal:
 
 | Item | Status | Owner | Notes |
 |------|--------|-------|-------|
-| PaymentSplitter Factory deployment | ⏳ Pending | Octant | Required for strategy deployment |
+| PaymentSplitter Factory deployment | ✅ Deployed | Octant | [`0x5711765E0756B45224fc1FdA1B41ab344682bBcb`](https://etherscan.io/address/0x5711765E0756B45224fc1FdA1B41ab344682bBcb) |
 | Dragon Funding Pool address | ⏳ Pending | Octant | PaymentSplitter payee |
 | Keeper Bot address | ⏳ Pending | Octant | Strategy keeper for harvesting |
 
@@ -42,7 +42,7 @@ The following items must be resolved before executing the DAO proposal:
 | Morpho Strategy Factory | [`0x052d20B0e0b141988bD32772C735085e45F357c1`](https://etherscan.io/address/0x052d20B0e0b141988bD32772C735085e45F357c1) | Ethereum |
 | Tokenized Strategy | [`0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c`](https://etherscan.io/address/0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c) | Ethereum |
 | Yearn Strategy USDC | [`0x074134A2784F4F66b6ceD6f68849382990Ff3215`](https://etherscan.io/address/0x074134A2784F4F66b6ceD6f68849382990Ff3215) | Ethereum |
-| PaymentSplitter Factory | `[TBD - Octant to deploy]` | Ethereum |
+| PaymentSplitter Factory | [`0x5711765E0756B45224fc1FdA1B41ab344682bBcb`](https://etherscan.io/address/0x5711765E0756B45224fc1FdA1B41ab344682bBcb) | Ethereum |
 
 ---
 
@@ -218,7 +218,7 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 
 | Field | Value |
 |-------|-------|
-| Target Contract | `[PAYMENT_SPLITTER_FACTORY_ADDRESS]` *(TBD by Octant)* |
+| Target Contract | `0x5711765E0756B45224fc1FdA1B41ab344682bBcb` |
 | Function | `createPaymentSplitter(address[],string[],uint256[])` |
 | `payees` | `[DRAGON_FUNDING_POOL_ADDRESS]` |
 | `payeeNames` | `["DragonFundingPool"]` |
@@ -348,7 +348,7 @@ forge script script/shutter/GenerateProposalCalldata.s.sol -vvvv
 ```
 
 Before running, update the configuration in the script:
-- `PAYMENT_SPLITTER_FACTORY` — Set after Octant deploys
+- `PAYMENT_SPLITTER_FACTORY` — `0x5711765E0756B45224fc1FdA1B41ab344682bBcb` (deployed)
 - `DRAGON_FUNDING_POOL` — Actual Dragon Funding Pool address
 - `KEEPER_BOT` — Dedicated keeper EOA/bot address
 
@@ -364,7 +364,7 @@ The script outputs:
 ### Transaction 1: Deploy PaymentSplitter
 
 ```
-Target:   [PAYMENT_SPLITTER_FACTORY_ADDRESS] (TBD by Octant)
+Target:   0x5711765E0756B45224fc1FdA1B41ab344682bBcb
 Function: createPaymentSplitter(address[],string[],uint256[])
 Value:    0
 

@@ -36,7 +36,7 @@ contract GenerateProposalCalldata is Script {
     // ══════════════════════════════════════════════════════════════════════════════
 
     address constant SHUTTER_TREASURY = 0x36bD3044ab68f600f6d3e081056F34f2a58432c4;
-    address constant PAYMENT_SPLITTER_FACTORY = address(0); // TODO: Set after Octant deploys
+    address constant PAYMENT_SPLITTER_FACTORY = 0x5711765E0756B45224fc1FdA1B41ab344682bBcb;
     address constant DRAGON_FUNDING_POOL = address(0); // TODO: Set actual address
     address constant KEEPER_BOT = address(0); // TODO: Set dedicated keeper address
 
