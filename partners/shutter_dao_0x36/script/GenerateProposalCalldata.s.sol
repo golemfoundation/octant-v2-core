@@ -16,7 +16,7 @@ import { USDC_MAINNET, MORPHO_STRATEGY_FACTORY_MAINNET, YIELD_DONATING_TOKENIZED
 /**
  * @title GenerateProposalCalldata
  * @notice Generates calldata for Shutter DAO proposal to deploy strategy and deposit funds
- * @dev Run with: forge script script/shutter/GenerateProposalCalldata.s.sol --fork-url $ETH_RPC_URL -vvvv
+ * @dev Run with: forge script partners/shutter_dao_0x36/script/GenerateProposalCalldata.s.sol --fork-url $ETH_RPC_URL -vvvv
  *
  *      This script outputs ready-to-use calldata for:
  *      - TX 0: Deploy PaymentSplitter via Factory

@@ -171,7 +171,7 @@ The entire deployment can be executed in a **single DAO proposal** with **1 batc
 3. Approve USDC to Strategy (uses precomputed Strategy address)
 4. Deposit USDC into Strategy
 
-**Key optimization**: Both factories use CREATE2, allowing address precomputation. This enables batching all 4 operations without waiting for return values. Run the calldata generator script (`script/shutter/GenerateProposalCalldata.s.sol`) against mainnet to get precomputed addresses.
+**Key optimization**: Both factories use CREATE2, allowing address precomputation. This enables batching all 4 operations without waiting for return values. Run the calldata generator script (`partners/shutter_dao_0x36/script/GenerateProposalCalldata.s.sol`) against mainnet to get precomputed addresses.
 
 > **MultiSend requirement**: Execute MultiSend with `operation=DELEGATECALL` (Azorius `execTransactionFromModule(..., operation=1)`). Using CALL makes `msg.sender` the MultiSend contract and will break USDC approvals.
 >
@@ -344,7 +344,7 @@ No additional vault wrapper is needed since only one strategy is approved by the
 Complete transaction calldata can be generated programmatically using the provided script:
 
 ```bash
-forge script script/shutter/GenerateProposalCalldata.s.sol -vvvv
+forge script partners/shutter_dao_0x36/script/GenerateProposalCalldata.s.sol --fork-url $ETH_RPC_URL -vvvv
 ```
 
 Before running, update the configuration in the script:

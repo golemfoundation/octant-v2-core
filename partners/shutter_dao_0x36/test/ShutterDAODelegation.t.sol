@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 pragma solidity ^0.8.25;
 
-import { ShutterDAOIntegrationTest } from "test/integration/shutter/ShutterDAOIntegration.t.sol";
+import { ShutterDAOIntegrationTest } from "partners/shutter_dao_0x36/test/ShutterDAOIntegration.t.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 import { Staker } from "staker/Staker.sol";
