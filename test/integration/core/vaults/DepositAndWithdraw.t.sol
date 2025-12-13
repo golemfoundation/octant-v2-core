@@ -51,11 +51,11 @@ contract DepositAndWithdrawTest is Test {
         vault = MultistrategyVault(vaultFactory.deployNewVault(address(asset), "Test Vault", "vTST", gov, 7 days));
 
         // Add roles to gov
-        vault.addRole(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
 
-        vault.setDepositLimit(type(uint256).max, true);
+        vault.set_deposit_limit(type(uint256).max, true);
         vm.stopPrank();
     }
 
@@ -85,7 +85,7 @@ contract DepositAndWithdrawTest is Test {
 
         // Set deposit limit to half_amount
         vm.prank(gov);
-        vault.setDepositLimit(halfAmount, true);
+        vault.set_deposit_limit(halfAmount, true);
 
         // Try to deposit more than limit
         vm.startPrank(fish);
@@ -104,7 +104,7 @@ contract DepositAndWithdrawTest is Test {
 
         // Raise deposit limit
         vm.prank(gov);
-        vault.setDepositLimit(fishAmount, true);
+        vault.set_deposit_limit(fishAmount, true);
 
         // Deposit another half
         vm.prank(fish);

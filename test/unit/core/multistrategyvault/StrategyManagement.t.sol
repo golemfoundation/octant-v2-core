@@ -37,20 +37,20 @@ contract StrategyManagementTest is Test {
         vault = MultistrategyVault(vaultFactory.deployNewVault(address(asset), "Test Vault", "tvTEST", gov, 7 days));
 
         // Set up roles for governance
-        vault.addRole(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.REVOKE_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.FORCE_REVOKE_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.REPORTING_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.REVOKE_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.FORCE_REVOKE_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.REPORTING_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
 
-        vault.setDepositLimit(type(uint256).max, true);
+        vault.set_deposit_limit(type(uint256).max, true);
         // Create initial strategy
         strategy = new MockYieldStrategy(address(asset), address(vault));
 
         // Add initial strategy to vault
-        vault.addStrategy(address(strategy), true);
+        vault.add_strategy(address(strategy), true);
 
         // Give user some tokens
         asset.mint(user, userAmount);
@@ -73,7 +73,7 @@ contract StrategyManagementTest is Test {
     }
 
     function addDebtToStrategy(MockYieldStrategy strat, uint256 amount) internal {
-        vault.updateDebt(address(strat), amount, 0);
+        vault.update_debt(address(strat), amount, 0);
     }
 
     // Test Cases
@@ -84,7 +84,7 @@ contract StrategyManagementTest is Test {
         uint256 snapshot = block.timestamp;
         vm.expectEmit(true, true, true, true);
         emit IMultistrategyVault.StrategyChanged(address(newStrategy), Constants.STRATEGY_CHANGE_ADDED);
-        vault.addStrategy(address(newStrategy), false);
+        vault.add_strategy(address(newStrategy), false);
 
         IMultistrategyVault.StrategyParams memory strategyParams = vault.strategies(address(newStrategy));
         assertEq(strategyParams.activation, snapshot);
@@ -95,12 +95,12 @@ contract StrategyManagementTest is Test {
 
     function testAddStrategyWithZeroAddressFails() public {
         vm.expectRevert(IMultistrategyVault.StrategyCannotBeZeroAddress.selector);
-        vault.addStrategy(Constants.ZERO_ADDRESS, false);
+        vault.add_strategy(Constants.ZERO_ADDRESS, false);
     }
 
     function testAddStrategyWithActivationFails() public {
         vm.expectRevert(IMultistrategyVault.StrategyAlreadyActive.selector);
-        vault.addStrategy(address(strategy), false);
+        vault.add_strategy(address(strategy), false);
     }
 
     function testAddStrategyWithIncorrectAssetFails() public {
@@ -108,7 +108,7 @@ contract StrategyManagementTest is Test {
         MockYieldStrategy mockTokenStrategy = createStrategy(address(mockToken));
 
         vm.expectRevert(IMultistrategyVault.InvalidAsset.selector);
-        vault.addStrategy(address(mockTokenStrategy), false);
+        vault.add_strategy(address(mockTokenStrategy), false);
     }
 
     function testAddStrategyWithGenericStrategy() public {
@@ -118,7 +118,7 @@ contract StrategyManagementTest is Test {
         uint256 snapshot = block.timestamp;
         vm.expectEmit(true, true, true, true);
         emit IMultistrategyVault.StrategyChanged(address(genericStrategy), Constants.STRATEGY_CHANGE_ADDED);
-        vault.addStrategy(address(genericStrategy), false);
+        vault.add_strategy(address(genericStrategy), false);
 
         IMultistrategyVault.StrategyParams memory strategyParams = vault.strategies(address(genericStrategy));
         assertEq(strategyParams.activation, snapshot);
@@ -130,7 +130,7 @@ contract StrategyManagementTest is Test {
     function testRevokeStrategyWithExistingStrategy() public {
         vm.expectEmit(true, true, true, true);
         emit IMultistrategyVault.StrategyChanged(address(strategy), Constants.STRATEGY_CHANGE_REVOKED);
-        vault.revokeStrategy(address(strategy));
+        vault.revoke_strategy(address(strategy));
 
         Checks.checkRevokedStrategy(vault, address(strategy));
     }
@@ -140,25 +140,25 @@ contract StrategyManagementTest is Test {
         uint256 vaultBalance = asset.balanceOf(address(vault));
         uint256 newDebt = vaultBalance;
 
-        vault.updateMaxDebtForStrategy(address(strategy), vaultBalance);
+        vault.update_max_debt_for_strategy(address(strategy), vaultBalance);
 
         addDebtToStrategy(strategy, newDebt);
 
         vm.expectRevert(IMultistrategyVault.StrategyHasDebt.selector);
-        vault.revokeStrategy(address(strategy));
+        vault.revoke_strategy(address(strategy));
     }
 
     function testRevokeStrategyWithInactiveStrategyFails() public {
         MockYieldStrategy inactiveStrategy = createStrategy(address(asset));
 
         vm.expectRevert(IMultistrategyVault.StrategyNotActive.selector);
-        vault.revokeStrategy(address(inactiveStrategy));
+        vault.revoke_strategy(address(inactiveStrategy));
     }
 
     function testForceRevokeStrategyWithExistingStrategy() public {
         vm.expectEmit(true, true, true, true);
         emit IMultistrategyVault.StrategyChanged(address(strategy), Constants.STRATEGY_CHANGE_REVOKED);
-        vault.forceRevokeStrategy(address(strategy));
+        vault.force_revoke_strategy(address(strategy));
 
         Checks.checkRevokedStrategy(vault, address(strategy));
     }
@@ -169,10 +169,10 @@ contract StrategyManagementTest is Test {
         uint256 vaultBalance = asset.balanceOf(address(vault));
 
         // THIS IS THE KEY FIX: Set the max debt for the strategy first
-        vault.updateMaxDebtForStrategy(address(strategy), vaultBalance);
+        vault.update_max_debt_for_strategy(address(strategy), vaultBalance);
 
         // Now update the debt - this will work since maxDebt is no longer 0
-        vault.updateDebt(address(strategy), vaultBalance, 0);
+        vault.update_debt(address(strategy), vaultBalance, 0);
 
         // Verify debt is properly allocated
         assertEq(vault.strategies(address(strategy)).currentDebt, vaultBalance);
@@ -181,7 +181,7 @@ contract StrategyManagementTest is Test {
         vm.expectEmit(true, true, true, true);
         emit IMultistrategyVault.StrategyReported(address(strategy), 0, vaultBalance, 0, 0, 0, 0);
 
-        vault.forceRevokeStrategy(address(strategy));
+        vault.force_revoke_strategy(address(strategy));
 
         // Verify strategy was revoked and debt is cleared
         assertEq(vault.totalDebt(), 0);
@@ -193,6 +193,6 @@ contract StrategyManagementTest is Test {
         MockYieldStrategy inactiveStrategy = createStrategy(address(asset));
 
         vm.expectRevert(IMultistrategyVault.StrategyNotActive.selector);
-        vault.forceRevokeStrategy(address(inactiveStrategy));
+        vault.force_revoke_strategy(address(inactiveStrategy));
     }
 }

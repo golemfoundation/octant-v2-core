@@ -65,18 +65,18 @@ contract MultipleStrategyWithdrawFlowTest is Test {
 
         // Set up strategies
         vm.startPrank(gov);
-        vault.addRole(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
 
-        vault.addStrategy(address(liquidStrategy), true);
-        vault.addStrategy(address(lockedStrategy), true);
+        vault.add_strategy(address(liquidStrategy), true);
+        vault.add_strategy(address(lockedStrategy), true);
 
         // Set max debt and allocate to strategies
-        vault.updateMaxDebtForStrategy(address(liquidStrategy), type(uint256).max);
-        vault.updateMaxDebtForStrategy(address(lockedStrategy), type(uint256).max);
-        vault.updateDebt(address(liquidStrategy), liquidStrategyDebt, 0);
-        vault.updateDebt(address(lockedStrategy), lockedStrategyDebt, 0);
+        vault.update_max_debt_for_strategy(address(liquidStrategy), type(uint256).max);
+        vault.update_max_debt_for_strategy(address(lockedStrategy), type(uint256).max);
+        vault.update_debt(address(liquidStrategy), liquidStrategyDebt, 0);
+        vault.update_debt(address(lockedStrategy), lockedStrategyDebt, 0);
         vm.stopPrank();
 
         // Lock half of assets in locked strategy
@@ -227,8 +227,8 @@ contract MultipleStrategyWithdrawFlowTest is Test {
         vault = MultistrategyVault(vaultFactory.deployNewVault(address(asset), "Test Vault", "vTST", gov, 7 days));
 
         // Set deposit limit to max
-        vault.addRole(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
-        vault.setDepositLimit(type(uint256).max, true);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.set_deposit_limit(type(uint256).max, true);
         vm.stopPrank();
     }
 

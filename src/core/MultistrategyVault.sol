@@ -39,6 +39,18 @@ import { DebtManagementLib } from "src/core/libs/DebtManagementLib.sol";
  *   and it is the responsibility of those that hold the corresponding roles to choose
  *   and fund strategies that best fit their desired specifications.
  *
+ * @custom:design-decisions
+ * 1. Function Naming: External functions use snake_case (e.g., set_deposit_limit, process_report)
+ *    to maintain exact compatibility with the Vyper implementation, ensuring existing integrations
+ *    continue to work seamlessly.
+ *
+ * 2. Withdraw/Redeem Overloads: Due to Solidity contract size constraints, we implement only the
+ *    most essential function overloads:
+ *    - 3-parameter versions for ERC4626 compliance
+ *    - 5-parameter versions for advanced usage with maxLoss and custom strategies
+ *    The Vyper version includes additional 4-parameter overloads which were intentionally omitted
+ *    to keep the contract size manageable while maintaining full functionality.
+ *
  *   Those holding vault tokens are able to redeem the tokens for the corresponding
  *   amount of underlying asset based on any reported profits or losses since their
  *   initial deposit.
@@ -357,7 +369,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param newAccountant_ Address of the new accountant contract (or address(0) to disable)
      * @custom:security Only callable by ACCOUNTANT_MANAGER role
      */
-    function setAccountant(address newAccountant_) external override {
+    function set_accountant(address newAccountant_) external override {
         _enforceRole(msg.sender, Roles.ACCOUNTANT_MANAGER);
         accountant = newAccountant_;
 
@@ -372,7 +384,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param newDefaultQueue_ Array of strategy addresses (maximum length MAX_QUEUE = 10)
      * @custom:security Only callable by QUEUE_MANAGER role
      */
-    function setDefaultQueue(address[] calldata newDefaultQueue_) external override {
+    function set_default_queue(address[] memory newDefaultQueue_) external override {
         _enforceRole(msg.sender, Roles.QUEUE_MANAGER);
         require(newDefaultQueue_.length <= MAX_QUEUE, MaxQueueLengthReached());
 
@@ -394,7 +406,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param useDefaultQueue_ True to force default queue, false to allow custom queues
      * @custom:security Only callable by QUEUE_MANAGER role
      */
-    function setUseDefaultQueue(bool useDefaultQueue_) external override {
+    function set_use_default_queue(bool useDefaultQueue_) external override {
         _enforceRole(msg.sender, Roles.QUEUE_MANAGER);
         useDefaultQueue = useDefaultQueue_;
 
@@ -409,11 +421,23 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param autoAllocate_ True to enable auto-allocation, false to keep deposits idle
      * @custom:security Only callable by DEBT_MANAGER role
      */
-    function setAutoAllocate(bool autoAllocate_) external override {
+    function set_auto_allocate(bool autoAllocate_) external override {
         _enforceRole(msg.sender, Roles.DEBT_MANAGER);
         autoAllocate = autoAllocate_;
 
         emit UpdateAutoAllocate(autoAllocate_);
+    }
+
+    /**
+     * @notice Sets the maximum total assets the vault can hold with default override behavior
+     * @dev Overload to match Vyper's default parameter behavior (shouldOverride = false by default)
+     *      See setDepositLimit(uint256, bool) for full documentation
+     * @param depositLimit_ New maximum total assets (use type(uint256).max for unlimited)
+     * @custom:security Only callable by DEPOSIT_LIMIT_MANAGER role
+     * @custom:security Reverts if vault is shutdown
+     */
+    function set_deposit_limit(uint256 depositLimit_) external override {
+        set_deposit_limit(depositLimit_, false);
     }
 
     /**
@@ -425,7 +449,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @custom:security Only callable by DEPOSIT_LIMIT_MANAGER role
      * @custom:security Reverts if vault is shutdown
      */
-    function setDepositLimit(uint256 depositLimit_, bool shouldOverride_) external override {
+    function set_deposit_limit(uint256 depositLimit_, bool shouldOverride_) public override {
         require(_shutdown == false, VaultShutdown());
         _enforceRole(msg.sender, Roles.DEPOSIT_LIMIT_MANAGER);
 
@@ -447,6 +471,18 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
+     * @notice Sets a module contract to dynamically control deposit limits with default override behavior
+     * @dev Overload to match Vyper's default parameter behavior (shouldOverride = false by default)
+     *      See set_deposit_limit_module(address, bool) for full documentation
+     * @param depositLimitModule_ Address of IDepositLimitModule contract (or address(0) to disable)
+     * @custom:security Only callable by DEPOSIT_LIMIT_MANAGER role
+     * @custom:security Reverts if vault is shutdown
+     */
+    function set_deposit_limit_module(address depositLimitModule_) public {
+        set_deposit_limit_module(depositLimitModule_, false);
+    }
+
+    /**
      * @notice Sets a module contract to dynamically control deposit limits
      * @dev Module overrides static depositLimit. Requires depositLimit = type(uint256).max
      *      or shouldOverride_ = true. Reverts if vault is shutdown
@@ -455,7 +491,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @custom:security Only callable by DEPOSIT_LIMIT_MANAGER role
      * @custom:security Reverts if vault is shutdown
      */
-    function setDepositLimitModule(address depositLimitModule_, bool shouldOverride_) external override {
+    function set_deposit_limit_module(address depositLimitModule_, bool shouldOverride_) public override {
         require(_shutdown == false, VaultShutdown());
         _enforceRole(msg.sender, Roles.DEPOSIT_LIMIT_MANAGER);
 
@@ -483,7 +519,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param withdrawLimitModule_ Address of IWithdrawLimitModule contract (or address(0) to disable)
      * @custom:security Only callable by WITHDRAW_LIMIT_MANAGER role
      */
-    function setWithdrawLimitModule(address withdrawLimitModule_) external override {
+    function set_withdraw_limit_module(address withdrawLimitModule_) external override {
         _enforceRole(msg.sender, Roles.WITHDRAW_LIMIT_MANAGER);
 
         withdrawLimitModule = withdrawLimitModule_;
@@ -498,7 +534,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param minimumTotalIdle_ Minimum idle assets (0 = no minimum)
      * @custom:security Only callable by MINIMUM_IDLE_MANAGER role
      */
-    function setMinimumTotalIdle(uint256 minimumTotalIdle_) external override {
+    function set_minimum_total_idle(uint256 minimumTotalIdle_) external override {
         _enforceRole(msg.sender, Roles.MINIMUM_IDLE_MANAGER);
         minimumTotalIdle = minimumTotalIdle_;
 
@@ -568,7 +604,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param rolesBitmask_ Complete role bitmask (overwrites existing)
      * @custom:security Only callable by roleManager
      */
-    function setRole(address account_, uint256 rolesBitmask_) external override {
+    function set_role(address account_, uint256 rolesBitmask_) external override {
         require(msg.sender == roleManager, NotAllowed());
         // Store the enum value directly
         roles[account_] = rolesBitmask_;
@@ -583,7 +619,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param role_ Role enum value to add (single role only)
      * @custom:security Only callable by roleManager
      */
-    function addRole(address account_, Roles role_) external override {
+    function add_role(address account_, Roles role_) external override {
         require(msg.sender == roleManager, NotAllowed());
         // Add the role with a bitwise OR
         roles[account_] = roles[account_] | (1 << uint256(role_));
@@ -598,7 +634,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param role_ Role enum value to remove (single role only)
      * @custom:security Only callable by roleManager
      */
-    function removeRole(address account_, Roles role_) external override {
+    function remove_role(address account_, Roles role_) external override {
         require(msg.sender == roleManager, NotAllowed());
 
         // Bitwise AND with NOT to remove the role
@@ -613,7 +649,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param roleManager_ Address of the new role manager
      * @custom:security Only callable by current roleManager
      */
-    function transferRoleManager(address roleManager_) external override {
+    function transfer_role_manager(address roleManager_) external override {
         require(msg.sender == roleManager, NotAllowed());
         futureRoleManager = roleManager_;
 
@@ -626,7 +662,7 @@ contract MultistrategyVault is IMultistrategyVault {
      *      Clears futureRoleManager and updates roleManager to caller
      * @custom:security Only callable by futureRoleManager address
      */
-    function acceptRoleManager() external override {
+    function accept_role_manager() external override {
         require(msg.sender == futureRoleManager, NotFutureRoleManager());
         roleManager = msg.sender;
         futureRoleManager = address(0);
@@ -676,7 +712,7 @@ contract MultistrategyVault is IMultistrategyVault {
      *      Maximum length is MAX_QUEUE (10)
      * @return Array of strategy addresses
      */
-    function getDefaultQueue() external view returns (address[] memory) {
+    function get_default_queue() external view returns (address[] memory) {
         return _defaultQueue;
     }
 
@@ -715,7 +751,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @custom:security Reentrancy protected
      * @custom:security Strategy convertToAssets() must be manipulation-resistant
      */
-    function processReport(address strategy_) external nonReentrant returns (uint256, uint256) {
+    function process_report(address strategy_) external nonReentrant returns (uint256, uint256) {
         _enforceRole(msg.sender, Roles.REPORTING_MANAGER);
 
         // slither-disable-next-line uninitialized-local
@@ -1017,7 +1053,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @custom:security Only callable by DEBT_PURCHASER role
      * @custom:security Reentrancy protected
      */
-    function buyDebt(address strategy_, uint256 amount_) external override nonReentrant {
+    function buy_debt(address strategy_, uint256 amount_) external override nonReentrant {
         _enforceRole(msg.sender, Roles.DEBT_PURCHASER);
         require(_strategies[strategy_].activation != 0, InactiveStrategy());
 
@@ -1062,6 +1098,17 @@ contract MultistrategyVault is IMultistrategyVault {
     // ============================================
 
     /**
+     * @notice Adds a new strategy to the vault with default queue behavior
+     * @dev Overload to match Vyper's default parameter behavior (addToQueue = true by default)
+     *      See addStrategy(address, bool) for full documentation
+     * @param newStrategy_ Address of the ERC4626 strategy to add
+     * @custom:security Only callable by ADD_STRATEGY_MANAGER role
+     */
+    function add_strategy(address newStrategy_) external override {
+        add_strategy(newStrategy_, true);
+    }
+
+    /**
      * @notice Adds a new strategy to the vault
      * @dev Validates strategy compatibility and initializes tracking
      *      Strategy MUST be ERC4626-compliant with matching asset
@@ -1080,7 +1127,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param addToQueue_ If true, adds to default queue (if queue has space)
      * @custom:security Only callable by ADD_STRATEGY_MANAGER role
      */
-    function addStrategy(address newStrategy_, bool addToQueue_) external override {
+    function add_strategy(address newStrategy_, bool addToQueue_) public override {
         _enforceRole(msg.sender, Roles.ADD_STRATEGY_MANAGER);
         _addStrategy(newStrategy_, addToQueue_);
     }
@@ -1095,7 +1142,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param strategy_ Address of the strategy to revoke (must have currentDebt = 0)
      * @custom:security Only callable by REVOKE_STRATEGY_MANAGER role
      */
-    function revokeStrategy(address strategy_) external override {
+    function revoke_strategy(address strategy_) external override {
         _enforceRole(msg.sender, Roles.REVOKE_STRATEGY_MANAGER);
         _revokeStrategy(strategy_, false);
     }
@@ -1123,7 +1170,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @custom:security Only callable by FORCE_REVOKE_MANAGER role
      * @custom:security Realizes immediate loss for all shareholders
      */
-    function forceRevokeStrategy(address strategy_) external override {
+    function force_revoke_strategy(address strategy_) external override {
         _enforceRole(msg.sender, Roles.FORCE_REVOKE_MANAGER);
         _revokeStrategy(strategy_, true);
     }
@@ -1138,7 +1185,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param newMaxDebt_ Maximum debt (0 = no new allocations)
      * @custom:security Only callable by MAX_DEBT_MANAGER role
      */
-    function updateMaxDebtForStrategy(address strategy_, uint256 newMaxDebt_) external override {
+    function update_max_debt_for_strategy(address strategy_, uint256 newMaxDebt_) external override {
         _enforceRole(msg.sender, Roles.MAX_DEBT_MANAGER);
         require(_strategies[strategy_].activation != 0, InactiveStrategy());
         _strategies[strategy_].maxDebt = newMaxDebt_;
@@ -1149,6 +1196,21 @@ contract MultistrategyVault is IMultistrategyVault {
     // ============================================
     // DEBT MANAGEMENT
     // ============================================
+
+    /**
+     * @notice Rebalances the debt allocation for a strategy with maximum loss tolerance
+     * @dev Overload to match Vyper's default parameter behavior (maxLoss = MAX_BPS by default)
+     *      See updateDebt(address, uint256, uint256) for full documentation
+     * @param strategy_ Address of the strategy to rebalance (must be active)
+     * @param targetDebt_ Target debt (or type(uint256).max for max allocation)
+     * @return newDebt The new current debt after rebalancing
+     * @custom:security Only callable by DEBT_MANAGER role
+     * @custom:security Reentrancy protected
+     */
+    function update_debt(address strategy_, uint256 targetDebt_) external override nonReentrant returns (uint256) {
+        _enforceRole(msg.sender, Roles.DEBT_MANAGER);
+        return _updateDebt(strategy_, targetDebt_, MAX_BPS);
+    }
 
     /**
      * @notice Rebalances the debt allocation for a strategy
@@ -1176,7 +1238,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @custom:security Only callable by DEBT_MANAGER role
      * @custom:security Reentrancy protected
      */
-    function updateDebt(
+    function update_debt(
         address strategy_,
         uint256 targetDebt_,
         uint256 maxLoss_
@@ -1241,7 +1303,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @custom:security Only callable by EMERGENCY_MANAGER role
      * @custom:security IRREVERSIBLE - use with extreme caution
      */
-    function shutdownVault() external override {
+    function shutdown_vault() external override {
         _enforceRole(msg.sender, Roles.EMERGENCY_MANAGER);
         require(_shutdown == false, AlreadyShutdown());
 
@@ -1379,7 +1441,7 @@ contract MultistrategyVault is IMultistrategyVault {
         address receiver_,
         address owner_,
         uint256 maxLoss_,
-        address[] calldata strategiesArray_
+        address[] memory strategiesArray_
     ) public virtual override nonReentrant returns (uint256) {
         uint256 shares = _convertToShares(assets_, Rounding.ROUND_UP);
         _redeem(msg.sender, receiver_, owner_, assets_, shares, maxLoss_, strategiesArray_);
@@ -1418,11 +1480,37 @@ contract MultistrategyVault is IMultistrategyVault {
         address receiver_,
         address owner_,
         uint256 maxLoss_,
-        address[] calldata strategiesArray_
+        address[] memory strategiesArray_
     ) public virtual override nonReentrant returns (uint256) {
         uint256 assets = _convertToAssets(shares_, Rounding.ROUND_DOWN);
         // Always return the actual amount of assets withdrawn.
         return _redeem(msg.sender, receiver_, owner_, assets, shares_, maxLoss_, strategiesArray_);
+    }
+
+    /**
+     * @notice Withdraws assets with default parameters (maxLoss = 0, default queue)
+     * @dev Overload to match Vyper's default parameters behavior
+     * @param assets_ Amount of assets to withdraw
+     * @param receiver_ Address to receive the withdrawn assets
+     * @param owner_ Address whose shares will be burned
+     * @return shares Amount of shares actually burned from owner
+     */
+    function withdraw(uint256 assets_, address receiver_, address owner_) external virtual returns (uint256) {
+        address[] memory emptyArray = new address[](0);
+        return withdraw(assets_, receiver_, owner_, 0, emptyArray);
+    }
+
+    /**
+     * @notice Redeems shares with default parameters (maxLoss = 10000, default queue)
+     * @dev Overload to match Vyper's default parameters behavior
+     * @param shares_ Exact amount of shares to burn
+     * @param receiver_ Address to receive the withdrawn assets
+     * @param owner_ Address whose shares will be burned
+     * @return assets Amount of assets actually withdrawn and sent to receiver
+     */
+    function redeem(uint256 shares_, address receiver_, address owner_) external virtual returns (uint256) {
+        address[] memory emptyArray = new address[](0);
+        return redeem(shares_, receiver_, owner_, 10_000, emptyArray);
     }
 
     // ============================================
@@ -1604,15 +1692,6 @@ contract MultistrategyVault is IMultistrategyVault {
     }
 
     /**
-     * @notice Returns the default withdrawal queue
-     * @dev Same as getDefaultQueue()
-     * @return queue Array of strategy addresses in withdrawal priority order
-     */
-    function defaultQueue() external view override returns (address[] memory) {
-        return _defaultQueue;
-    }
-
-    /**
      * @notice Returns maximum assets that can be deposited for a receiver
      * @dev Checks against depositLimit or depositLimitModule (if set)
      *      Returns 0 if receiver is vault address or zero address
@@ -1656,9 +1735,9 @@ contract MultistrategyVault is IMultistrategyVault {
     function maxWithdraw(
         address owner_,
         uint256 maxLoss_,
-        address[] calldata strategiesArray_
+        address[] memory strategiesArray_
     ) external view virtual override returns (uint256) {
-        return _maxWithdraw(owner_, maxLoss_, strategiesArray_);
+        return _max_withdraw(owner_, maxLoss_, strategiesArray_);
     }
 
     /**
@@ -1678,12 +1757,66 @@ contract MultistrategyVault is IMultistrategyVault {
     function maxRedeem(
         address owner_,
         uint256 maxLoss_,
-        address[] calldata strategiesArray_
+        address[] memory strategiesArray_
     ) external view virtual override returns (uint256) {
         return
             Math.min(
                 // Min of the shares equivalent of max_withdraw or the full balance
-                _convertToShares(_maxWithdraw(owner_, maxLoss_, strategiesArray_), Rounding.ROUND_DOWN),
+                _convertToShares(_max_withdraw(owner_, maxLoss_, strategiesArray_), Rounding.ROUND_DOWN),
+                _balanceOf[owner_]
+            );
+    }
+
+    /**
+     * @notice Returns maximum assets that owner can withdraw with custom loss tolerance
+     * @dev Uses default queue for withdrawal strategies
+     * @param owner_ Address that owns the shares
+     * @param maxLoss_ Maximum acceptable loss in basis points (0-10000)
+     * @return max Maximum withdrawable assets
+     */
+    function maxWithdraw(address owner_, uint256 maxLoss_) external view virtual returns (uint256) {
+        address[] memory emptyArray = new address[](0);
+        return _max_withdraw(owner_, maxLoss_, emptyArray);
+    }
+
+    /**
+     * @notice Returns maximum assets that owner can withdraw with default parameters
+     * @dev Overload to match Vyper's default parameters behavior (maxLoss = 0, default queue)
+     * @param owner_ Address that owns the shares
+     * @return max Maximum withdrawable assets
+     */
+    function maxWithdraw(address owner_) external view virtual returns (uint256) {
+        address[] memory emptyArray = new address[](0);
+        return _max_withdraw(owner_, 0, emptyArray);
+    }
+
+    /**
+     * @notice Returns maximum shares that owner can redeem with custom loss tolerance
+     * @dev Uses default queue for withdrawal strategies
+     * @param owner_ Address that owns the shares
+     * @param maxLoss_ Maximum acceptable loss in basis points (0-10000)
+     * @return max Maximum redeemable shares
+     */
+    function maxRedeem(address owner_, uint256 maxLoss_) external view virtual returns (uint256) {
+        address[] memory emptyArray = new address[](0);
+        return
+            Math.min(
+                _convertToShares(_max_withdraw(owner_, maxLoss_, emptyArray), Rounding.ROUND_DOWN),
+                _balanceOf[owner_]
+            );
+    }
+
+    /**
+     * @notice Returns maximum shares that owner can redeem with default parameters
+     * @dev Overload to match Vyper's default parameters behavior (maxLoss = MAX_BPS, default queue)
+     * @param owner_ Address that owns the shares
+     * @return max Maximum redeemable shares
+     */
+    function maxRedeem(address owner_) external view virtual returns (uint256) {
+        address[] memory emptyArray = new address[](0);
+        return
+            Math.min(
+                _convertToShares(_max_withdraw(owner_, MAX_BPS, emptyArray), Rounding.ROUND_DOWN),
                 _balanceOf[owner_]
             );
     }
@@ -1729,28 +1862,6 @@ contract MultistrategyVault is IMultistrategyVault {
      */
     function apiVersion() external pure override returns (string memory) {
         return API_VERSION;
-    }
-
-    // ============================================
-    // VIEW FUNCTIONS - STRATEGY QUERIES
-    // ============================================
-
-    /**
-     * @notice Calculates the unrealized losses for a withdrawal from strategy
-     * @dev Compares strategy's actual asset value vs recorded debt
-     *      If strategy is underwater, user takes proportional share of loss
-     *
-     *      Formula: loss = assetsNeeded - (assetsNeeded * strategyAssets / currentDebt)
-     *
-     * @param strategy_ Address of the strategy
-     * @param assetsNeeded_ Amount of assets to withdraw from strategy
-     * @return loss User's share of unrealized losses
-     */
-    function assessShareOfUnrealisedLosses(address strategy_, uint256 assetsNeeded_) external view returns (uint256) {
-        uint256 currentDebt = _strategies[strategy_].currentDebt;
-        require(currentDebt >= assetsNeeded_, NotEnoughDebt());
-
-        return _assessShareOfUnrealisedLosses(strategy_, currentDebt, assetsNeeded_);
     }
 
     // ============================================
@@ -1801,13 +1912,13 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param assetsNeeded The amount of assets needed to be withdrawn
      * @return The share of unrealised losses that the strategy has
      */
-    function assessShareOfUnrealisedLosses(
+    function assess_share_of_unrealised_losses(
         address strategy,
         uint256 currentDebt,
         uint256 assetsNeeded
     ) external view returns (uint256) {
         require(currentDebt >= assetsNeeded, NotEnoughDebt());
-        return _assessShareOfUnrealisedLosses(strategy, currentDebt, assetsNeeded);
+        return _assess_share_of_unrealised_losses(strategy, currentDebt, assetsNeeded);
     }
 
     /**
@@ -2084,7 +2195,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param strategiesParam_ Custom withdrawal queue
      * @return max Maximum withdrawable assets
      */
-    function _maxWithdraw(
+    function _max_withdraw(
         address owner_,
         uint256 maxLoss_,
         address[] memory strategiesParam_
@@ -2131,7 +2242,7 @@ contract MultistrategyVault is IMultistrategyVault {
                 uint256 toWithdraw = Math.min(vars.maxAssets - vars.have, currentDebt);
 
                 // Get any unrealized loss for the strategy
-                uint256 unrealizedLoss = _assessShareOfUnrealisedLosses(strategy, currentDebt, toWithdraw);
+                uint256 unrealizedLoss = _assess_share_of_unrealised_losses(strategy, currentDebt, toWithdraw);
 
                 // See if any limit is enforced by the strategy
                 uint256 strategyLimit = IERC4626Payable(strategy).convertToAssets(
@@ -2219,7 +2330,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param assetsNeeded_ Amount to withdraw
      * @return loss User's proportional share of losses
      */
-    function _assessShareOfUnrealisedLosses(
+    function _assess_share_of_unrealised_losses(
         address strategy_,
         uint256 strategyCurrentDebt_,
         uint256 assetsNeeded_
@@ -2365,7 +2476,11 @@ contract MultistrategyVault is IMultistrategyVault {
                 );
 
                 // Check for unrealized losses
-                uint256 unrealisedLossesShare = _assessShareOfUnrealisedLosses(strategy, currentDebt, assetsToWithdraw);
+                uint256 unrealisedLossesShare = _assess_share_of_unrealised_losses(
+                    strategy,
+                    currentDebt,
+                    assetsToWithdraw
+                );
 
                 // Handle unrealized losses if any
                 if (unrealisedLossesShare > 0) {

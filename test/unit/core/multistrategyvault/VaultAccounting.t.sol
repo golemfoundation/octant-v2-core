@@ -31,14 +31,14 @@ contract VaultAccountingTest is Test {
         vm.startPrank(gov);
         // Set up roles for governance using direct values matching the Vyper implementation
         // Vyper Roles is a bit flag enum where each role is a power of 2
-        vault.addRole(gov, IMultistrategyVault.Roles.REPORTING_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.REPORTING_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
         // set deposit limit manager
-        vault.addRole(depositLimitManager, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.add_role(depositLimitManager, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
         vm.stopPrank();
         // set deposit limit
         vm.prank(depositLimitManager);
-        vault.setDepositLimit(100 ether, true);
+        vault.set_deposit_limit(100 ether, true);
     }
 
     function mintAndDepositIntoVault() internal returns (uint256) {
@@ -87,7 +87,7 @@ contract VaultAccountingTest is Test {
             "Vault asset balance should include airdrop"
         );
 
-        (uint256 gain, uint256 loss) = vault.processReport(address(vault));
+        (uint256 gain, uint256 loss) = vault.process_report(address(vault));
 
         // Verify event data through return values
         assertEq(gain, airdropAmount, "Gain should equal airdrop amount");

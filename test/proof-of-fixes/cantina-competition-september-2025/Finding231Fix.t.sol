@@ -37,11 +37,11 @@ contract Finding231Fix is Test {
         vm.stopPrank();
 
         vm.startPrank(governance);
-        vault.addRole(governance, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        vault.addRole(governance, IMultistrategyVault.Roles.DEBT_MANAGER);
-        vault.addRole(governance, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
-        vault.addRole(governance, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
-        vault.setDepositLimit(MAX_INT, false);
+        vault.add_role(governance, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
+        vault.add_role(governance, IMultistrategyVault.Roles.DEBT_MANAGER);
+        vault.add_role(governance, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
+        vault.add_role(governance, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.set_deposit_limit(MAX_INT, false);
         vm.stopPrank();
     }
 
