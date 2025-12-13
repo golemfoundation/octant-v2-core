@@ -33,6 +33,7 @@ import { NotInAllowset } from "src/errors.sol";
 /// @notice Provides shared functionality including:
 ///         - Variable reward duration (7-3000 days, configurable by admin)
 ///         - Earning power management with external bumping incentivized by tips (up to maxBumpTip)
+///         - Earning power calculator updates (blocked during active reward periods for governance protection)
 ///         - Adjustable minimum stake amount (existing deposits grandfathered with restrictions)
 ///         - Access control for stakers and allocation mechanisms
 ///         - Reward compounding (when REWARD_TOKEN == STAKE_TOKEN)
@@ -85,6 +86,10 @@ import { NotInAllowset } from "src/errors.sol";
 /// @dev Integer division causes ~1 wei precision loss, negligible due to SCALE_FACTOR (1e36).
 /// @dev This base is abstract, with variants implementing token-specific behaviors (e.g., delegation surrogates).
 /// @dev Earning power updates are required after balance changes; some are automatic, others via bumpEarningPower.
+///
+/// @dev ACCESS CONTROL:
+///      - admin: Admin operations (protocol parameters, pause, access control) from base Staker
+///      - rewardManager: Can manage reward notifiers (operational role, separation of duties)
 abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, StakerPermitAndStake, StakerOnBehalf {
     using SafeCast for uint256;
 
@@ -132,6 +137,7 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     error CompoundingNotSupported();
     error CannotRaiseMinimumStakeAmountDuringActiveReward();
     error CannotRaiseMaxBumpTipDuringActiveReward();
+    error CannotChangeEarningPowerCalculatorDuringActiveReward();
     error ZeroOperation();
     error NoOperation();
     error DisablingAllocationMechanismAllowsetNotAllowed();
@@ -151,6 +157,10 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @notice Tracks the total amount of rewards that have been consumed by users
     /// @dev This includes claims, compounding, contributions, and tips
     uint256 public totalClaimedRewards;
+
+    /// @notice Address that can manage reward notifiers (operational role)
+    /// @dev Separated from admin for operational efficiency and security separation of duties
+    address public rewardManager;
 
     /// @notice Summary of the most recently scheduled reward cycle.
     /// @dev Tracks both the new amount and any carried-over rewards for analytics and UX.
@@ -220,6 +230,10 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @notice Emitted when the minimum stake amount is updated
     /// @param newMinimumStakeAmount New minimum stake required in stake token base units
     event MinimumStakeAmountSet(uint256 newMinimumStakeAmount);
+
+    /// @notice Emitted when the reward manager address is updated
+    /// @param newRewardManager New reward manager address that can manage notifiers
+    event RewardManagerSet(address indexed newRewardManager);
 
     // === Getters ===
     /// @notice Gets the current reward duration
@@ -531,6 +545,18 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         _setMaxBumpTip(_newMaxBumpTip);
     }
 
+    /// @notice Sets the earning power calculator with governance protection
+    /// @dev TIMING RESTRICTION: Cannot change during active reward period to protect reward distribution integrity.
+    /// @dev SECURITY: Changing calculator mid-cycle could disrupt reward fairness and earning power calculations.
+    /// @dev GOVERNANCE PROTECTION: Requires waiting until after rewardEndTime to change calculator.
+    /// @dev Can only be called by admin
+    /// @param _newEarningPowerCalculator New earning power calculator contract address
+    function setEarningPowerCalculator(address _newEarningPowerCalculator) external virtual override {
+        _revertIfNotAdmin();
+        require(block.timestamp > rewardEndTime, CannotChangeEarningPowerCalculatorDuringActiveReward());
+        _setEarningPowerCalculator(_newEarningPowerCalculator);
+    }
+
     /// @notice Pauses the contract, disabling user operations except withdrawals and view functions
     /// @dev EMERGENCY USE: Intended for security incidents or critical maintenance.
     /// @dev SCOPE: Affects stake, claim, contribute, and compound operations.
@@ -547,6 +573,30 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     function unpause() external whenPaused {
         _revertIfNotAdmin();
         _unpause();
+    }
+
+    /// @notice Sets the reward manager address (operational role for managing notifiers)
+    /// @dev Only admin can call this function
+    /// @param _newRewardManager New reward manager address
+    function setRewardManager(address _newRewardManager) external {
+        _revertIfNotAdmin();
+        rewardManager = _newRewardManager;
+        emit RewardManagerSet(_newRewardManager);
+    }
+
+    /// @notice Override setRewardNotifier() to allow both admin and reward manager
+    /// @dev This is the key function that separates operational (reward manager) from governance (admin)
+    /// @dev Admin can manage notifiers as part of broader protocol control
+    /// @dev Reward manager can manage notifiers for faster operational response
+    /// @param _rewardNotifier Address of the reward notifier
+    /// @param _isEnabled True to enable the notifier, false to disable
+    function setRewardNotifier(address _rewardNotifier, bool _isEnabled) external virtual override {
+        require(
+            msg.sender == admin || msg.sender == rewardManager,
+            Staker__Unauthorized("not admin or reward manager", msg.sender)
+        );
+        isRewardNotifier[_rewardNotifier] = _isEnabled;
+        emit RewardNotifierSet(_rewardNotifier, _isEnabled);
     }
 
     // === Public Functions ===
