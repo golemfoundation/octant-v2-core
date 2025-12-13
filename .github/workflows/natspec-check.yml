@@ -23,7 +23,7 @@ jobs:
           forge soldeer install
 
       - name: Generate documentation
-        run: forge doc
+        run: FOUNDRY_DENY_WARNINGS=false forge doc
 
       - name: Upload documentation artifacts
         uses: actions/upload-artifact@v4
