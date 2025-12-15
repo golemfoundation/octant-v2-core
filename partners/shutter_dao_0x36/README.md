@@ -3,15 +3,11 @@
 
 ## Overview
 
-Shutter DAO 0x36 will integrate with Octant v2 through **two distinct components**:
-
-1. **SHUGrantPool Strategy** — An ERC-4626 yield-donating strategy for treasury capital (no lockup)
-2. **Regen Staker** — A staking contract for SHU tokens enabling public goods funding with matched rewards
+Shutter DAO 0x36 will integrate with Octant v2 through the **SHUGrantPool Strategy** — an ERC-4626 yield-donating vault configured with Morpho's "Steakhouse" USDC yield strategy (rated A+ by Credora, ~4-6% APY).
 
 | Component | Purpose | Capital |
 |-----------|---------|---------|
-| SHUGrantPool Strategy | Generate yield to fund Regen Staker rewards | 1.2M USDC |
-| Regen Staker | Public goods funding (matched rewards) | SHU tokens |
+| SHUGrantPool Strategy | Generate yield for public goods funding | 1M USDC |
 
 > **Architecture Note**: The strategy IS the ERC-4626 vault. No MultistrategyVault wrapper is needed since only one strategy is approved by the DAO. This simplifies deployment, reduces gas costs, and eliminates unnecessary complexity.
 
@@ -23,11 +19,11 @@ The following items must be resolved before executing the DAO proposal:
 
 | Item | Status | Owner | Notes |
 |------|--------|-------|-------|
-| PaymentSplitter Factory deployment | ✅ Deployed | Octant | [`0x5711765E0756B45224fc1FdA1B41ab344682bBcb`](https://etherscan.io/address/0x5711765E0756B45224fc1FdA1B41ab344682bBcb) |
-| Dragon Funding Pool address | ⏳ Pending | Octant | PaymentSplitter payee |
-| Keeper Bot address | ⏳ Pending | Octant | Strategy keeper for harvesting |
+| Dragon Funding Pool address | ⏳ Pending | Shutter DAO | Strategy donation recipient |
+| Keeper Bot address | ⏳ Pending | Shutter DAO | Strategy keeper for harvesting |
+| Emergency Shutdown Admin address | ⏳ Pending | Shutter DAO | Can shutdown strategy and perform emergency withdrawals |
 
-> ⚠️ **Action Required**: Update this document with actual addresses once Octant completes deployment.
+> ⚠️ **Action Required**: Update this document with actual addresses before submitting the proposal.
 
 ---
 
@@ -72,31 +68,6 @@ The `MorphoCompounderStrategyFactory` at `0x052d20B...` deploys strategies that 
 | Destination | Allocation |
 |-------------|------------|
 | Dragon Funding Pool | 100% |
-
----
-
-## Part 2: Regen Staker
-
-The Regen Staker allows SHU holders to stake their tokens and direct their staking rewards toward public goods funding. Rewards are distributed from an external source (e.g., SHUGrantPool Strategy yield).
-
-### Key Features
-
-- **Public Goods Funding**: Stakers allocate their rewards to projects in funding rounds
-- **Delegation Preserved**: Stakers retain Shutter DAO voting power via delegation surrogates
-
-### Voting Power (Shutter DAO)
-
-| Action | Shutter DAO Voting |
-|--------|------------|
-| Stake SHU in Regen Staker | ✓ (via delegation surrogate) |
-| Stake in Shutter Keyper Contract | Keyper Incentives (separate system) |
-
-### How Delegation Works
-
-1. User stakes SHU tokens in the Regen Staker
-2. Tokens are held by a **Delegation Surrogate** contract (deployed deterministically via CREATE2)
-3. The surrogate delegates Shutter DAO voting power to the user's chosen delegatee
-4. User's staking rewards can be directed to public goods funding
 
 ---
 
@@ -165,13 +136,12 @@ Shutter DAO also supports **Shielded Voting** on Snapshot, which encrypts votes 
 
 ### Phase 1: Strategy Deployment
 
-The entire deployment can be executed in a **single DAO proposal** with **1 batched MultiSend** containing 4 operations:
-1. Deploy PaymentSplitter via Factory
-2. Deploy Strategy via Factory (uses precomputed PaymentSplitter address)
-3. Approve USDC to Strategy (uses precomputed Strategy address)
-4. Deposit USDC into Strategy
+The entire deployment can be executed in a **single DAO proposal** with **1 batched MultiSend** containing 3 operations:
+1. Deploy Strategy via Factory
+2. Approve USDC to Strategy (uses precomputed Strategy address)
+3. Deposit USDC into Strategy
 
-**Key optimization**: Both factories use CREATE2, allowing address precomputation. This enables batching all 4 operations without waiting for return values. Run the calldata generator script (`partners/shutter_dao_0x36/script/GenerateProposalCalldata.s.sol`) against mainnet to get precomputed addresses.
+**Key optimization**: The strategy factory uses CREATE2, allowing address precomputation. This enables batching all 3 operations without waiting for return values. Run the calldata generator script (`partners/shutter_dao_0x36/script/GenerateProposalCalldata.s.sol`) against mainnet to get precomputed addresses.
 
 > **MultiSend requirement**: Execute MultiSend with `operation=DELEGATECALL` (Azorius `execTransactionFromModule(..., operation=1)`). Using CALL makes `msg.sender` the MultiSend contract and will break USDC approvals.
 >
@@ -180,14 +150,13 @@ The entire deployment can be executed in a **single DAO proposal** with **1 batc
 <details>
 <summary><strong>Fallback: Individual Transactions (if DELEGATECALL batching unavailable)</strong></summary>
 
-If the Decent UI doesn't support DELEGATECALL batching, submit as **4 individual transactions** in a single proposal:
+If the Decent UI doesn't support DELEGATECALL batching, submit as **3 individual transactions** in a single proposal:
 
 | TX | Target | Function | Notes |
 |----|--------|----------|-------|
-| 0 | PaymentSplitterFactory | `createPaymentSplitter(payees, names, shares)` | Returns PaymentSplitter address |
-| 1 | MorphoCompounderStrategyFactory | `createStrategy(name, mgmt, keeper, admin, donationAddr, false, tokenizedStrategy)` | Use PaymentSplitter address from TX 0 |
-| 2 | USDC | `approve(strategyAddress, amount)` | Use Strategy address from TX 1 |
-| 3 | Strategy | `deposit(amount, treasury)` | Deposits treasury USDC |
+| 0 | MorphoCompounderStrategyFactory | `createStrategy(name, mgmt, keeper, admin, donationAddr, false, tokenizedStrategy)` | Returns Strategy address |
+| 1 | USDC | `approve(strategyAddress, amount)` | Use Strategy address from TX 0 |
+| 2 | Strategy | `deposit(amount, treasury)` | Deposits treasury USDC |
 
 Each transaction uses `operation=0` (CALL). The Decent UI should support adding multiple transactions to a single proposal.
 
@@ -211,20 +180,10 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 
 | Field | Value |
 |-------|-------|
-| Title | `Deploy Octant SHUGrantPool Strategy and Deposit 1.2M USDC` |
+| Title | `Deploy Octant SHUGrantPool Strategy and Deposit 1M USDC` |
 | Description | See [Proposal Template](#proposal-template) below |
 
-**1.5 — Add Transaction 1: Deploy PaymentSplitter**
-
-| Field | Value |
-|-------|-------|
-| Target Contract | `0x5711765E0756B45224fc1FdA1B41ab344682bBcb` |
-| Function | `createPaymentSplitter(address[],string[],uint256[])` |
-| `payees` | `[DRAGON_FUNDING_POOL_ADDRESS]` |
-| `payeeNames` | `["DragonFundingPool"]` |
-| `shares` | `[100]` |
-
-**1.6 — Add Transaction 2: Deploy Strategy**
+**1.5 — Add Transaction 1: Deploy Strategy**
 
 | Field | Value |
 |-------|-------|
@@ -233,44 +192,44 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 | `_name` | `SHUGrantPool` |
 | `_management` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` |
 | `_keeper` | `[KEEPER_BOT_ADDRESS]` |
-| `_emergencyAdmin` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` |
-| `_donationAddress` | `[PAYMENT_SPLITTER_ADDRESS]` *(from Tx 1)* |
+| `_emergencyAdmin` | `[EMERGENCY_ADMIN_ADDRESS]` |
+| `_donationAddress` | `[DRAGON_FUNDING_POOL_ADDRESS]` |
 | `_enableBurning` | `false` |
 | `_tokenizedStrategyAddress` | `0xb27064a2c51b8c5b39a5bb911ad34db039c3ab9c` |
 
 > **Note**: The strategy IS the ERC-4626 vault. No additional vault wrapper is needed.
 
-**1.7 — Add Transaction 3: Approve USDC**
+**1.6 — Add Transaction 2: Approve USDC**
 
 | Field | Value |
 |-------|-------|
 | Target Contract | `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48` (USDC) |
 | Function | `approve(address spender, uint256 amount)` |
-| `spender` | `[STRATEGY_ADDRESS]` *(from Tx 2)* |
-| `amount` | `1200000000000` (1.2M USDC) |
+| `spender` | `[STRATEGY_ADDRESS]` *(from Tx 1)* |
+| `amount` | `1000000000000` (1M USDC) |
 
-**1.8 — Add Transaction 4: Deposit USDC**
+**1.7 — Add Transaction 3: Deposit USDC**
 
 | Field | Value |
 |-------|-------|
-| Target Contract | `[STRATEGY_ADDRESS]` *(from Tx 2)* |
+| Target Contract | `[STRATEGY_ADDRESS]` *(from Tx 1)* |
 | Function | `deposit(uint256 assets, address receiver)` |
-| `assets` | `1200000000000` (1.2M USDC) |
+| `assets` | `1000000000000` (1M USDC) |
 | `receiver` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` |
 
-**1.9 — Submit Proposal**
+**1.8 — Submit Proposal**
 
 Review all details and click "Submit Proposal". Sign the transaction with your wallet.
 
-> ✅ **Gas Verified**: The simplified proposal (1 batched MultiSend with 4 operations) uses minimal gas - well under the 16.7M per-transaction limit (EIP-7825). See `ShutterDAOGasProfilingTest` for details.
+> ✅ **Gas Verified**: The simplified proposal (1 batched MultiSend with 3 operations) uses minimal gas - well under the 16.7M per-transaction limit (EIP-7825). See `ShutterDAOGasProfilingTest` for details.
 
 ### Gas Profile
 
 | Component | Gas Cost |
 |-----------|----------|
-| **DAO Proposal (1 batched call, 4 operations)** | **~1.5M** |
+| **DAO Proposal (1 batched call, 3 operations)** | **~1M** |
 | **EIP-7825 Limit** | 16,777,216 |
-| **Headroom** | >91% |
+| **Headroom** | >92% |
 
 *Note: Direct strategy deposits (no vault wrapper) and batched execution minimize gas costs.*
 
@@ -293,8 +252,7 @@ Once the voting period ends and the proposal passes:
 
 After execution, verify:
 
-- [ ] PaymentSplitter deployed at expected address
-- [ ] Strategy deployed with correct donation address
+- [ ] Strategy deployed with correct donation address (Dragon Funding Pool)
 - [ ] Treasury received strategy shares
 - [ ] USDC deposited and earning yield in Morpho markets
 
@@ -303,20 +261,19 @@ After execution, verify:
 ```markdown
 ## Summary
 
-This proposal deploys the Octant SHUGrantPool Strategy and deposits 
-1,200,000 USDC from Shutter DAO 0x36 treasury as part of the Octant v2 pilot.
+This proposal deploys the Octant SHUGrantPool Strategy and deposits
+1,000,000 USDC from Shutter DAO 0x36 treasury as part of the Octant v2 pilot.
 
 ## Background
 
-Octant v2 enables DAOs to optimize treasury yield while funding public goods. 
+Octant v2 enables DAOs to optimize treasury yield while funding public goods.
 See: [Octant v2 Pilot Proposal](https://shutternetwork.discourse.group/t/octant-v2-pilot-to-optimize-treasury-strengthen-ecosystem/760)
 
-## Transactions (4 total)
+## Transactions (3 total)
 
-1. **Deploy PaymentSplitter**: Create yield distribution contract (100% to Dragon Funding Pool)
-2. **Deploy Strategy**: Create ERC-4626 yield-donating strategy
-3. **Approve USDC**: Allow Strategy to spend 1.2M USDC
-4. **Deposit USDC**: Deposit 1.2M USDC, receiving shares to Treasury
+1. **Deploy Strategy**: Create ERC-4626 yield-donating strategy (yield → Dragon Funding Pool)
+2. **Approve USDC**: Allow Strategy to spend 1M USDC
+3. **Deposit USDC**: Deposit 1M USDC, receiving shares to Treasury
 
 ## Architecture
 
@@ -348,33 +305,20 @@ forge script partners/shutter_dao_0x36/script/GenerateProposalCalldata.s.sol --f
 ```
 
 Before running, update the configuration in the script:
-- `PAYMENT_SPLITTER_FACTORY` — `0x5711765E0756B45224fc1FdA1B41ab344682bBcb` (deployed)
 - `DRAGON_FUNDING_POOL` — Actual Dragon Funding Pool address
 - `KEEPER_BOT` — Dedicated keeper EOA/bot address
+- `EMERGENCY_ADMIN` — Emergency shutdown admin address
 
 The script outputs:
-- Precomputed CREATE2 addresses for PaymentSplitter and Strategy
-- Individual calldata for each transaction (TX 0-3)
+- Precomputed CREATE2 address for Strategy
+- Individual calldata for each transaction (TX 0-2)
 - Batched MultiSend calldata (recommended for single-proposal execution)
 
 > **Manual Reference**: The transaction parameters below can be used for UI-based proposal creation.
 
 ---
 
-### Transaction 1: Deploy PaymentSplitter
-
-```
-Target:   0x5711765E0756B45224fc1FdA1B41ab344682bBcb
-Function: createPaymentSplitter(address[],string[],uint256[])
-Value:    0
-
-Parameters:
-  payees:     [[DRAGON_FUNDING_POOL]]
-  payeeNames: ["DragonFundingPool"]
-  shares:     [100]
-```
-
-### Transaction 2: Deploy Strategy
+### Transaction 1: Deploy Strategy
 
 ```
 Target:   0x052d20B0e0b141988bD32772C735085e45F357c1 (Morpho Strategy Factory)
@@ -386,13 +330,13 @@ Parameters:
   _name:                     "SHUGrantPool"
   _management:               0x36bD3044ab68f600f6d3e081056F34f2a58432c4
   _keeper:                   [KEEPER_ADDRESS] (dedicated bot)
-  _emergencyAdmin:           0x36bD3044ab68f600f6d3e081056F34f2a58432c4
-  _donationAddress:          [PAYMENT_SPLITTER_ADDRESS] (from Tx 1)
+  _emergencyAdmin:           [EMERGENCY_ADMIN_ADDRESS]
+  _donationAddress:          [DRAGON_FUNDING_POOL_ADDRESS]
   _enableBurning:            false
   _tokenizedStrategyAddress: 0xb27064a2c51b8c5b39a5bb911ad34db039c3ab9c
 ```
 
-### Transaction 3: Approve USDC
+### Transaction 2: Approve USDC
 
 ```
 Target:   0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 (USDC)
@@ -401,20 +345,20 @@ Selector: 0x095ea7b3
 Value:    0
 
 Parameters:
-  spender: [STRATEGY_ADDRESS] (from Tx 2)
-  amount:  1200000000000 (1.2M USDC with 6 decimals)
+  spender: [STRATEGY_ADDRESS] (from Tx 1)
+  amount:  1000000000000 (1M USDC with 6 decimals)
 ```
 
-### Transaction 4: Deposit USDC
+### Transaction 3: Deposit USDC
 
 ```
-Target:   [STRATEGY_ADDRESS] (from Tx 2)
+Target:   [STRATEGY_ADDRESS] (from Tx 1)
 Function: deposit(uint256,address)
 Selector: 0x6e553f65
 Value:    0
 
 Parameters:
-  assets:   1200000000000 (1.2M USDC with 6 decimals)
+  assets:   1000000000000 (1M USDC with 6 decimals)
   receiver: 0x36bD3044ab68f600f6d3e081056F34f2a58432c4 (Treasury)
 ```
 
@@ -434,9 +378,6 @@ Value:    0
 
 Parameters: (none)
 
-Calldata:
-0x2606a10b
-
 Note: Called by management or keeper to harvest yield. Returns (uint256 profit, uint256 loss).
 ```
 
@@ -454,9 +395,6 @@ Value:    0
 
 Parameters: (none)
 
-Calldata:
-0xbe8f1668
-
 Effect: Stops new deposits/mints, allows withdrawals, still allows tend/report.
 Access:  management or emergencyAdmin
 ```
@@ -470,10 +408,7 @@ Selector: 0x5312ea8e
 Value:    0
 
 Parameters:
-  _amount: 1200000000000 (1.2M USDC - full withdrawal)
-
-Calldata:
-0x5312ea8e000000000000000000000000000000000000000000000000000001176592e000
+  _amount: Amount to withdraw (up to full balance)
 
 Prerequisite: Strategy must be shutdown first.
 Access:       management or emergencyAdmin
@@ -485,7 +420,6 @@ Access:       management or emergencyAdmin
 
 | Function | Selector | Target | Purpose |
 |----------|----------|--------|---------|
-| `createPaymentSplitter(...)` | - | PaymentSplitter Factory | Deploy yield distribution |
 | `createStrategy(...)` | `0x31d89943` | Morpho Factory | Deploy strategy |
 | `approve(address,uint256)` | `0x095ea7b3` | USDC | Allow spending |
 | `deposit(uint256,address)` | `0x6e553f65` | Strategy | Deposit funds |
@@ -493,25 +427,6 @@ Access:       management or emergencyAdmin
 | `report()` | `0x2606a10b` | Strategy | Harvest yield |
 | `shutdownStrategy()` | `0xbe8f1668` | Strategy | Emergency shutdown |
 | `emergencyWithdraw(uint256)` | `0x5312ea8e` | Strategy | Emergency exit |
-
----
-
-### Phase 2: Regen Staker Setup
-
-Once the Regen Staker is deployed by Octant:
-
-#### Verification Checklist
-
-- [ ] Admin address matches Treasury (`0x36bD3044ab68f600f6d3e081056F34f2a58432c4`)
-- [ ] `STAKE_TOKEN()` returns SHU address (`0xe485E2f1bab389C08721B291f6b59780feC83Fd7`)
-- [ ] Delegation surrogates deploy correctly (test with small stake)
-
-#### User Flow
-
-1. SHU holder approves tokens for Regen Staker contract
-2. Calls `stake(amount, delegatee)` 
-3. Delegatee receives Shutter DAO voting power via surrogate
-4. Staker can direct their rewards to public goods projects in Octant funding rounds
 
 ---
 
