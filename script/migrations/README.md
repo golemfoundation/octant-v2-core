@@ -2,9 +2,9 @@
 
 One-time scripts for on-chain state changes.
 
-## SetEpochPropsForMarch2026
+## SetEpochPropsForFeb2026
 
-Sets the Octant epoch to end on March 4, 2026 via the Octant multisig.
+Sets the Octant epoch to end on February 18, 2026 via the Octant multisig.
 
 ### Prerequisites
 
@@ -27,7 +27,7 @@ Sets the Octant epoch to end on March 4, 2026 via the Octant multisig.
 CHAIN=mainnet \
 WALLET_TYPE=ledger \
 MNEMONIC_INDEX=0 \
-forge script script/migrations/SetEpochPropsForMarch2026.s.sol \
+forge script script/migrations/SetEpochPropsForFeb2026.s.sol \
   --fork-url $ETH_RPC_URL \
   --ffi
 ```
@@ -38,7 +38,7 @@ forge script script/migrations/SetEpochPropsForMarch2026.s.sol \
 CHAIN=mainnet \
 WALLET_TYPE=trezor \
 MNEMONIC_INDEX=0 \
-forge script script/migrations/SetEpochPropsForMarch2026.s.sol \
+forge script script/migrations/SetEpochPropsForFeb2026.s.sol \
   --fork-url $ETH_RPC_URL \
   --ffi
 ```
@@ -49,7 +49,7 @@ forge script script/migrations/SetEpochPropsForMarch2026.s.sol \
 CHAIN=mainnet \
 WALLET_TYPE=private_key \
 PRIVATE_KEY=0x... \
-forge script script/migrations/SetEpochPropsForMarch2026.s.sol \
+forge script script/migrations/SetEpochPropsForFeb2026.s.sol \
   --fork-url $ETH_RPC_URL \
   --ffi
 ```
@@ -66,8 +66,8 @@ forge script script/migrations/SetEpochPropsForMarch2026.s.sol \
 
 | Parameter | Value | Description |
 |-----------|-------|-------------|
-| `_epochDuration` | 4,885,200 (56 days) | Duration from Jan 6, 2026 to March 4, 2026 |
-| `_decisionWindow` | 1,209,600 (14 days) | Decision window for the new epoch |
+| `_epochDuration` | 3,744,000 (~43 days) | Duration from Jan 6, 2026 to Feb 18, 2026 |
+| `_decisionWindow` | (from contract) | Uses current on-chain value (14 days) |
 
 ### Behavior
 

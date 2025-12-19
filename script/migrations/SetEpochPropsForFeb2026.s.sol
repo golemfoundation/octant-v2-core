@@ -19,8 +19,8 @@ interface IAuth {
 }
 
 /**
- * @title SetEpochPropsForMarch2026
- * @notice Batched Safe transaction to set Octant epoch to end on March 4, 2026
+ * @title SetEpochPropsForFeb2026
+ * @notice Batched Safe transaction to set Octant epoch to end on February 18, 2026
  * @dev Run: CHAIN=mainnet WALLET_TYPE=ledger MNEMONIC_INDEX=0 \
  *           forge script partners/shutter_dao_0x36/script/SetEpochPropsForMarch2026.s.sol \
  *           --fork-url $ETH_RPC_URL --ffi
@@ -37,14 +37,14 @@ interface IAuth {
  *          └─> MultiSendCallOnly.multiSend() [in Safe's context]
  *                └─> CALL Epochs.setEpochProps() [msg.sender = Safe]
  */
-contract SetEpochPropsForMarch2026 is Script, BatchScript {
+contract SetEpochPropsForFeb2026 is Script, BatchScript {
     // Octant contract addresses (verified in test/integration/shutter/OctantEpochs.t.sol)
     address constant EPOCHS_CONTRACT = 0xc292eBCa7855CB464755Aa638f9784c131F27D59;
     address constant AUTH_CONTRACT = 0x287493F76b8A1833E9E0BF2dE0D972Fb16C6C8ae;
     address constant OCTANT_MULTISIG = 0xa40FcB633d0A6c0d27aA9367047635Ff656229B0;
 
-    // Target date: March 4, 2026 00:00:00 UTC
-    uint64 constant MARCH_4_2026 = 1772600400;
+    // Target date: End of February 18, 2026
+    uint64 constant FEB_18_2026_END = 1771459200;
 
     // Expected current state (must match on-chain or script fails)
     uint64 constant EXPECTED_CURRENT_EPOCH_END = 1767715200; // Jan 6, 2026
@@ -53,8 +53,7 @@ contract SetEpochPropsForMarch2026 is Script, BatchScript {
     uint256 constant EXPECTED_DECISION_WINDOW = 14 days;
 
     // New epoch parameters
-    uint256 constant NEW_EPOCH_DURATION = MARCH_4_2026 - EXPECTED_CURRENT_EPOCH_END; // 56 days
-    uint256 constant NEW_DECISION_WINDOW = 14 days;
+    uint256 constant NEW_EPOCH_DURATION = FEB_18_2026_END - EXPECTED_CURRENT_EPOCH_END; // ~43 days
 
     IEpochs public epochs;
 
@@ -122,7 +121,7 @@ contract SetEpochPropsForMarch2026 is Script, BatchScript {
         require(epochs.getDecisionWindow() == EXPECTED_DECISION_WINDOW, "Decision window mismatch");
 
         // Verify target date is in the future relative to current epoch end
-        require(MARCH_4_2026 > currentEpochEnd, "Target date must be after current epoch end");
+        require(FEB_18_2026_END > currentEpochEnd, "Target date must be after current epoch end");
 
         console.log("Current state verified");
     }
@@ -144,6 +143,7 @@ contract SetEpochPropsForMarch2026 is Script, BatchScript {
     }
 
     function _logProposedChanges() internal view {
+        uint256 currentDecisionWindow = epochs.getDecisionWindow();
         console.log("\n========================================");
         console.log("          PROPOSED CHANGES");
         console.log("========================================");
@@ -151,7 +151,7 @@ contract SetEpochPropsForMarch2026 is Script, BatchScript {
         console.log("");
         console.log("Parameters:");
         console.log("  _epochDuration: %d (%d days)", NEW_EPOCH_DURATION, NEW_EPOCH_DURATION / 1 days);
-        console.log("  _decisionWindow: %d (%d days)", NEW_DECISION_WINDOW, NEW_DECISION_WINDOW / 1 days);
+        console.log("  _decisionWindow: %d (%d days)", currentDecisionWindow, currentDecisionWindow / 1 days);
         console.log("");
         console.log("Immediate effects (after Safe executes):");
         console.log("  epochPropsIndex: 1 -> 2");
@@ -159,7 +159,7 @@ contract SetEpochPropsForMarch2026 is Script, BatchScript {
         console.log("");
         console.log("Deferred effects (after Jan 6, 2026 epoch transition):");
         console.log("  getEpochDuration(): %d -> %d", EXPECTED_EPOCH_DURATION, NEW_EPOCH_DURATION);
-        console.log("  getCurrentEpochEnd(): %d -> %d (March 4, 2026)", EXPECTED_CURRENT_EPOCH_END, MARCH_4_2026);
+        console.log("  getCurrentEpochEnd(): %d -> %d (end of Feb 18, 2026)", EXPECTED_CURRENT_EPOCH_END, FEB_18_2026_END);
         console.log("========================================\n");
     }
 
@@ -175,7 +175,8 @@ contract SetEpochPropsForMarch2026 is Script, BatchScript {
     function _addSetEpochProps() internal {
         console.log("Adding setEpochProps to batch...");
 
-        bytes memory callData = abi.encodeCall(IEpochs.setEpochProps, (NEW_EPOCH_DURATION, NEW_DECISION_WINDOW));
+        uint256 currentDecisionWindow = epochs.getDecisionWindow();
+        bytes memory callData = abi.encodeCall(IEpochs.setEpochProps, (NEW_EPOCH_DURATION, currentDecisionWindow));
 
         // addToBatch simulates with vm.prank(safe) - will revert if unauthorized
         addToBatch(EPOCHS_CONTRACT, callData);

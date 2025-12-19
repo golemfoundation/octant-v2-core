@@ -32,11 +32,10 @@ contract OctantEpochsTest is Test {
     address constant MULTISIG_ADDRESS = 0xa40FcB633d0A6c0d27aA9367047635Ff656229B0;
 
     // Target date
-    uint256 constant MARCH_4_2026 = 1772600400; // March 4, 2026 00:00:00 UTC
+    uint256 constant FEB_18_2026_END = 1771459200; // End of February 18, 2026
 
-    // setEpochProps parameters (new epoch duration to end on March 4, 2026)
-    uint256 constant NEW_EPOCH_DURATION = MARCH_4_2026 - 1767715200; // 56 days (March 4 - Jan 6)
-    uint256 constant NEW_DECISION_WINDOW = 14 days;
+    // setEpochProps parameters (new epoch duration to end on Feb 18, 2026)
+    uint256 constant NEW_EPOCH_DURATION = FEB_18_2026_END - 1767715200; // ~43 days (Feb 18 - Jan 6)
 
     // _verifyInitialState expected values (ordered: propsIndex, duration, window, epochEnd, props)
     uint256 constant INITIAL_EPOCH_PROPS_INDEX = 1;
@@ -62,14 +61,14 @@ contract OctantEpochsTest is Test {
 
     // _verifyStateAfterEpochTransition expected values (new props now active)
     uint256 constant POST_TRANSITION_EPOCH_PROPS_INDEX = FINAL_EPOCH_PROPS_INDEX; // unchanged
-    uint256 constant POST_TRANSITION_EPOCH_DURATION = NEW_EPOCH_DURATION; // 56 days active
-    uint256 constant POST_TRANSITION_DECISION_WINDOW = NEW_DECISION_WINDOW; // 14 days active
-    uint256 constant POST_TRANSITION_CURRENT_EPOCH_END = MARCH_4_2026;
+    uint256 constant POST_TRANSITION_EPOCH_DURATION = NEW_EPOCH_DURATION; // ~43 days active
+    uint256 constant POST_TRANSITION_DECISION_WINDOW = INITIAL_DECISION_WINDOW; // unchanged (14 days)
+    uint256 constant POST_TRANSITION_CURRENT_EPOCH_END = FEB_18_2026_END;
     uint32 constant POST_TRANSITION_PROPS_FROM = 11; // new props active from epoch 11
     uint32 constant POST_TRANSITION_PROPS_TO = 0; // 0 = indefinite (until next setEpochProps)
     uint64 constant POST_TRANSITION_PROPS_FROM_TS = INITIAL_CURRENT_EPOCH_END; // Jan 6, 2026
     uint64 constant POST_TRANSITION_PROPS_DURATION = uint64(NEW_EPOCH_DURATION);
-    uint64 constant POST_TRANSITION_PROPS_DECISION_WINDOW = uint64(NEW_DECISION_WINDOW);
+    uint64 constant POST_TRANSITION_PROPS_DECISION_WINDOW = uint64(INITIAL_DECISION_WINDOW);
 
     function setUp() public {
         vm.createSelectFork(vm.envString("ETH_RPC_URL"));
@@ -154,13 +153,14 @@ contract OctantEpochsTest is Test {
         _verifyInitialState();
     }
 
-    function test_setEpochProps_for_march_4_2026() public {
+    function test_setEpochProps_for_feb_18_2026() public {
         // Log and verify initial state
         _logState("Initial State");
         _verifyInitialState();
 
-        // Set new epoch props using constants
-        _setEpochPropsAsMultisig(NEW_EPOCH_DURATION, NEW_DECISION_WINDOW);
+        // Set new epoch props - duration changes, decision window stays the same
+        uint256 currentDecisionWindow = epochs.getDecisionWindow();
+        _setEpochPropsAsMultisig(NEW_EPOCH_DURATION, currentDecisionWindow);
 
         // Log and verify state after setEpochProps (props queued but not active)
         _logState("After setEpochProps");
