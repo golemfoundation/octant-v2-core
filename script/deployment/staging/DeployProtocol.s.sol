@@ -15,6 +15,8 @@ import { DeploySkyCompounderStrategyFactory } from "script/deploy/DeploySkyCompo
 import { DeployMorphoCompounderStrategyFactory } from "script/deploy/DeployMorphoCompounderStrategyFactory.sol";
 import { DeployRegenStakerFactory } from "script/deploy/DeployRegenStakerFactory.sol";
 import { DeployAllocationMechanismFactory } from "script/deploy/DeployAllocationMechanismFactory.sol";
+import { DeployYearnV3StrategyFactory } from "script/deploy/DeployYearnV3StrategyFactory.s.sol";
+import { DeployLidoStrategyFactory } from "script/deploy/DeployLidoStrategyFactory.sol";
 import { DeployedAddresses } from "script/helpers/DeployedAddresses.sol";
 
 /**
@@ -35,6 +37,8 @@ contract DeployProtocol is Script {
     DeployMorphoCompounderStrategyFactory public deployMorphoCompounderStrategyFactory;
     DeployRegenStakerFactory public deployRegenStakerFactory;
     DeployAllocationMechanismFactory public deployAllocationMechanismFactory;
+    DeployYearnV3StrategyFactory public deployYearnV3StrategyFactory;
+    DeployLidoStrategyFactory public deployLidoStrategyFactory;
 
     // Address registry for network-specific deployments
     DeployedAddresses public immutable deployedAddresses;
@@ -57,6 +61,7 @@ contract DeployProtocol is Script {
     // External strategy contracts (tracked for reference, not deployed by this script)
     address public yieldDonatingTokenizedStrategyAddress;
     address public yearnV3StrategyFactoryAddress;
+    address public lidoStrategyFactoryAddress;
 
     error DeploymentFailed();
 
@@ -81,6 +86,8 @@ contract DeployProtocol is Script {
         deployMorphoCompounderStrategyFactory = new DeployMorphoCompounderStrategyFactory();
         deployRegenStakerFactory = new DeployRegenStakerFactory();
         deployAllocationMechanismFactory = new DeployAllocationMechanismFactory();
+        deployYearnV3StrategyFactory = new DeployYearnV3StrategyFactory();
+        deployLidoStrategyFactory = new DeployLidoStrategyFactory();
     }
 
     /**
@@ -111,6 +118,7 @@ contract DeployProtocol is Script {
         allocationMechanismFactoryAddress = addresses.allocationMechanismFactory;
         yieldDonatingTokenizedStrategyAddress = addresses.yieldDonatingTokenizedStrategy;
         yearnV3StrategyFactoryAddress = addresses.yearnV3StrategyFactory;
+        lidoStrategyFactoryAddress = addresses.lidoStrategyFactory;
     }
 
     function run() public {
@@ -218,6 +226,18 @@ contract DeployProtocol is Script {
             if (allocationMechanismFactoryAddress == address(0)) revert DeploymentFailed();
         }
 
+        // Deploy Yearn V3 Strategy Factory
+        if (yearnV3StrategyFactoryAddress == address(0)) {
+            yearnV3StrategyFactoryAddress = deployYearnV3StrategyFactory.run();
+            if (yearnV3StrategyFactoryAddress == address(0)) revert DeploymentFailed();
+        }
+
+        // Deploy Lido Strategy Factory
+        if (lidoStrategyFactoryAddress == address(0)) {
+            lidoStrategyFactoryAddress = deployLidoStrategyFactory.deploy();
+            if (lidoStrategyFactoryAddress == address(0)) revert DeploymentFailed();
+        }
+
         // Log deployment addresses
         console2.log("\nDeployment Summary:");
         console2.log("------------------");
@@ -237,6 +257,8 @@ contract DeployProtocol is Script {
         console2.log("Morpho Compounder Strategy Vault Factory: ", morphoCompounderStrategyFactoryAddress);
         console2.log("Regen Staker Factory:                     ", regenStakerFactoryAddress);
         console2.log("Allocation Mechanism Factory:             ", allocationMechanismFactoryAddress);
+        console2.log("Yearn V3 Strategy Factory:                ", yearnV3StrategyFactoryAddress);
+        console2.log("Lido Strategy Factory:                    ", lidoStrategyFactoryAddress);
         console2.log("------------------");
         console2.log("Top Hat ID:                ", vm.toString(deployHatsProtocol.topHatId()));
         console2.log("Autonomous Admin Hat ID:   ", vm.toString(deployHatsProtocol.autonomousAdminHatId()));
@@ -303,6 +325,14 @@ contract DeployProtocol is Script {
         vm.writeLine(
             contractAddressFilename,
             string.concat("ALLOCATION_MECHANISM_FACTORY_ADDRESS=", vm.toString(allocationMechanismFactoryAddress))
+        );
+        vm.writeLine(
+            contractAddressFilename,
+            string.concat("YEARN_V3_STRATEGY_FACTORY_ADDRESS=", vm.toString(yearnV3StrategyFactoryAddress))
+        );
+        vm.writeLine(
+            contractAddressFilename,
+            string.concat("LIDO_STRATEGY_FACTORY_ADDRESS=", vm.toString(lidoStrategyFactoryAddress))
         );
         vm.writeLine(contractAddressFilename, string.concat("HATS_ADDRESS=", vm.toString(hatsAddress)));
         vm.writeLine(
