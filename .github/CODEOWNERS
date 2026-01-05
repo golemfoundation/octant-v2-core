@@ -1,3 +1,5 @@
-/.github/  @golemfoundation/devops
-/ci/       @golemfoundation/devops
-Dockerfile @golemfoundation/devops
+/.github/                        @golemfoundation/devops
+/ci/                             @golemfoundation/devops
+Dockerfile                       @golemfoundation/devops
+/.github/code-review.md
+/.github/copilot-instructions.md
