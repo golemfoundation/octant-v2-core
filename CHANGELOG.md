@@ -1,5 +1,38 @@
 
 
+## [1.0.0-develop.0](https://github.com/golemfoundation/octant-v2-core/compare/v0.9.0-develop.0...v1.0.0-develop.0) (2026-01-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* **shutter:** fix payment splitter revert, add robust delegation tests, and update gas limits per EIP-7825
+
+### Features
+
+* **shutter:** add calldata generator script for DAO proposal ([c846167](https://github.com/golemfoundation/octant-v2-core/commit/c8461671f1abb5218a8fea3c23c22309c2387d60))
+* **shutter:** add Shutter DAO 0x36 integration guide and tests ([d57d583](https://github.com/golemfoundation/octant-v2-core/commit/d57d5830d4ed524ab3f101d97c6dd6f201c52b6d))
+* **shutter:** add test mode to calldata generator script ([7fedffe](https://github.com/golemfoundation/octant-v2-core/commit/7fedffedd03f67b0eacb39ae46f20731516eff9c))
+* **shutter:** batch all 4 ops using CREATE2 address precomputation ([17875fe](https://github.com/golemfoundation/octant-v2-core/commit/17875fe167989a212b131b6c52d2be5d643bcb49))
+* **shutter:** set PaymentSplitter Factory mainnet address ([05697e5](https://github.com/golemfoundation/octant-v2-core/commit/05697e59285f5bba1beb4999c9726ee7d7ec2557))
+
+
+### Bug Fixes
+
+* **shutter:** align test execution path with script and update docs ([4237547](https://github.com/golemfoundation/octant-v2-core/commit/423754783372a77e45677b415d2173cb6906bef5))
+* **shutter:** align tests with source of truth using factory deployment ([d9d1287](https://github.com/golemfoundation/octant-v2-core/commit/d9d12870ee0658b3b0975bfa6be702d97c35af0e))
+* **shutter:** capture strategy address from return value instead of CREATE2 prediction ([6b8d099](https://github.com/golemfoundation/octant-v2-core/commit/6b8d0998de229348ba9bc45664c59db8faddf019))
+* **shutter:** delegatecall multisend in integration tests ([ddf9adf](https://github.com/golemfoundation/octant-v2-core/commit/ddf9adfe78920aa400db35b7727052dbebde504f))
+* **shutter:** use Treasury as roleManager per documentation ([8588007](https://github.com/golemfoundation/octant-v2-core/commit/85880071a3cd4e26a33624a90d4c01a8203e73aa))
+* **test:** remove unused import to satisfy deny_warnings ([f0c8e02](https://github.com/golemfoundation/octant-v2-core/commit/f0c8e024513b0331cbaf35638c3ad8a6c5279b52))
+* **test:** remove zero-share payee from PaymentSplitter setup to prevent revert ([78f3c5b](https://github.com/golemfoundation/octant-v2-core/commit/78f3c5b2a536a723fc7fcd73377731ecbb8d3a05))
+* **test:** resolve compilation errors and stack depth issues ([ddf38af](https://github.com/golemfoundation/octant-v2-core/commit/ddf38af8582a09a0720fc1d1ebeec9b949bafa6e))
+* **test:** use ERC1967Proxy for PaymentSplitter deployment ([9d96b82](https://github.com/golemfoundation/octant-v2-core/commit/9d96b82ff9fc29ccd24421922fe7963855fdf803))
+
+
+### Documentation
+
+* **shutter:** fix payment splitter revert, add robust delegation tests, and update gas limits per EIP-7825 ([8d328eb](https://github.com/golemfoundation/octant-v2-core/commit/8d328eb5d9dbb0818856024b5e91fb1825e040b3))
+
 ## [0.9.0-develop.0](https://github.com/golemfoundation/octant-v2-core/compare/v0.8.0-develop.0...v0.9.0-develop.0) (2025-12-05)
 
 
