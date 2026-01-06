@@ -1495,7 +1495,11 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param owner_ Address whose shares will be burned
      * @return shares Amount of shares actually burned from owner
      */
-    function withdraw(uint256 assets_, address receiver_, address owner_) external virtual nonReentrant returns (uint256) {
+    function withdraw(
+        uint256 assets_,
+        address receiver_,
+        address owner_
+    ) external virtual nonReentrant returns (uint256) {
         address[] memory emptyArray = new address[](0);
         uint256 shares = _convertToShares(assets_, Rounding.ROUND_UP);
         _redeem(msg.sender, receiver_, owner_, assets_, shares, 0, emptyArray);
@@ -1510,7 +1514,11 @@ contract MultistrategyVault is IMultistrategyVault {
      * @param owner_ Address whose shares will be burned
      * @return assets Amount of assets actually withdrawn and sent to receiver
      */
-    function redeem(uint256 shares_, address receiver_, address owner_) external virtual nonReentrant returns (uint256) {
+    function redeem(
+        uint256 shares_,
+        address receiver_,
+        address owner_
+    ) external virtual nonReentrant returns (uint256) {
         address[] memory emptyArray = new address[](0);
         uint256 assets = _convertToAssets(shares_, Rounding.ROUND_DOWN);
         return _redeem(msg.sender, receiver_, owner_, assets, shares_, 10_000, emptyArray);
