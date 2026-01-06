@@ -4,8 +4,10 @@ out = "out"
 libs = ["dependencies"]
 evm_version = "prague"
 optimizer = true
+
 # Default runs target balanced gas/size; size-limited contracts override below.
 optimizer_runs = 1
+
 
 via_ir = false
 solc = "0.8.33"
