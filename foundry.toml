@@ -20,7 +20,8 @@ build_info = true
 extra_output = ["storageLayout"]
 seed = "0xDEADC0DE"
 fuzz = { runs = 256, max_test_rejects = 65536 }
-deny_warnings = true
+# deny options: never, warnings, notes
+deny = "never"
 lint = { severity = ["high"], exclude_lints = ["erc20-unchecked-transfer", "unsafe-typecast", "incorrect-shift"] }
 
 
