@@ -42,20 +42,20 @@ contract DebtManagementTest is Test {
         lossyStrategy = new MockYieldStrategy(address(asset), address(vault));
 
         // Set roles
-        vault.addRole(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.REVOKE_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MINIMUM_IDLE_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.REVOKE_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MINIMUM_IDLE_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
 
         // set max deposit limit
-        vault.setDepositLimit(type(uint256).max, false);
+        vault.set_deposit_limit(type(uint256).max, false);
 
         // Add strategies to vault
-        vault.addStrategy(address(strategy), true);
-        vault.addStrategy(address(lockedStrategy), true);
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(strategy), true);
+        vault.add_strategy(address(lockedStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
 
         // Seed vault with funds - 1 ETH + 0.5 ETH
         seedVaultWithFunds(1e18, 5e17);
@@ -66,7 +66,7 @@ contract DebtManagementTest is Test {
         maxDebt = bound(maxDebt, 0, 10 ** 22);
 
         // Update max debt for strategy
-        vault.updateMaxDebtForStrategy(address(strategy), maxDebt);
+        vault.update_max_debt_for_strategy(address(strategy), maxDebt);
 
         // Check max debt was updated
         IMultistrategyVault.StrategyParams memory params = vault.strategies(address(strategy));
@@ -80,7 +80,7 @@ contract DebtManagementTest is Test {
 
         // Try to update max debt - should revert
         vm.expectRevert(IMultistrategyVault.InactiveStrategy.selector);
-        vault.updateMaxDebtForStrategy(address(inactiveStrategy), maxDebt);
+        vault.update_max_debt_for_strategy(address(inactiveStrategy), maxDebt);
     }
 
     function testUpdateDebtWithoutPermissionReverts() public {
@@ -88,12 +88,12 @@ contract DebtManagementTest is Test {
         uint256 newDebt = vaultBalance / 2;
 
         // Set max debt for strategy
-        vault.updateMaxDebtForStrategy(address(strategy), newDebt);
+        vault.update_max_debt_for_strategy(address(strategy), newDebt);
 
         // Try to update debt as bunny - should revert
         vm.prank(bunny);
         vm.expectRevert(IMultistrategyVault.NotAllowed.selector);
-        vault.updateDebt(address(strategy), newDebt, 0);
+        vault.update_debt(address(strategy), newDebt, 0);
     }
 
     function testUpdateDebtWithStrategyMaxDebtLessThanNewDebt() public {
@@ -101,10 +101,10 @@ contract DebtManagementTest is Test {
         uint256 newDebt = vaultBalance / 2;
 
         // Set max debt for strategy
-        vault.updateMaxDebtForStrategy(address(strategy), newDebt);
+        vault.update_max_debt_for_strategy(address(strategy), newDebt);
 
         // Try to update debt to more than max debt
-        uint256 returnValue = vault.updateDebt(address(strategy), newDebt + 10, 0);
+        uint256 returnValue = vault.update_debt(address(strategy), newDebt + 10, 0);
 
         // Should be capped at max debt
         assertEq(returnValue, newDebt);
@@ -134,10 +134,10 @@ contract DebtManagementTest is Test {
         uint256 initialDebt = vault.totalDebt();
 
         // Set max debt for strategy
-        vault.updateMaxDebtForStrategy(address(strategy), newDebt);
+        vault.update_max_debt_for_strategy(address(strategy), newDebt);
 
         // Update debt to new value
-        vault.updateDebt(address(strategy), newDebt, 0);
+        vault.update_debt(address(strategy), newDebt, 0);
 
         // Check strategy state
         IMultistrategyVault.StrategyParams memory params = vault.strategies(address(strategy));
@@ -157,12 +157,12 @@ contract DebtManagementTest is Test {
         uint256 newDebt = vaultBalance / 2;
 
         // First set the debt
-        vault.updateMaxDebtForStrategy(address(strategy), newDebt);
-        vault.updateDebt(address(strategy), newDebt, 0);
+        vault.update_max_debt_for_strategy(address(strategy), newDebt);
+        vault.update_debt(address(strategy), newDebt, 0);
 
         // Then try to set it to the same value
         vm.expectRevert(IMultistrategyVault.NewDebtEqualsCurrentDebt.selector);
-        vault.updateDebt(address(strategy), newDebt, 0);
+        vault.update_debt(address(strategy), newDebt, 0);
     }
 
     function testUpdateDebtWithCurrentDebtGreaterThanNewDebtAndZeroWithdrawable() public {
@@ -171,15 +171,15 @@ contract DebtManagementTest is Test {
         uint256 newDebt = vaultBalance / 2;
 
         // First set full debt
-        vault.updateMaxDebtForStrategy(address(lockedStrategy), currentDebt);
-        vault.updateDebt(address(lockedStrategy), currentDebt, 0);
+        vault.update_max_debt_for_strategy(address(lockedStrategy), currentDebt);
+        vault.update_debt(address(lockedStrategy), currentDebt, 0);
 
         // Lock all the funds
         lockedStrategy.setLockedFunds(currentDebt, DAY);
 
         // Try to reduce debt
-        vault.updateMaxDebtForStrategy(address(lockedStrategy), newDebt);
-        uint256 returnValue = vault.updateDebt(address(lockedStrategy), newDebt, 0);
+        vault.update_max_debt_for_strategy(address(lockedStrategy), newDebt);
+        uint256 returnValue = vault.update_debt(address(lockedStrategy), newDebt, 0);
 
         // Should stay at current debt since funds are locked
         assertEq(returnValue, currentDebt);
@@ -197,15 +197,15 @@ contract DebtManagementTest is Test {
 
         // Set minimum total idle to keep a small amount in vault
         uint256 minimumTotalIdle = vaultBalance - 1;
-        vault.setMinimumTotalIdle(minimumTotalIdle);
+        vault.set_minimum_total_idle(minimumTotalIdle);
 
         // Calculate expected adjustments
         uint256 expectedNewDifference = initialIdle - minimumTotalIdle;
         uint256 expectedNewDebt = currentDebt + expectedNewDifference;
 
         // Set max debt and update debt
-        vault.updateMaxDebtForStrategy(address(strategy), newDebt);
-        vault.updateDebt(address(strategy), newDebt, 0);
+        vault.update_max_debt_for_strategy(address(strategy), newDebt);
+        vault.update_debt(address(strategy), newDebt, 0);
 
         // Verify state
         params = vault.strategies(address(strategy));
@@ -231,11 +231,11 @@ contract DebtManagementTest is Test {
 
         // Set a small minimum total idle
         uint256 minimumTotalIdle = 1;
-        vault.setMinimumTotalIdle(minimumTotalIdle);
+        vault.set_minimum_total_idle(minimumTotalIdle);
 
         // Reduce debt in strategy
-        vault.updateMaxDebtForStrategy(address(strategy), newDebt);
-        vault.updateDebt(address(strategy), newDebt, 0);
+        vault.update_max_debt_for_strategy(address(strategy), newDebt);
+        vault.update_debt(address(strategy), newDebt, 0);
 
         // Verify state
         IMultistrategyVault.StrategyParams memory params = vault.strategies(address(strategy));
@@ -260,15 +260,15 @@ contract DebtManagementTest is Test {
 
         // Set minimum idle higher than the debt difference would allow
         uint256 minimumTotalIdle = (currentDebt - newDebt) + 1;
-        vault.setMinimumTotalIdle(minimumTotalIdle);
+        vault.set_minimum_total_idle(minimumTotalIdle);
 
         // Calculate expected adjustments
         uint256 expectedNewDifference = minimumTotalIdle - initialIdle;
         uint256 expectedNewDebt = currentDebt - expectedNewDifference;
 
         // Reduce debt in strategy
-        vault.updateMaxDebtForStrategy(address(strategy), newDebt);
-        vault.updateDebt(address(strategy), newDebt, 0);
+        vault.update_max_debt_for_strategy(address(strategy), newDebt);
+        vault.update_debt(address(strategy), newDebt, 0);
 
         // Verify state
         IMultistrategyVault.StrategyParams memory params = vault.strategies(address(strategy));
@@ -284,7 +284,7 @@ contract DebtManagementTest is Test {
 
         // Deploy lossy strategy
         MockLossyStrategy _lossyStrategy = new MockLossyStrategy(address(asset), address(vault));
-        vault.addStrategy(address(_lossyStrategy), true);
+        vault.add_strategy(address(_lossyStrategy), true);
 
         // Allocate full debt to strategy
         addDebtToStrategy(address(_lossyStrategy), vaultBalance);
@@ -304,7 +304,7 @@ contract DebtManagementTest is Test {
         uint256 initialPps = vault.pricePerShare();
 
         // Update debt to 0 (withdraw everything)
-        vault.updateDebt(address(_lossyStrategy), newDebt, MAX_BPS); // Allow full loss
+        vault.update_debt(address(_lossyStrategy), newDebt, MAX_BPS); // Allow full loss
 
         // Verify state
         params = vault.strategies(address(_lossyStrategy));
@@ -323,7 +323,7 @@ contract DebtManagementTest is Test {
 
         // Deploy lossy strategy
         MockLossyStrategy _lossyStrategy = new MockLossyStrategy(address(asset), address(vault));
-        vault.addStrategy(address(_lossyStrategy), true);
+        vault.add_strategy(address(_lossyStrategy), true);
 
         // Allocate full debt to strategy
         addDebtToStrategy(address(_lossyStrategy), vaultBalance);
@@ -344,14 +344,14 @@ contract DebtManagementTest is Test {
 
         // With 0 max loss should revert
         vm.expectRevert(IMultistrategyVault.TooMuchLoss.selector);
-        vault.updateDebt(address(_lossyStrategy), newDebt, 0);
+        vault.update_debt(address(_lossyStrategy), newDebt, 0);
 
         // Up to the loss percent should revert (999 bps < 1000 bps needed)
         vm.expectRevert(IMultistrategyVault.TooMuchLoss.selector);
-        vault.updateDebt(address(_lossyStrategy), newDebt, 999);
+        vault.update_debt(address(_lossyStrategy), newDebt, 999);
 
         // With sufficient max loss should succeed
-        vault.updateDebt(address(_lossyStrategy), newDebt, 1000);
+        vault.update_debt(address(_lossyStrategy), newDebt, 1000);
 
         // Verify state
         params = vault.strategies(address(_lossyStrategy));
@@ -370,7 +370,7 @@ contract DebtManagementTest is Test {
 
         // Deploy lossy strategy with extra yield
         MockLossyStrategy _lossyStrategy = new MockLossyStrategy(address(asset), address(vault));
-        vault.addStrategy(address(_lossyStrategy), true);
+        vault.add_strategy(address(_lossyStrategy), true);
 
         // Allocate full debt to strategy
         addDebtToStrategy(address(_lossyStrategy), vaultBalance);
@@ -393,7 +393,7 @@ contract DebtManagementTest is Test {
         uint256 initialPps = vault.pricePerShare();
 
         // Update debt to 0
-        vault.updateDebt(address(_lossyStrategy), 0, 0);
+        vault.update_debt(address(_lossyStrategy), 0, 0);
 
         // Verify state
         params = vault.strategies(address(_lossyStrategy));
@@ -418,7 +418,7 @@ contract DebtManagementTest is Test {
 
         // Deploy faulty strategy that only takes half the funds
         MockFaultyStrategy faultyStrategy = new MockFaultyStrategy(address(asset), address(vault));
-        vault.addStrategy(address(faultyStrategy), true);
+        vault.add_strategy(address(faultyStrategy), true);
 
         // Allocate full debt to strategy, but it only takes half
         addDebtToStrategy(address(faultyStrategy), currentDebt);
@@ -440,7 +440,7 @@ contract DebtManagementTest is Test {
 
         // Deploy lossy strategy
         MockLossyStrategy _lossyStrategy = new MockLossyStrategy(address(asset), address(vault));
-        vault.addStrategy(address(_lossyStrategy), true);
+        vault.add_strategy(address(_lossyStrategy), true);
 
         // Allocate full debt to strategy
         addDebtToStrategy(address(_lossyStrategy), vaultBalance);
@@ -463,7 +463,7 @@ contract DebtManagementTest is Test {
         airdropAsset(address(vault), fishAmount);
 
         // Update debt to 0 (withdraw everything)
-        vault.updateDebt(address(_lossyStrategy), newDebt, MAX_BPS); // Allow full loss
+        vault.update_debt(address(_lossyStrategy), newDebt, MAX_BPS); // Allow full loss
 
         // Verify state
         params = vault.strategies(address(_lossyStrategy));
@@ -483,7 +483,7 @@ contract DebtManagementTest is Test {
 
         // Deploy lossy strategy
         MockLossyStrategy _lossyStrategy = new MockLossyStrategy(address(asset), address(vault));
-        vault.addStrategy(address(_lossyStrategy), true);
+        vault.add_strategy(address(_lossyStrategy), true);
 
         // Allocate full debt to strategy
         addDebtToStrategy(address(_lossyStrategy), vaultBalance);
@@ -507,14 +507,14 @@ contract DebtManagementTest is Test {
 
         // With 0 max loss should revert
         vm.expectRevert(IMultistrategyVault.TooMuchLoss.selector);
-        vault.updateDebt(address(_lossyStrategy), newDebt, 0);
+        vault.update_debt(address(_lossyStrategy), newDebt, 0);
 
         // Up to the loss percent should revert (999 bps < 1000 bps needed)
         vm.expectRevert(IMultistrategyVault.TooMuchLoss.selector);
-        vault.updateDebt(address(_lossyStrategy), newDebt, 999);
+        vault.update_debt(address(_lossyStrategy), newDebt, 999);
 
         // With sufficient max loss should succeed
-        vault.updateDebt(address(_lossyStrategy), newDebt, 1000);
+        vault.update_debt(address(_lossyStrategy), newDebt, 1000);
 
         // Verify state
         params = vault.strategies(address(_lossyStrategy));
@@ -545,9 +545,9 @@ contract DebtManagementTest is Test {
 
     function addDebtToStrategy(address strategyAddress, uint256 amount) internal {
         // First set max debt
-        vault.updateMaxDebtForStrategy(strategyAddress, type(uint256).max);
+        vault.update_max_debt_for_strategy(strategyAddress, type(uint256).max);
         // Then update debt
-        vault.updateDebt(strategyAddress, amount, 0);
+        vault.update_debt(strategyAddress, amount, 0);
     }
 
     // Helper to airdrop assets

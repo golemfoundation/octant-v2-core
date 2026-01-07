@@ -503,7 +503,7 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
         }
 
         // Get the max from parent implementation
-        uint256 parentMax = _maxWithdraw(owner_, maxLoss_, strategiesArray_);
+        uint256 parentMax = _max_withdraw(owner_, maxLoss_, strategiesArray_);
 
         // Convert custodied shares to assets
         uint256 custodyAssets = _convertToAssets(custody.lockedShares, Rounding.ROUND_DOWN);
@@ -535,7 +535,7 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
 
         // Get max shares from parent calculation
         uint256 parentMax = Math.min(
-            _convertToShares(_maxWithdraw(owner_, maxLoss_, strategiesArray_), Rounding.ROUND_DOWN),
+            _convertToShares(_max_withdraw(owner_, maxLoss_, strategiesArray_), Rounding.ROUND_DOWN),
             balanceOf(owner_)
         );
 

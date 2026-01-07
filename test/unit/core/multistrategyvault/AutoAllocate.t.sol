@@ -32,23 +32,23 @@ contract AutoAllocateTest is Test {
         vault = MultistrategyVault(vaultFactory.deployNewVault(address(asset), "Test Vault", "tvTEST", gov, 7 days));
 
         // Set up roles for governance
-        vault.addRole(gov, IMultistrategyVault.Roles.REPORTING_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.QUEUE_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MINIMUM_IDLE_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.REPORTING_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.QUEUE_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MINIMUM_IDLE_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
 
         // Set deposit limit
         vm.prank(gov);
-        vault.setDepositLimit(100 ether, true);
+        vault.set_deposit_limit(100 ether, true);
 
         // Create and initialize the strategy
         strategy = new MockYieldStrategy(address(asset), address(vault));
 
         // Add strategy to vault
-        vault.addStrategy(address(strategy), true);
+        vault.add_strategy(address(strategy), true);
 
         // Give fish some tokens
         asset.mint(fish, fishAmount);
@@ -61,8 +61,8 @@ contract AutoAllocateTest is Test {
         assertEq(vault.autoAllocate(), false);
 
         // Set up auto-allocate
-        vault.setAutoAllocate(true);
-        vault.updateMaxDebtForStrategy(address(strategy), assets * 2);
+        vault.set_auto_allocate(true);
+        vault.update_max_debt_for_strategy(address(strategy), assets * 2);
 
         // Verify settings
         assertEq(vault.autoAllocate(), true);
@@ -102,8 +102,8 @@ contract AutoAllocateTest is Test {
         assertEq(vault.autoAllocate(), false);
 
         // Set up auto-allocate
-        vault.setAutoAllocate(true);
-        vault.updateMaxDebtForStrategy(address(strategy), assets * 2);
+        vault.set_auto_allocate(true);
+        vault.update_max_debt_for_strategy(address(strategy), assets * 2);
 
         // Verify settings
         assertEq(vault.autoAllocate(), true);
@@ -144,8 +144,8 @@ contract AutoAllocateTest is Test {
         assertEq(vault.autoAllocate(), false);
 
         // Set up auto-allocate with limited max debt
-        vault.setAutoAllocate(true);
-        vault.updateMaxDebtForStrategy(address(strategy), maxDebt);
+        vault.set_auto_allocate(true);
+        vault.update_max_debt_for_strategy(address(strategy), maxDebt);
 
         // Verify settings
         assertEq(vault.autoAllocate(), true);
@@ -188,8 +188,8 @@ contract AutoAllocateTest is Test {
         assertEq(vault.autoAllocate(), false);
 
         // Set up auto-allocate with high max debt but limited strategy deposit
-        vault.setAutoAllocate(true);
-        vault.updateMaxDebtForStrategy(address(strategy), type(uint256).max);
+        vault.set_auto_allocate(true);
+        vault.update_max_debt_for_strategy(address(strategy), type(uint256).max);
         strategy.setMaxDebt(maxDeposit);
 
         // Verify settings
@@ -233,8 +233,8 @@ contract AutoAllocateTest is Test {
         assertEq(vault.autoAllocate(), false);
 
         // Set up auto-allocate with high max debt but zero strategy deposit
-        vault.setAutoAllocate(true);
-        vault.updateMaxDebtForStrategy(address(strategy), type(uint256).max);
+        vault.set_auto_allocate(true);
+        vault.update_max_debt_for_strategy(address(strategy), type(uint256).max);
         strategy.setMaxDebt(maxDeposit);
 
         // Verify settings
@@ -276,9 +276,9 @@ contract AutoAllocateTest is Test {
         assertEq(vault.autoAllocate(), false);
 
         // Set up auto-allocate with minimum idle requirement
-        vault.setAutoAllocate(true);
-        vault.updateMaxDebtForStrategy(address(strategy), type(uint256).max);
-        vault.setMinimumTotalIdle(minIdle);
+        vault.set_auto_allocate(true);
+        vault.update_max_debt_for_strategy(address(strategy), type(uint256).max);
+        vault.set_minimum_total_idle(minIdle);
 
         // Verify settings
         assertEq(vault.autoAllocate(), true);
@@ -321,9 +321,9 @@ contract AutoAllocateTest is Test {
         assertEq(vault.autoAllocate(), false);
 
         // Set up auto-allocate with high minimum idle requirement
-        vault.setAutoAllocate(true);
-        vault.updateMaxDebtForStrategy(address(strategy), type(uint256).max);
-        vault.setMinimumTotalIdle(minIdle);
+        vault.set_auto_allocate(true);
+        vault.update_max_debt_for_strategy(address(strategy), type(uint256).max);
+        vault.set_minimum_total_idle(minIdle);
 
         // Verify settings
         assertEq(vault.autoAllocate(), true);
@@ -365,8 +365,8 @@ contract AutoAllocateTest is Test {
         assertEq(vault.autoAllocate(), false);
 
         // Set up auto-allocate with limited max debt
-        vault.setAutoAllocate(true);
-        vault.updateMaxDebtForStrategy(address(strategy), maxDebt);
+        vault.set_auto_allocate(true);
+        vault.update_max_debt_for_strategy(address(strategy), maxDebt);
 
         // Verify settings
         assertEq(vault.autoAllocate(), true);
@@ -403,7 +403,7 @@ contract AutoAllocateTest is Test {
         // Simulate profit in strategy and report it
         asset.mint(address(strategy), profit);
         strategy.report();
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Verify debt is now greater than max debt
         assertGt(vault.strategies(address(strategy)).currentDebt, vault.strategies(address(strategy)).maxDebt);

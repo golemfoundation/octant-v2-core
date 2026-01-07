@@ -51,15 +51,15 @@ contract ERC4626Test is Test {
 
         vm.startPrank(gov);
         // Add roles to gov
-        vault.addRole(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
         vm.stopPrank();
 
         // set max deposit limit
         vm.prank(gov);
-        vault.setDepositLimit(MAX_INT, false);
+        vault.set_deposit_limit(MAX_INT, false);
     }
 
     function userDeposit(address user, uint256 amount) internal {
@@ -77,14 +77,14 @@ contract ERC4626Test is Test {
 
     function addStrategyToVault(address strategyAddress) internal {
         vm.prank(gov);
-        vault.addStrategy(strategyAddress, true);
+        vault.add_strategy(strategyAddress, true);
         vm.prank(gov);
-        vault.updateMaxDebtForStrategy(strategyAddress, type(uint256).max);
+        vault.update_max_debt_for_strategy(strategyAddress, type(uint256).max);
     }
 
     function addDebtToStrategy(address strategyAddress, uint256 amount) internal {
         vm.prank(gov);
-        vault.updateDebt(strategyAddress, amount, 0);
+        vault.update_debt(strategyAddress, amount, 0);
     }
 
     function testTotalAssets() public {
@@ -121,7 +121,7 @@ contract ERC4626Test is Test {
         userDeposit(fish, assets);
 
         vm.prank(gov);
-        vault.setDepositLimit(assets, false);
+        vault.set_deposit_limit(assets, false);
 
         assertEq(vault.maxDeposit(fish), 0, "Max deposit should be 0 when limit reached");
     }
@@ -132,7 +132,7 @@ contract ERC4626Test is Test {
         userDeposit(fish, assets);
 
         vm.prank(gov);
-        vault.setDepositLimit(halfFishAmount, false);
+        vault.set_deposit_limit(halfFishAmount, false);
 
         assertEq(vault.maxDeposit(fish), 0, "Max deposit should be 0 when over limit");
     }
@@ -141,7 +141,7 @@ contract ERC4626Test is Test {
         uint256 depositLimit = fishAmount;
 
         vm.prank(gov);
-        vault.setDepositLimit(depositLimit, false);
+        vault.set_deposit_limit(depositLimit, false);
 
         assertEq(vault.maxDeposit(fish), depositLimit, "Max deposit should equal deposit limit");
     }
@@ -160,7 +160,7 @@ contract ERC4626Test is Test {
         userDeposit(fish, assets);
 
         vm.prank(gov);
-        vault.setDepositLimit(assets, false);
+        vault.set_deposit_limit(assets, false);
 
         assertEq(vault.maxMint(fish), 0, "Max mint should be 0 when limit reached");
     }
@@ -171,7 +171,7 @@ contract ERC4626Test is Test {
         userDeposit(fish, assets);
 
         vm.prank(gov);
-        vault.setDepositLimit(halfFishAmount, false);
+        vault.set_deposit_limit(halfFishAmount, false);
 
         assertEq(vault.maxMint(fish), 0, "Max mint should be 0 when over limit");
     }
@@ -180,7 +180,7 @@ contract ERC4626Test is Test {
         uint256 depositLimit = fishAmount;
 
         vm.prank(gov);
-        vault.setDepositLimit(depositLimit, false);
+        vault.set_deposit_limit(depositLimit, false);
 
         assertEq(vault.maxMint(fish), depositLimit, "Max mint should equal deposit limit");
     }
@@ -355,7 +355,7 @@ contract ERC4626Test is Test {
         uint256 strategyDeposit = assets;
 
         vm.prank(gov);
-        vault.addRole(gov, IMultistrategyVault.Roles.QUEUE_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.QUEUE_MANAGER);
 
         userDeposit(fish, assets);
         addStrategyToVault(strategyAddress);
@@ -384,7 +384,7 @@ contract ERC4626Test is Test {
 
         // Enable useDefaultQueue
         vm.prank(gov);
-        vault.setUseDefaultQueue(true);
+        vault.set_use_default_queue(true);
 
         assertEq(
             vault.maxWithdraw(fish, 0, new address[](0)),
@@ -545,7 +545,7 @@ contract ERC4626Test is Test {
         uint256 strategyDeposit = assets;
 
         vm.prank(gov);
-        vault.addRole(gov, IMultistrategyVault.Roles.QUEUE_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.QUEUE_MANAGER);
 
         userDeposit(fish, assets);
         addStrategyToVault(strategyAddress);
@@ -574,7 +574,7 @@ contract ERC4626Test is Test {
 
         // Enable useDefaultQueue
         vm.prank(gov);
-        vault.setUseDefaultQueue(true);
+        vault.set_use_default_queue(true);
 
         assertEq(
             vault.maxRedeem(fish, 0, new address[](0)),
@@ -619,10 +619,10 @@ contract ERC4626Test is Test {
 
         // Set withdraw limit module
         vm.prank(gov);
-        vault.addRole(gov, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
 
         vm.prank(gov);
-        vault.setWithdrawLimitModule(address(limitModule));
+        vault.set_withdraw_limit_module(address(limitModule));
 
         assertEq(vault.withdrawLimitModule(), address(limitModule), "Withdraw limit module should be set");
         assertEq(vault.maxWithdraw(fish, 0, new address[](0)), 0, "Max withdraw should still be 0 with no balance");
@@ -668,10 +668,10 @@ contract ERC4626Test is Test {
 
         // Set withdraw limit module
         vm.prank(gov);
-        vault.addRole(gov, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
 
         vm.prank(gov);
-        vault.setWithdrawLimitModule(address(limitModule));
+        vault.set_withdraw_limit_module(address(limitModule));
 
         assertEq(vault.withdrawLimitModule(), address(limitModule), "Withdraw limit module should be set");
         assertEq(vault.maxRedeem(fish, 0, new address[](0)), 0, "Max redeem should still be 0 with no balance");
@@ -721,7 +721,7 @@ contract ERC4626Test is Test {
     function testDepositWithDepositLimitModule() public {
         // Create vault with zero deposit limit
         vm.prank(gov);
-        vault.setDepositLimit(0, false);
+        vault.set_deposit_limit(0, false);
 
         MockDepositLimitModule limitModule = deployLimitModule();
         uint256 assets = fishAmount;
@@ -732,8 +732,8 @@ contract ERC4626Test is Test {
 
         // Set max deposit limit and add module
         vm.startPrank(gov);
-        vault.setDepositLimit(MAX_INT, false);
-        vault.setDepositLimitModule(address(limitModule), false);
+        vault.set_deposit_limit(MAX_INT, false);
+        vault.set_deposit_limit_module(address(limitModule), false);
         vm.stopPrank();
 
         // Enable allowset and make deposit fail
@@ -763,7 +763,7 @@ contract ERC4626Test is Test {
     function testMintWithDepositLimitModule() public {
         // Create vault with zero deposit limit
         vm.prank(gov);
-        vault.setDepositLimit(0, false);
+        vault.set_deposit_limit(0, false);
 
         MockDepositLimitModule limitModule = deployLimitModule();
         uint256 assets = fishAmount;
@@ -774,8 +774,8 @@ contract ERC4626Test is Test {
 
         // Set max deposit limit and add module
         vm.startPrank(gov);
-        vault.setDepositLimit(MAX_INT, false);
-        vault.setDepositLimitModule(address(limitModule), false);
+        vault.set_deposit_limit(MAX_INT, false);
+        vault.set_deposit_limit_module(address(limitModule), false);
         vm.stopPrank();
 
         // Enable allowset and make mint fail
@@ -814,10 +814,10 @@ contract ERC4626Test is Test {
 
         // Set withdraw limit module
         vm.prank(gov);
-        vault.addRole(gov, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
 
         vm.prank(gov);
-        vault.setWithdrawLimitModule(address(limitModule));
+        vault.set_withdraw_limit_module(address(limitModule));
 
         // Initially, max withdraw equals assets (full balance)
         assertEq(vault.maxWithdraw(fish, 0, new address[](0)), assets, "Initial max withdraw should equal assets");
@@ -865,10 +865,10 @@ contract ERC4626Test is Test {
 
         // Set withdraw limit module
         vm.prank(gov);
-        vault.addRole(gov, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
 
         vm.prank(gov);
-        vault.setWithdrawLimitModule(address(limitModule));
+        vault.set_withdraw_limit_module(address(limitModule));
 
         // Initially, max redeem equals shares (full balance)
         assertEq(vault.maxRedeem(fish, 0, new address[](0)), shares, "Initial max redeem should equal shares");

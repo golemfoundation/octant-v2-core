@@ -383,12 +383,12 @@ interface IMultistrategyVault {
 
     function maxDeposit(address receiver) external view returns (uint256);
     function maxMint(address receiver) external view returns (uint256);
-    function maxWithdraw(address owner, uint256 maxLoss, address[] calldata strategies) external view returns (uint256);
-    function maxRedeem(address owner, uint256 maxLoss, address[] calldata strategies) external view returns (uint256);
+    function maxWithdraw(address owner, uint256 maxLoss, address[] memory strategies) external view returns (uint256);
+    function maxRedeem(address owner, uint256 maxLoss, address[] memory strategies) external view returns (uint256);
 
     function FACTORY() external view returns (address);
     function apiVersion() external pure returns (string memory);
-    function assessShareOfUnrealisedLosses(
+    function assess_share_of_unrealised_losses(
         address strategy,
         uint256 currentDebt,
         uint256 assetsNeeded
@@ -420,14 +420,14 @@ interface IMultistrategyVault {
         address receiver,
         address owner,
         uint256 maxLoss,
-        address[] calldata strategies
+        address[] memory strategies
     ) external returns (uint256);
     function redeem(
         uint256 shares,
         address receiver,
         address owner,
         uint256 maxLoss,
-        address[] calldata strategies
+        address[] memory strategies
     ) external returns (uint256);
 
     function approve(address spender, uint256 amount) external returns (bool);
@@ -444,38 +444,38 @@ interface IMultistrategyVault {
     ) external returns (bool);
 
     // Management Functions
-    function setName(string memory name) external;
-    function setSymbol(string memory symbol) external;
-    function setAccountant(address newAccountant) external;
-    function setDefaultQueue(address[] calldata newDefaultQueue) external;
-    function setUseDefaultQueue(bool useDefaultQueue) external;
-    function setAutoAllocate(bool autoAllocate) external;
-    function setDepositLimit(uint256 depositLimit, bool shouldOverride) external;
-    function setDepositLimitModule(address depositLimitModule, bool shouldOverride) external;
-    function setWithdrawLimitModule(address withdrawLimitModule) external;
-    function setMinimumTotalIdle(uint256 minimumTotalIdle) external;
+    function set_name(string memory name) external;
+    function set_symbol(string memory symbol) external;
+    function set_accountant(address newAccountant) external;
+    function set_default_queue(address[] memory newDefaultQueue) external;
+    function set_use_default_queue(bool useDefaultQueue) external;
+    function set_auto_allocate(bool autoAllocate) external;
+    function set_deposit_limit(uint256 depositLimit, bool shouldOverride) external;
+    function set_deposit_limit_module(address depositLimitModule, bool shouldOverride) external;
+    function set_withdraw_limit_module(address withdrawLimitModule) external;
+    function set_minimum_total_idle(uint256 minimumTotalIdle) external;
     function setProfitMaxUnlockTime(uint256 newProfitMaxUnlockTime) external;
 
     // Role Management
-    function setRole(address account, uint256 roles) external;
-    function addRole(address account, Roles role) external;
-    function removeRole(address account, Roles role) external;
-    function transferRoleManager(address roleManager) external;
-    function acceptRoleManager() external;
+    function set_role(address account, uint256 roles) external;
+    function add_role(address account, Roles role) external;
+    function remove_role(address account, Roles role) external;
+    function transfer_role_manager(address roleManager) external;
+    function accept_role_manager() external;
 
     // Reporting Management
-    function processReport(address strategy) external returns (uint256, uint256);
-    function buyDebt(address strategy, uint256 amount) external;
+    function process_report(address strategy) external returns (uint256, uint256);
+    function buy_debt(address strategy, uint256 amount) external;
 
     // Strategy Management
-    function addStrategy(address newStrategy, bool addToQueue) external;
-    function revokeStrategy(address strategy) external;
-    function forceRevokeStrategy(address strategy) external;
+    function add_strategy(address newStrategy, bool addToQueue) external;
+    function revoke_strategy(address strategy) external;
+    function force_revoke_strategy(address strategy) external;
 
     // Debt Management
-    function updateMaxDebtForStrategy(address strategy, uint256 newMaxDebt) external;
-    function updateDebt(address strategy, uint256 targetDebt, uint256 maxLoss) external returns (uint256);
+    function update_max_debt_for_strategy(address strategy, uint256 newMaxDebt) external;
+    function update_debt(address strategy, uint256 targetDebt, uint256 maxLoss) external returns (uint256);
 
     // Emergency Management
-    function shutdownVault() external;
+    function shutdown_vault() external;
 }

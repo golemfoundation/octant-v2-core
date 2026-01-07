@@ -197,20 +197,20 @@ contract OctantTestBase is Test {
     function _configureSystem() internal {
         // Configure vault roles and limits
         vm.startPrank(vaultManager);
-        vault.addRole(vaultManager, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
-        vault.addRole(vaultManager, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
-        vault.addRole(vaultManager, IMultistrategyVault.Roles.DEBT_MANAGER);
-        vault.addRole(vaultManager, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        vault.addRole(vaultManager, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
-        vault.addRole(vaultManager, IMultistrategyVault.Roles.REPORTING_MANAGER);
+        vault.add_role(vaultManager, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.add_role(vaultManager, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
+        vault.add_role(vaultManager, IMultistrategyVault.Roles.DEBT_MANAGER);
+        vault.add_role(vaultManager, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
+        vault.add_role(vaultManager, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
+        vault.add_role(vaultManager, IMultistrategyVault.Roles.REPORTING_MANAGER);
 
-        vault.setDepositLimit(type(uint256).max, true);
+        vault.set_deposit_limit(type(uint256).max, true);
 
         // Add strategy to vault
-        vault.addStrategy(address(strategy), true);
+        vault.add_strategy(address(strategy), true);
 
         // Set max debt for strategy
-        vault.updateMaxDebtForStrategy(address(strategy), type(uint256).max);
+        vault.update_max_debt_for_strategy(address(strategy), type(uint256).max);
         vm.stopPrank();
 
         // Setup allowsets
@@ -281,7 +281,7 @@ contract OctantTestBase is Test {
 
     function allocateVaultToStrategy(uint256 amount) internal {
         vm.prank(vaultManager);
-        vault.updateDebt(address(strategy), amount, 0);
+        vault.update_debt(address(strategy), amount, 0);
     }
 
     function reportStrategyProfit(uint256 /* profit */) internal {
@@ -291,7 +291,7 @@ contract OctantTestBase is Test {
 
         // Vault needs to process the report to update totalAssets
         vm.prank(vaultManager);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
     }
 
     function generateYieldSourceProfit(uint256 profit) internal {

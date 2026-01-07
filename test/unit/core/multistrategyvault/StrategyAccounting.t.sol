@@ -50,17 +50,17 @@ contract StrategyAccountingTest is Test {
         vault = MultistrategyVault(vaultFactory.deployNewVault(address(asset), "Test Vault", "tvTEST", gov, 7 days));
 
         // Set roles for governance - this matches the set_role fixture
-        vault.addRole(gov, IMultistrategyVault.Roles.EMERGENCY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.REVOKE_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.ACCOUNTANT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.REPORTING_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.EMERGENCY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.REVOKE_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ACCOUNTANT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.REPORTING_MANAGER);
 
         // increase max deposit limit
-        vault.setDepositLimit(type(uint256).max, true);
+        vault.set_deposit_limit(type(uint256).max, true);
 
         // Seed vault with funds
         uint256 seedAmount = 1e18;
@@ -72,14 +72,14 @@ contract StrategyAccountingTest is Test {
         strategy = new MockYieldStrategy(address(asset), address(vault));
 
         // Add strategy to vault
-        vault.addStrategy(address(strategy), true);
+        vault.add_strategy(address(strategy), true);
 
         // Update max debt for strategy
-        vault.updateMaxDebtForStrategy(address(strategy), type(uint256).max);
+        vault.update_max_debt_for_strategy(address(strategy), type(uint256).max);
     }
 
     function addDebtToStrategy(address strategyAddress, uint256 amount) internal {
-        vault.updateDebt(strategyAddress, amount, 0);
+        vault.update_debt(strategyAddress, amount, 0);
     }
 
     function airdropAsset(address recipient, uint256 amount) internal {
@@ -88,7 +88,7 @@ contract StrategyAccountingTest is Test {
 
     function deployAccountant() internal returns (MockAccountant) {
         MockAccountant accountant = new MockAccountant(address(asset));
-        vault.setAccountant(address(accountant));
+        vault.set_accountant(address(accountant));
         return accountant;
     }
 
@@ -110,7 +110,7 @@ contract StrategyAccountingTest is Test {
 
         // Expect the process report to revert
         vm.expectRevert(IMultistrategyVault.InactiveStrategy.selector);
-        vault.processReport(address(inactiveStrategy));
+        vault.process_report(address(inactiveStrategy));
     }
 
     function testProcessReportWithGainAndZeroFees() public {
@@ -135,7 +135,7 @@ contract StrategyAccountingTest is Test {
         uint256 snapshotTimestamp = block.timestamp;
         vm.expectEmit(true, true, true, true);
         emit IMultistrategyVault.StrategyReported(address(strategy), gain, 0, initialDebt + gain, 0, 0, 0);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Check updated strategy params
         strategyParams = vault.strategies(address(strategy));
@@ -180,7 +180,7 @@ contract StrategyAccountingTest is Test {
         uint256 snapshotTimestamp = block.timestamp;
         vm.expectEmit(true, true, true, true);
         emit IMultistrategyVault.StrategyReported(address(strategy), gain, 0, initialDebt + gain, 0, totalFee, 0);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Check updated strategy params
         strategyParams = vault.strategies(address(strategy));
@@ -220,7 +220,7 @@ contract StrategyAccountingTest is Test {
         uint256 snapshotTimestamp = block.timestamp;
         vm.expectEmit(true, true, true, true);
         emit IMultistrategyVault.StrategyReported(address(strategy), gain, 0, initialDebt + gain, 0, 0, 0);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Check updated strategy params
         strategyParams = vault.strategies(address(strategy));
@@ -250,7 +250,7 @@ contract StrategyAccountingTest is Test {
         uint256 snapshotTimestamp = block.timestamp;
         vm.expectEmit(true, true, true, true);
         emit IMultistrategyVault.StrategyReported(address(strategy), 0, loss, initialDebt - loss, 0, 0, 0);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Check updated strategy params
         strategyParams = vault.strategies(address(strategy));
@@ -295,7 +295,7 @@ contract StrategyAccountingTest is Test {
         // Process report
         vm.expectEmit(true, true, true, true);
         emit IMultistrategyVault.StrategyReported(address(strategy), 0, loss, initialDebt - loss, 0, 0, loss);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Due to refunds, these values should remain unchanged
         assertEq(vault.pricePerShare(), ppsBeforeLoss);
@@ -322,8 +322,8 @@ contract StrategyAccountingTest is Test {
 
         // Create a lossy strategy
         MockLossyStrategy lossyStrategy = new MockLossyStrategy(address(asset), address(vault));
-        vault.addStrategy(address(lossyStrategy), true);
-        vault.updateMaxDebtForStrategy(address(lossyStrategy), type(uint256).max);
+        vault.add_strategy(address(lossyStrategy), true);
+        vault.update_max_debt_for_strategy(address(lossyStrategy), type(uint256).max);
 
         // Set fees with refund ratio
         setFeesForStrategy(accountant, address(lossyStrategy), managementFee, performanceFee, refundRatio);
@@ -355,7 +355,7 @@ contract StrategyAccountingTest is Test {
             0,
             actualRefund
         );
-        vault.processReport(address(lossyStrategy));
+        vault.process_report(address(lossyStrategy));
 
         // Check the vault state after partial refund
         assertLt(vault.pricePerShare(), ppsBeforeLoss);
@@ -375,7 +375,7 @@ contract StrategyAccountingTest is Test {
 
         // Deploy faulty accountant (doesn't approve tokens)
         MockFaultyAccountant accountant = new MockFaultyAccountant(address(asset));
-        vault.setAccountant(address(accountant));
+        vault.set_accountant(address(accountant));
 
         // Mint enough assets for full refund
         airdropAsset(address(accountant), loss);
@@ -388,8 +388,8 @@ contract StrategyAccountingTest is Test {
 
         // Create a lossy strategy
         MockLossyStrategy lossyStrategy = new MockLossyStrategy(address(asset), address(vault));
-        vault.addStrategy(address(lossyStrategy), true);
-        vault.updateMaxDebtForStrategy(address(lossyStrategy), type(uint256).max);
+        vault.add_strategy(address(lossyStrategy), true);
+        vault.update_max_debt_for_strategy(address(lossyStrategy), type(uint256).max);
 
         // Set fees with refund ratio
         accountant.setFees(address(lossyStrategy), managementFee, performanceFee, refundRatio);
@@ -421,7 +421,7 @@ contract StrategyAccountingTest is Test {
             0,
             actualRefund
         );
-        vault.processReport(address(lossyStrategy));
+        vault.process_report(address(lossyStrategy));
 
         // Check the vault state after partial refund due to limited allowance
         assertLt(vault.pricePerShare(), ppsBeforeLoss);
@@ -436,7 +436,7 @@ contract StrategyAccountingTest is Test {
         MockAccountant accountant = new MockAccountant(address(asset));
 
         // Set the accountant in the vault
-        vault.setAccountant(address(accountant));
+        vault.set_accountant(address(accountant));
 
         // Verify the accountant was set
         assertEq(vault.accountant(), address(accountant));
@@ -452,7 +452,7 @@ contract StrategyAccountingTest is Test {
 
         // Deploy flexible accountant
         MockFlexibleAccountant accountant = new MockFlexibleAccountant(address(asset));
-        vault.setAccountant(address(accountant));
+        vault.set_accountant(address(accountant));
 
         // Mint assets to the accountant for refunds
         airdropAsset(address(accountant), gain);
@@ -476,7 +476,7 @@ contract StrategyAccountingTest is Test {
         // Process report on vault itself
         vm.expectEmit(true, true, true, true);
         emit IMultistrategyVault.StrategyReported(address(vault), gain, 0, vaultBalance + gain + refund, 0, 0, refund);
-        vault.processReport(address(vault));
+        vault.process_report(address(vault));
 
         // Verify the vault state after processing
         assertEq(vault.pricePerShare(), ppsBeforeReport);
@@ -503,7 +503,7 @@ contract StrategyAccountingTest is Test {
 
         // Deploy flexible accountant
         MockFlexibleAccountant accountant = new MockFlexibleAccountant(address(asset));
-        vault.setAccountant(address(accountant));
+        vault.set_accountant(address(accountant));
 
         // Mint assets to the accountant for refunds
         airdropAsset(address(accountant), vars.loss);
@@ -540,7 +540,7 @@ contract StrategyAccountingTest is Test {
             0,
             vars.refund
         );
-        vault.processReport(address(vault));
+        vault.process_report(address(vault));
 
         // Price per share should decrease after loss
         assertLt(vault.pricePerShare(), vars.ppsBeforeReport);

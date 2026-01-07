@@ -35,13 +35,13 @@ contract StrategyWithdrawTest is Test {
         vault = MultistrategyVault(vaultFactory.deployNewVault(address(asset), "Test Vault", "tvTEST", gov, 7 days));
 
         // add roles
-        vault.addRole(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
 
         // Set deposit limit
-        vault.setDepositLimit(type(uint256).max, false);
+        vault.set_deposit_limit(type(uint256).max, false);
     }
 
     function testWithdrawWithInactiveStrategyReverts() public {
@@ -59,7 +59,7 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add active strategy and allocate debt
-        vault.addStrategy(address(strategy), true);
+        vault.add_strategy(address(strategy), true);
         addDebtToStrategy(address(strategy), amount);
 
         // Try to withdraw using inactive strategy
@@ -82,7 +82,7 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategy and allocate debt
-        vault.addStrategy(address(strategy), true);
+        vault.add_strategy(address(strategy), true);
         addDebtToStrategy(address(strategy), amount);
 
         // Initial checks
@@ -118,8 +118,8 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(firstStrategy), true);
-        vault.addStrategy(address(secondStrategy), true);
+        vault.add_strategy(address(firstStrategy), true);
+        vault.add_strategy(address(secondStrategy), true);
         addDebtToStrategy(address(firstStrategy), amountPerStrategy);
         addDebtToStrategy(address(secondStrategy), amountPerStrategy);
 
@@ -159,8 +159,8 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(liquidStrategy), true);
-        vault.addStrategy(address(lockedStrategy), true);
+        vault.add_strategy(address(liquidStrategy), true);
+        vault.add_strategy(address(lockedStrategy), true);
         addDebtToStrategy(address(liquidStrategy), amountPerStrategy);
         addDebtToStrategy(address(lockedStrategy), amountPerStrategy);
 
@@ -192,8 +192,8 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(liquidStrategy), true);
-        vault.addStrategy(address(lockedStrategy), true);
+        vault.add_strategy(address(liquidStrategy), true);
+        vault.add_strategy(address(lockedStrategy), true);
         addDebtToStrategy(address(liquidStrategy), amountPerStrategy);
         addDebtToStrategy(address(lockedStrategy), amountPerStrategy);
 
@@ -231,7 +231,7 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategy and allocate debt
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
 
         // Set loss in lossy strategy - removed gov parameter
@@ -258,7 +258,7 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategy and allocate debt
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
 
         // Set loss in lossy strategy
@@ -293,7 +293,7 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategy and allocate debt
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
 
         // Set loss in lossy strategy
@@ -331,7 +331,7 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategy and allocate debt
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
 
         // Set loss in lossy strategy
@@ -367,7 +367,7 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategy and allocate debt
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
 
         // Set loss in lossy strategy (remove gov parameter)
@@ -405,8 +405,8 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(liquidStrategy), true);
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(liquidStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
         addDebtToStrategy(address(liquidStrategy), amountPerStrategy);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
 
@@ -446,8 +446,8 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(liquidStrategy), true);
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(liquidStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
         addDebtToStrategy(address(liquidStrategy), amountPerStrategy);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
 
@@ -487,8 +487,8 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(liquidStrategy), true);
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(liquidStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
         addDebtToStrategy(address(liquidStrategy), amountPerStrategy);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
 
@@ -528,8 +528,8 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(liquidStrategy), true);
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(liquidStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
         addDebtToStrategy(address(liquidStrategy), amountPerStrategy);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
 
@@ -569,8 +569,8 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(liquidStrategy), true);
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(liquidStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
         addDebtToStrategy(address(liquidStrategy), amountPerStrategy);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
 
@@ -601,8 +601,8 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(liquidStrategy), true);
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(liquidStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
         addDebtToStrategy(address(liquidStrategy), amountPerStrategy);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
 
@@ -643,8 +643,8 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(liquidStrategy), true);
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(liquidStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
         addDebtToStrategy(address(liquidStrategy), amountPerStrategy);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
 
@@ -682,8 +682,8 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(liquidStrategy), true);
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(liquidStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
         addDebtToStrategy(address(liquidStrategy), amountPerStrategy);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
 
@@ -712,7 +712,7 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategy and allocate debt
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
 
         // Set loss in lossy strategy (unrealized loss)
@@ -751,7 +751,7 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategy and allocate debt
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
 
         // Set loss in lossy strategy (unrealized loss)
@@ -792,8 +792,8 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(lossyStrategy), true);
-        vault.addStrategy(address(liquidStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
+        vault.add_strategy(address(liquidStrategy), true);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
         addDebtToStrategy(address(liquidStrategy), amountPerStrategy);
 
@@ -839,7 +839,7 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategy and allocate debt
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
 
         // Set 100% loss in lossy strategy
@@ -878,7 +878,7 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategy and allocate debt
-        vault.addStrategy(address(lossyStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
 
         // Set 100% loss in lossy strategy
@@ -918,8 +918,8 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(lossyStrategy), true);
-        vault.addStrategy(address(liquidStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
+        vault.add_strategy(address(liquidStrategy), true);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
         addDebtToStrategy(address(liquidStrategy), amountPerStrategy);
 
@@ -950,8 +950,8 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(lossyStrategy), true);
-        vault.addStrategy(address(liquidStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
+        vault.add_strategy(address(liquidStrategy), true);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
         addDebtToStrategy(address(liquidStrategy), amountPerStrategy);
 
@@ -1001,8 +1001,8 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(lossyStrategy), true);
-        vault.addStrategy(address(liquidStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
+        vault.add_strategy(address(liquidStrategy), true);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
         addDebtToStrategy(address(liquidStrategy), amountPerStrategy);
 
@@ -1053,8 +1053,8 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(lossyStrategy), true);
-        vault.addStrategy(address(liquidStrategy), true);
+        vault.add_strategy(address(lossyStrategy), true);
+        vault.add_strategy(address(liquidStrategy), true);
         addDebtToStrategy(address(lossyStrategy), amountPerStrategy);
         addDebtToStrategy(address(liquidStrategy), amountPerStrategy);
 
@@ -1091,8 +1091,8 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(firstStrategy), true);
-        vault.addStrategy(address(secondStrategy), true);
+        vault.add_strategy(address(firstStrategy), true);
+        vault.add_strategy(address(secondStrategy), true);
         addDebtToStrategy(address(firstStrategy), amountPerStrategy);
         addDebtToStrategy(address(secondStrategy), amountPerStrategy);
 
@@ -1141,22 +1141,22 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add required role for default queue management
-        vault.addRole(gov, IMultistrategyVault.Roles.QUEUE_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.QUEUE_MANAGER);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(firstStrategy), true);
-        vault.addStrategy(address(secondStrategy), true);
+        vault.add_strategy(address(firstStrategy), true);
+        vault.add_strategy(address(secondStrategy), true);
         addDebtToStrategy(address(firstStrategy), amountPerStrategy);
         addDebtToStrategy(address(secondStrategy), amountPerStrategy);
 
         // Set override to true
-        vault.setUseDefaultQueue(true);
+        vault.set_use_default_queue(true);
 
         // Set default queue to opposite of the custom one
         address[] memory defaultQueue = new address[](2);
         defaultQueue[0] = address(secondStrategy);
         defaultQueue[1] = address(firstStrategy);
-        vault.setDefaultQueue(defaultQueue);
+        vault.set_default_queue(defaultQueue);
 
         // Withdraw half
         vm.prank(fish);
@@ -1189,22 +1189,22 @@ contract StrategyWithdrawTest is Test {
         userDeposit(fish, amount);
 
         // Add required role for queue management
-        vault.addRole(gov, IMultistrategyVault.Roles.QUEUE_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.QUEUE_MANAGER);
 
         // Add strategies and allocate debt
-        vault.addStrategy(address(firstStrategy), true);
-        vault.addStrategy(address(secondStrategy), true);
+        vault.add_strategy(address(firstStrategy), true);
+        vault.add_strategy(address(secondStrategy), true);
         addDebtToStrategy(address(firstStrategy), amountPerStrategy);
         addDebtToStrategy(address(secondStrategy), amountPerStrategy);
 
         // Set override to true
-        vault.setUseDefaultQueue(true);
+        vault.set_use_default_queue(true);
 
         // Set default queue to opposite of the custom one
         address[] memory defaultQueue = new address[](2);
         defaultQueue[0] = address(secondStrategy);
         defaultQueue[1] = address(firstStrategy);
-        vault.setDefaultQueue(defaultQueue);
+        vault.set_default_queue(defaultQueue);
 
         // Redeem half using redeem instead of withdraw
         vm.prank(fish);
@@ -1263,9 +1263,9 @@ contract StrategyWithdrawTest is Test {
 
     function addDebtToStrategy(address strategyAddress, uint256 amount) internal {
         // First set max debt
-        vault.updateMaxDebtForStrategy(strategyAddress, type(uint256).max);
+        vault.update_max_debt_for_strategy(strategyAddress, type(uint256).max);
         // Then update debt
-        vault.updateDebt(strategyAddress, amount, 0);
+        vault.update_debt(strategyAddress, amount, 0);
     }
 
     function checkVaultEmpty(MultistrategyVault _vault) internal view {

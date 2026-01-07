@@ -70,7 +70,7 @@ contract LossyStrategyFlowTest is Test {
 
         // Process report
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         // Price per share should reflect the loss (75% of original)
         assertEq(vault.pricePerShare(), 0.75e18, "Price per share should be 0.75");
@@ -87,7 +87,7 @@ contract LossyStrategyFlowTest is Test {
         assertEq(vault.totalDebt(), depositAmount - firstLoss, "Debt should reflect loss");
         // update max debt to 2 * depositAmount
         vm.prank(gov);
-        vault.updateMaxDebtForStrategy(address(strategy), 2 * depositAmount);
+        vault.update_max_debt_for_strategy(address(strategy), 2 * depositAmount);
 
         // Add all assets to strategy
         _addDebtToStrategy(address(strategy), vault.totalAssets());
@@ -108,7 +108,7 @@ contract LossyStrategyFlowTest is Test {
 
         // Process report
         vm.prank(gov);
-        vault.processReport(address(strategy));
+        vault.process_report(address(strategy));
 
         assertEq(
             vault.totalAssets(),
@@ -119,7 +119,7 @@ contract LossyStrategyFlowTest is Test {
 
         // Set minimum idle
         vm.prank(gov);
-        vault.setMinimumTotalIdle((3 * depositAmount) / 4);
+        vault.set_minimum_total_idle((3 * depositAmount) / 4);
 
         // Update debt to ensure minimum idle
         _addDebtToStrategy(address(strategy), depositAmount);
@@ -149,7 +149,7 @@ contract LossyStrategyFlowTest is Test {
         );
         assertTrue(vault.totalIdle() < vault.minimumTotalIdle(), "Total idle should be below minimum");
         vm.prank(gov);
-        vault.updateMaxDebtForStrategy(address(strategy), depositAmount / 4);
+        vault.update_max_debt_for_strategy(address(strategy), depositAmount / 4);
 
         // Update debt to comply with minimum idle
         _addDebtToStrategy(address(strategy), depositAmount / 4);
@@ -172,7 +172,7 @@ contract LossyStrategyFlowTest is Test {
 
         // Revoke strategy
         vm.prank(gov);
-        vault.revokeStrategy(address(strategy));
+        vault.revoke_strategy(address(strategy));
 
         assertEq(vault.strategies(address(strategy)).activation, 0, "Strategy should be deactivated");
     }
@@ -182,23 +182,23 @@ contract LossyStrategyFlowTest is Test {
         vault = MultistrategyVault(vaultFactory.deployNewVault(address(asset), "Test Vault", "vTST", gov, 7 days));
 
         // Add roles to gov
-        vault.addRole(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.REVOKE_STRATEGY_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.FORCE_REVOKE_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.ACCOUNTANT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.REPORTING_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
-        vault.addRole(gov, IMultistrategyVault.Roles.MINIMUM_IDLE_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ADD_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.REVOKE_STRATEGY_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.FORCE_REVOKE_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.ACCOUNTANT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.REPORTING_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.DEPOSIT_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.WITHDRAW_LIMIT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MAX_DEBT_MANAGER);
+        vault.add_role(gov, IMultistrategyVault.Roles.MINIMUM_IDLE_MANAGER);
 
         strategy = _createLossyStrategy();
 
         // Set deposit limit to max
-        vault.setDepositLimit(type(uint256).max, true);
-        vault.addStrategy(address(strategy), true);
-        vault.updateMaxDebtForStrategy(address(strategy), fishAmount);
+        vault.set_deposit_limit(type(uint256).max, true);
+        vault.add_strategy(address(strategy), true);
+        vault.update_max_debt_for_strategy(address(strategy), fishAmount);
         vm.stopPrank();
     }
 
@@ -216,12 +216,12 @@ contract LossyStrategyFlowTest is Test {
 
     function _addStrategyToVault(address strategyAddress) internal {
         vm.prank(gov);
-        vault.addStrategy(strategyAddress, true);
+        vault.add_strategy(strategyAddress, true);
     }
 
     function _addDebtToStrategy(address strategyAddress, uint256 amount) internal {
         vm.prank(gov);
-        vault.updateDebt(strategyAddress, amount, 0);
+        vault.update_debt(strategyAddress, amount, 0);
     }
 
     function _airdropAsset(address to, uint256 amount) internal {
