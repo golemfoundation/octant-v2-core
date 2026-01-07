@@ -40,6 +40,7 @@ contract LidoStrategy is BaseYieldSkimmingStrategy {
     /**
      * @param _asset Address of the underlying asset (wstETH)
      * @param _name Strategy name
+     * @param _symbol Strategy symbol
      * @param _management Address with management role
      * @param _keeper Address with keeper role
      * @param _emergencyAdmin Address with emergency admin role
@@ -50,6 +51,7 @@ contract LidoStrategy is BaseYieldSkimmingStrategy {
     constructor(
         address _asset,
         string memory _name,
+        string memory _symbol,
         address _management,
         address _keeper,
         address _emergencyAdmin,
@@ -60,6 +62,7 @@ contract LidoStrategy is BaseYieldSkimmingStrategy {
         BaseYieldSkimmingStrategy(
             _asset, // shares address
             _name,
+            _symbol,
             _management,
             _keeper,
             _emergencyAdmin,

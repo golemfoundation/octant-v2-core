@@ -81,6 +81,7 @@ contract MorphoCompounderStrategyFactoryTest is Test {
 
         address strategyAddress = factory.createStrategy(
             vaultSharesName,
+            "osMORPHO",
             management,
             keeper,
             emergencyAdmin,
@@ -116,6 +117,7 @@ contract MorphoCompounderStrategyFactoryTest is Test {
         vm.startPrank(management);
         address firstStrategyAddress = factory.createStrategy(
             firstVaultName,
+            "osMORPHO1",
             management,
             keeper,
             emergencyAdmin,
@@ -129,6 +131,7 @@ contract MorphoCompounderStrategyFactoryTest is Test {
 
         address secondStrategyAddress = factory.createStrategy(
             secondVaultName,
+            "osMORPHO2",
             management,
             keeper,
             emergencyAdmin,
@@ -162,6 +165,7 @@ contract MorphoCompounderStrategyFactoryTest is Test {
         vm.startPrank(firstUser);
         address firstStrategyAddress = factory.createStrategy(
             firstVaultName,
+            "osMORPHO1",
             firstUser,
             keeper,
             emergencyAdmin,
@@ -177,6 +181,7 @@ contract MorphoCompounderStrategyFactoryTest is Test {
         vm.startPrank(secondUser);
         address secondStrategyAddress = factory.createStrategy(
             secondVaultName,
+            "osMORPHO2",
             secondUser,
             keeper,
             emergencyAdmin,
@@ -207,6 +212,7 @@ contract MorphoCompounderStrategyFactoryTest is Test {
         vm.startPrank(management);
         address firstAddress = factory.createStrategy(
             vaultSharesName,
+            "osDET",
             management,
             keeper,
             emergencyAdmin,
@@ -221,6 +227,7 @@ contract MorphoCompounderStrategyFactoryTest is Test {
         vm.expectRevert(abi.encodeWithSelector(BaseStrategyFactory.StrategyAlreadyExists.selector, firstAddress));
         factory.createStrategy(
             vaultSharesName,
+            "osDET",
             management,
             keeper,
             emergencyAdmin,
@@ -235,6 +242,7 @@ contract MorphoCompounderStrategyFactoryTest is Test {
         vm.startPrank(management);
         address secondAddress = factory.createStrategy(
             differentName,
+            "osDIF",
             management,
             keeper,
             emergencyAdmin,

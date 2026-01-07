@@ -50,6 +50,7 @@ abstract contract BaseHealthCheck is BaseStrategy, IBaseHealthCheck {
     constructor(
         address _asset,
         string memory _name,
+        string memory _symbol,
         address _management,
         address _keeper,
         address _emergencyAdmin,
@@ -60,6 +61,7 @@ abstract contract BaseHealthCheck is BaseStrategy, IBaseHealthCheck {
         BaseStrategy(
             _asset,
             _name,
+            _symbol,
             _management,
             _keeper,
             _emergencyAdmin,

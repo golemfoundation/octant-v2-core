@@ -156,6 +156,7 @@ contract RocketPoolStrategyTest is Test {
         vm.startPrank(params.management);
         address strategyAddress = factory.createStrategy(
             params.vaultSharesName,
+            "osRPL",
             params.management,
             params.keeper,
             params.emergencyAdmin,

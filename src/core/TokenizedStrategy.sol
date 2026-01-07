@@ -225,6 +225,10 @@ abstract contract TokenizedStrategy {
         /// @notice Human-readable name of the strategy share token
         /// @dev ERC20 metadata. Set during initialize() and never changes
         string name;
+
+        /// @notice Symbol of the strategy share token
+        /// @dev ERC20 metadata. Set during initialize() and never changes
+        string symbol;
         
         /// @notice Total supply of strategy shares currently minted
         /// @dev In share base units. Increases on deposits, decreases on withdrawals
@@ -551,6 +555,7 @@ abstract contract TokenizedStrategy {
      *
      * @param _asset Address of the underlying ERC20 asset (cannot be zero)
      * @param _name Human-readable name for strategy shares (e.g., \"Octant Lido ETH Strategy\")
+     * @param _symbol Symbol for strategy shares (e.g., \"osWSTETH\")
      * @param _management Address for primary admin (cannot be zero)
      * @param _keeper Address authorized to call report/tend (cannot be zero)
      * @param _emergencyAdmin Address authorized for emergency actions (cannot be zero)
@@ -562,6 +567,7 @@ abstract contract TokenizedStrategy {
     function initialize(
         address _asset,
         string memory _name,
+        string memory _symbol,
         address _management,
         address _keeper,
         address _emergencyAdmin,
@@ -578,6 +584,8 @@ abstract contract TokenizedStrategy {
         S.asset = ERC20(_asset);
         // Set the Strategy Tokens name.
         S.name = _name;
+        // Set the Strategy Tokens symbol.
+        S.symbol = _symbol;
         // Set decimals based off the `asset`.
         S.decimals = ERC20(_asset).decimals();
 
@@ -1458,11 +1466,10 @@ abstract contract TokenizedStrategy {
 
     /**
      * @notice Returns the symbol of the strategy token.
-     * @dev Will be 'os' + asset symbol.
      * @return symbol_ Token symbol
      */
     function symbol() external view returns (string memory) {
-        return string(abi.encodePacked("os", _strategyStorage().asset.symbol()));
+        return _strategyStorage().symbol;
     }
 
     /**

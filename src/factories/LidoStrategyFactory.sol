@@ -44,6 +44,7 @@ contract LidoStrategyFactory is BaseStrategyFactory {
      *      5. Record deployment for tracking
      *
      * @param _name Strategy share token name
+     * @param _symbol Strategy share token symbol
      * @param _management Management address (can update params)
      * @param _keeper Keeper address (calls report)
      * @param _emergencyAdmin Emergency admin address
@@ -54,6 +55,7 @@ contract LidoStrategyFactory is BaseStrategyFactory {
      */
     function createStrategy(
         string memory _name,
+        string memory _symbol,
         address _management,
         address _keeper,
         address _emergencyAdmin,
@@ -66,6 +68,7 @@ contract LidoStrategyFactory is BaseStrategyFactory {
             abi.encode(
                 WSTETH,
                 _name,
+                _symbol,
                 _management,
                 _keeper,
                 _emergencyAdmin,
@@ -80,6 +83,7 @@ contract LidoStrategyFactory is BaseStrategyFactory {
             abi.encode(
                 WSTETH,
                 _name,
+                _symbol,
                 _management,
                 _keeper,
                 _emergencyAdmin,

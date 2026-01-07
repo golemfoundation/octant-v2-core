@@ -140,6 +140,7 @@ abstract contract BaseStrategy {
      *
      * @param _asset Address of the underlying asset.
      * @param _name Name the strategy will use.
+     * @param _symbol Symbol the strategy will use.
      * @param _management Address with management permissions
      * @param _keeper Address with keeper permissions
      * @param _emergencyAdmin Address with emergency admin permissions
@@ -150,6 +151,7 @@ abstract contract BaseStrategy {
     constructor(
         address _asset,
         string memory _name,
+        string memory _symbol,
         address _management,
         address _keeper,
         address _emergencyAdmin,
@@ -167,7 +169,7 @@ abstract contract BaseStrategy {
         _delegateCall(
             abi.encodeCall(
                 ITokenizedStrategy.initialize,
-                (_asset, _name, _management, _keeper, _emergencyAdmin, _donationAddress, _enableBurning)
+                (_asset, _name, _symbol, _management, _keeper, _emergencyAdmin, _donationAddress, _enableBurning)
             )
         );
 

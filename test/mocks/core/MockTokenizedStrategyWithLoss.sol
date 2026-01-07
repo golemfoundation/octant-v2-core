@@ -30,13 +30,14 @@ contract MockTokenizedStrategyWithLoss is TokenizedStrategy, IBaseStrategy {
     function initialize(
         address _asset,
         string memory _name,
+        string memory _symbol,
         address _management,
         address _keeper,
         address _emergencyAdmin,
         address _dragonRouter,
         bool _enableBurning
     ) public override {
-        super.initialize(_asset, _name, _management, _keeper, _emergencyAdmin, _dragonRouter, _enableBurning);
+        super.initialize(_asset, _name, _symbol, _management, _keeper, _emergencyAdmin, _dragonRouter, _enableBurning);
         mockTotalAssets = 0;
         mockAvailableDepositLimit = type(uint256).max;
         mockAvailableWithdrawLimit = type(uint256).max;

@@ -102,6 +102,7 @@ contract YearnV3DonatingStrategyTest is Test {
                 YEARN_V3_USDC_VAULT,
                 USDC,
                 params.strategyName,
+                "osYEARN",
                 params.management,
                 params.keeper,
                 params.emergencyAdmin,
@@ -515,6 +516,7 @@ contract YearnV3DonatingStrategyTest is Test {
             YEARN_V3_USDC_VAULT,
             address(0x123), // Wrong asset
             strategyName,
+            "osYEARN",
             management,
             keeper,
             emergencyAdmin,

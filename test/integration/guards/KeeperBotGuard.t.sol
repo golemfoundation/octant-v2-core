@@ -141,6 +141,7 @@ contract KeeperBotGuardTest is Test {
         strategy = MorphoCompounderStrategy(
             strategyFactory.createStrategy(
                 "MorphoCompounder KeeperBot Test Strategy",
+                "osKBT",
                 address(safeMultisig), // Use Safe as management directly
                 address(safeMultisig), // Use Safe as keeper too
                 emergencyAdmin,

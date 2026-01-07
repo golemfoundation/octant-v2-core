@@ -35,6 +35,7 @@ contract MockStrategySkimming is BaseStrategy {
         BaseStrategy(
             _yieldSource,
             "Test Strategy",
+            "tsSYMBOL",
             _management,
             _keeper,
             _emergencyAdmin,

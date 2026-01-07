@@ -53,6 +53,7 @@ contract SkyCompounderStrategy is BaseHealthCheck, UniswapV3Swapper, ISkyCompoun
      * @notice Constructs the Sky Compounder Strategy
      * @param _staking Sky Protocol staking contract address
      * @param _name Strategy share token name
+     * @param _symbol Strategy share token symbol
      * @param _management Management address (can update params)
      * @param _keeper Keeper address (calls report)
      * @param _emergencyAdmin Emergency admin address
@@ -64,6 +65,7 @@ contract SkyCompounderStrategy is BaseHealthCheck, UniswapV3Swapper, ISkyCompoun
     constructor(
         address _staking,
         string memory _name,
+        string memory _symbol,
         address _management,
         address _keeper,
         address _emergencyAdmin,
@@ -74,6 +76,7 @@ contract SkyCompounderStrategy is BaseHealthCheck, UniswapV3Swapper, ISkyCompoun
         BaseHealthCheck(
             USDS,
             _name,
+            _symbol,
             _management,
             _keeper,
             _emergencyAdmin,

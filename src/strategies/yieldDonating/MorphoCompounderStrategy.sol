@@ -44,6 +44,7 @@ contract MorphoCompounderStrategy is BaseHealthCheck {
      * @param _compounderVault Address of the Morpho compounder vault to deposit into
      * @param _asset Address of the underlying asset (must match compounder vault's asset)
      * @param _name Strategy display name (e.g., "Octant Morpho USDC Strategy")
+     * @param _symbol Strategy symbol (e.g., "osMorphoUSDC")
      * @param _management Address with management permissions
      * @param _keeper Address authorized to call report() and tend()
      * @param _emergencyAdmin Address authorized for emergency shutdown
@@ -55,6 +56,7 @@ contract MorphoCompounderStrategy is BaseHealthCheck {
         address _compounderVault,
         address _asset,
         string memory _name,
+        string memory _symbol,
         address _management,
         address _keeper,
         address _emergencyAdmin,
@@ -65,6 +67,7 @@ contract MorphoCompounderStrategy is BaseHealthCheck {
         BaseHealthCheck(
             _asset,
             _name,
+            _symbol,
             _management,
             _keeper,
             _emergencyAdmin,

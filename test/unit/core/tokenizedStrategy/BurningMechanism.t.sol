@@ -45,6 +45,7 @@ contract BurningMechanismTest is Test {
         yieldDonatingStrategy.initialize(
             address(asset),
             "Yield Donating Strategy",
+            "osYD",
             management,
             keeper,
             emergencyAdmin,
@@ -55,6 +56,7 @@ contract BurningMechanismTest is Test {
         yieldSkimmingStrategy.initialize(
             address(asset),
             "Yield Skimming Strategy",
+            "osYS",
             management,
             keeper,
             emergencyAdmin,

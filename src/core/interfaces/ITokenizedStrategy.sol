@@ -72,6 +72,7 @@ interface ITokenizedStrategy is IERC4626, IERC20Permit {
      * @notice Used to initialize storage for a newly deployed strategy
      * @param _asset Underlying asset address
      * @param _name Strategy name
+     * @param _symbol Strategy symbol
      * @param _management Management address
      * @param _keeper Keeper address
      * @param _emergencyAdmin Emergency admin address
@@ -81,6 +82,7 @@ interface ITokenizedStrategy is IERC4626, IERC20Permit {
     function initialize(
         address _asset,
         string memory _name,
+        string memory _symbol,
         address _management,
         address _keeper,
         address _emergencyAdmin,

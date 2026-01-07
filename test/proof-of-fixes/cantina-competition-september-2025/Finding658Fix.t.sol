@@ -142,7 +142,7 @@ contract Finding658Fix is Test {
 
         YieldDonatingTokenizedStrategy implementation = new YieldDonatingTokenizedStrategy();
         strategy = YieldDonatingTokenizedStrategy(address(new ERC1967Proxy(address(implementation), "")));
-        strategy.initialize(address(asset), "Strategy", address(0x1), address(0x2), address(0x3), address(0x4), true);
+        strategy.initialize(address(asset), "Strategy", "osTEST", address(0x1), address(0x2), address(0x3), address(0x4), true);
     }
 
     function _signPermit(

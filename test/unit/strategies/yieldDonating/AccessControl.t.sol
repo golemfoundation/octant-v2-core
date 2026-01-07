@@ -126,7 +126,7 @@ contract AccessControlTest is Setup {
         vm.assume(_address != address(0));
 
         vm.expectRevert("initialized");
-        tokenizedStrategy.initialize(address(asset), name_, _address, _address, _address, _address, true);
+        tokenizedStrategy.initialize(address(asset), name_, "tsSYMBOL", _address, _address, _address, _address, true);
     }
 
     function test_accessControl_deployFunds(address _address, uint256 _amount) public {

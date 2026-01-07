@@ -23,6 +23,7 @@ contract YieldSkimmingHealthCheckLogic is BaseYieldSkimmingHealthCheck {
         BaseYieldSkimmingHealthCheck(
             _asset,
             "Test Health Check",
+            "tsTHC",
             _management,
             address(0x2), // keeper
             address(0x3), // emergencyAdmin

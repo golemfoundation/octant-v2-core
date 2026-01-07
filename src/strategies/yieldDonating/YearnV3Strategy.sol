@@ -43,6 +43,7 @@ contract YearnV3Strategy is BaseHealthCheck {
      * @param _yearnVault Address of the Yearn v3 vault this strategy deposits into
      * @param _asset Address of the underlying asset (must match Yearn vault's asset)
      * @param _name Strategy display name (e.g., "Octant Yearn USDC Strategy")
+     * @param _symbol Strategy symbol (e.g., "osYearnUSDC")
      * @param _management Address with management permissions
      * @param _keeper Address authorized to call report() and tend()
      * @param _emergencyAdmin Address authorized for emergency shutdown
@@ -54,6 +55,7 @@ contract YearnV3Strategy is BaseHealthCheck {
         address _yearnVault,
         address _asset,
         string memory _name,
+        string memory _symbol,
         address _management,
         address _keeper,
         address _emergencyAdmin,
@@ -64,6 +66,7 @@ contract YearnV3Strategy is BaseHealthCheck {
         BaseHealthCheck(
             _asset,
             _name,
+            _symbol,
             _management,
             _keeper,
             _emergencyAdmin,

@@ -43,6 +43,7 @@ abstract contract BaseYieldSkimmingStrategy is BaseYieldSkimmingHealthCheck {
     constructor(
         address _asset,
         string memory _name,
+        string memory _symbol,
         address _management,
         address _keeper,
         address _emergencyAdmin,
@@ -53,6 +54,7 @@ abstract contract BaseYieldSkimmingStrategy is BaseYieldSkimmingHealthCheck {
         BaseYieldSkimmingHealthCheck(
             _asset,
             _name,
+            _symbol,
             _management,
             _keeper,
             _emergencyAdmin,

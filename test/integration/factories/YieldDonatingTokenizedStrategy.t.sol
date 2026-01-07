@@ -72,6 +72,7 @@ contract YieldDonatingTokenizedStrategyTest is Test {
         strategy.initialize(
             mockAsset,
             "Test Strategy",
+            "tsTEST",
             mockManagement,
             mockKeeper,
             mockEmergencyAdmin,

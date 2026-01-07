@@ -67,6 +67,7 @@ contract Setup is Test {
         tokenizedStrategy.initialize(
             address(yieldSource),
             "Test Strategy",
+            "tsSYMBOL",
             management,
             keeper,
             emergencyAdmin,

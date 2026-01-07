@@ -76,12 +76,15 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
     function testCreateStrategy() public {
         string memory vaultSharesName = "MorphoCompounder Donating Vault Shares";
 
+        string memory vaultSymbol = "osMORPHO";
+
         // Generate parameter hash for prediction
         bytes32 parameterHash = keccak256(
             abi.encode(
                 0x074134A2784F4F66b6ceD6f68849382990Ff3215, // YS_USDC
                 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, // USDC
                 vaultSharesName,
+                vaultSymbol,
                 management,
                 keeper,
                 emergencyAdmin,
@@ -98,6 +101,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
                 0x074134A2784F4F66b6ceD6f68849382990Ff3215, // YS_USDC
                 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, // USDC
                 vaultSharesName,
+                vaultSymbol,
                 management,
                 keeper,
                 emergencyAdmin,
@@ -121,6 +125,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
 
         address strategyAddress = factory.createStrategy(
             vaultSharesName,
+            vaultSymbol,
             management,
             keeper,
             emergencyAdmin,
@@ -152,6 +157,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         vm.startPrank(management);
         address firstStrategyAddress = factory.createStrategy(
             firstVaultName,
+            "osMORPHO1",
             management,
             keeper,
             emergencyAdmin,
@@ -165,6 +171,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
 
         address secondStrategyAddress = factory.createStrategy(
             secondVaultName,
+            "osMORPHO2",
             management,
             keeper,
             emergencyAdmin,
@@ -198,6 +205,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         vm.startPrank(firstUser);
         address firstStrategyAddress = factory.createStrategy(
             firstVaultName,
+            "osMORPHO1",
             firstUser,
             keeper,
             emergencyAdmin,
@@ -213,6 +221,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         vm.startPrank(secondUser);
         address secondStrategyAddress = factory.createStrategy(
             secondVaultName,
+            "osMORPHO2",
             secondUser,
             keeper,
             emergencyAdmin,
@@ -243,6 +252,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         vm.startPrank(management);
         address firstAddress = factory.createStrategy(
             vaultSharesName,
+            "osDET",
             management,
             keeper,
             emergencyAdmin,
@@ -257,6 +267,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         vm.expectRevert(abi.encodeWithSelector(BaseStrategyFactory.StrategyAlreadyExists.selector, firstAddress));
         factory.createStrategy(
             vaultSharesName,
+            "osDET",
             management,
             keeper,
             emergencyAdmin,
@@ -271,6 +282,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         vm.startPrank(management);
         address secondAddress = factory.createStrategy(
             differentName,
+            "osDIF",
             management,
             keeper,
             emergencyAdmin,
@@ -292,6 +304,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         vm.startPrank(management);
         address firstStrategyAddress = factory.createStrategy(
             firstVaultName,
+            "osM1",
             management,
             keeper,
             emergencyAdmin,
@@ -302,6 +315,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
 
         address secondStrategyAddress = factory.createStrategy(
             secondVaultName,
+            "osM2",
             management,
             keeper,
             emergencyAdmin,

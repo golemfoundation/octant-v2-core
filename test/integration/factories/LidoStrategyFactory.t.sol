@@ -81,6 +81,7 @@ contract LidoStrategyFactoryTest is Test {
 
         address strategyAddress = factory.createStrategy(
             vaultSharesName,
+            "osLIDO",
             management,
             keeper,
             emergencyAdmin,
@@ -112,6 +113,7 @@ contract LidoStrategyFactoryTest is Test {
         vm.startPrank(management);
         address firstStrategyAddress = factory.createStrategy(
             firstVaultName,
+            "osLIDO1",
             management,
             keeper,
             emergencyAdmin,
@@ -125,6 +127,7 @@ contract LidoStrategyFactoryTest is Test {
 
         address secondStrategyAddress = factory.createStrategy(
             secondVaultName,
+            "osLIDO2",
             management,
             keeper,
             emergencyAdmin,
@@ -158,6 +161,7 @@ contract LidoStrategyFactoryTest is Test {
         vm.startPrank(firstUser);
         address firstStrategyAddress = factory.createStrategy(
             firstVaultName,
+            "osLIDO1",
             firstUser,
             keeper,
             emergencyAdmin,
@@ -173,6 +177,7 @@ contract LidoStrategyFactoryTest is Test {
         vm.startPrank(secondUser);
         address secondStrategyAddress = factory.createStrategy(
             secondVaultName,
+            "osLIDO2",
             secondUser,
             keeper,
             emergencyAdmin,
@@ -203,6 +208,7 @@ contract LidoStrategyFactoryTest is Test {
         vm.startPrank(management);
         address firstAddress = factory.createStrategy(
             vaultSharesName,
+            "osDET",
             management,
             keeper,
             emergencyAdmin,
@@ -217,6 +223,7 @@ contract LidoStrategyFactoryTest is Test {
         vm.expectRevert(abi.encodeWithSelector(BaseStrategyFactory.StrategyAlreadyExists.selector, firstAddress));
         factory.createStrategy(
             vaultSharesName,
+            "osDET",
             management,
             keeper,
             emergencyAdmin,
@@ -231,6 +238,7 @@ contract LidoStrategyFactoryTest is Test {
         vm.startPrank(management);
         address secondAddress = factory.createStrategy(
             differentName,
+            "osDIF",
             management,
             keeper,
             emergencyAdmin,

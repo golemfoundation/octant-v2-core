@@ -78,11 +78,14 @@ contract SkyCompounderStrategyFactoryTest is Test {
     function testCreateStrategy() public {
         string memory vaultSharesName = "SkyCompounder Vault Shares";
 
+        string memory vaultSymbol = "osSKY";
+
         // Calculate expected address based on parameters
         bytes32 parameterHash = keccak256(
             abi.encode(
                 0x0650CAF159C5A49f711e8169D4336ECB9b950275, // USDS_REWARD_ADDRESS
                 vaultSharesName,
+                vaultSymbol,
                 management,
                 keeper,
                 emergencyAdmin,
@@ -98,6 +101,7 @@ contract SkyCompounderStrategyFactoryTest is Test {
             abi.encode(
                 0x0650CAF159C5A49f711e8169D4336ECB9b950275, // USDS_REWARD_ADDRESS
                 vaultSharesName,
+                vaultSymbol,
                 management,
                 keeper,
                 emergencyAdmin,
@@ -119,6 +123,7 @@ contract SkyCompounderStrategyFactoryTest is Test {
 
         address strategyAddress = factory.createStrategy(
             vaultSharesName,
+            vaultSymbol,
             management,
             keeper,
             emergencyAdmin,
@@ -151,6 +156,7 @@ contract SkyCompounderStrategyFactoryTest is Test {
         vm.startPrank(management);
         address firstStrategyAddress = factory.createStrategy(
             firstVaultName,
+            "osSKY1",
             management,
             keeper,
             emergencyAdmin,
@@ -164,6 +170,7 @@ contract SkyCompounderStrategyFactoryTest is Test {
 
         address secondStrategyAddress = factory.createStrategy(
             secondVaultName,
+            "osSKY2",
             management,
             keeper,
             emergencyAdmin,
@@ -197,6 +204,7 @@ contract SkyCompounderStrategyFactoryTest is Test {
         vm.startPrank(firstUser);
         address firstStrategyAddress = factory.createStrategy(
             firstVaultName,
+            "osSKY1",
             firstUser,
             keeper,
             emergencyAdmin,
@@ -212,6 +220,7 @@ contract SkyCompounderStrategyFactoryTest is Test {
         vm.startPrank(secondUser);
         address secondStrategyAddress = factory.createStrategy(
             secondVaultName,
+            "osSKY2",
             secondUser,
             keeper,
             emergencyAdmin,
@@ -242,6 +251,7 @@ contract SkyCompounderStrategyFactoryTest is Test {
         vm.startPrank(management);
         address firstAddress = factory.createStrategy(
             vaultSharesName,
+            "osDET",
             management,
             keeper,
             emergencyAdmin,
@@ -254,6 +264,7 @@ contract SkyCompounderStrategyFactoryTest is Test {
         vm.expectRevert(abi.encodeWithSelector(BaseStrategyFactory.StrategyAlreadyExists.selector, firstAddress));
         factory.createStrategy(
             vaultSharesName,
+            "osDET",
             management,
             keeper,
             emergencyAdmin,
@@ -266,6 +277,7 @@ contract SkyCompounderStrategyFactoryTest is Test {
         string memory differentName = "Different Vault";
         address secondAddress = factory.createStrategy(
             differentName,
+            "osDIF",
             management,
             keeper,
             emergencyAdmin,

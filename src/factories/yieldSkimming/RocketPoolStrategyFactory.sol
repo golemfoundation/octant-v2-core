@@ -31,6 +31,7 @@ contract RocketPoolStrategyFactory is BaseStrategyFactory {
      * @notice Deploys a new RocketPool strategy for the Yield Skimming Vault
      * @dev Uses deterministic deployment based on strategy parameters to prevent duplicates
      * @param _name Strategy share token name
+     * @param _symbol Strategy share token symbol
      * @param _management Management address (can update params)
      * @param _keeper Keeper address (calls report)
      * @param _emergencyAdmin Emergency admin address
@@ -41,6 +42,7 @@ contract RocketPoolStrategyFactory is BaseStrategyFactory {
      */
     function createStrategy(
         string memory _name,
+        string memory _symbol,
         address _management,
         address _keeper,
         address _emergencyAdmin,
@@ -53,6 +55,7 @@ contract RocketPoolStrategyFactory is BaseStrategyFactory {
             abi.encode(
                 R_ETH,
                 _name,
+                _symbol,
                 _management,
                 _keeper,
                 _emergencyAdmin,
@@ -67,6 +70,7 @@ contract RocketPoolStrategyFactory is BaseStrategyFactory {
             abi.encode(
                 R_ETH,
                 _name,
+                _symbol,
                 _management,
                 _keeper,
                 _emergencyAdmin,

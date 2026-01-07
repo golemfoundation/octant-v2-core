@@ -137,12 +137,14 @@ contract ShutterDAOIntegrationTest is Test {
     function _predictStrategyAddress(address _paymentSplitter, address _keeper) internal view returns (address) {
         address ysUsdc = MorphoCompounderStrategyFactory(MORPHO_STRATEGY_FACTORY).YS_USDC();
         address usdc = MorphoCompounderStrategyFactory(MORPHO_STRATEGY_FACTORY).USDC();
+        string memory strategySymbol = "osSHU";
 
         bytes32 parameterHash = keccak256(
             abi.encode(
                 ysUsdc,
                 usdc,
                 STRATEGY_NAME,
+                strategySymbol,
                 SHUTTER_TREASURY,
                 _keeper,
                 SHUTTER_TREASURY,
@@ -158,6 +160,7 @@ contract ShutterDAOIntegrationTest is Test {
                 ysUsdc,
                 usdc,
                 STRATEGY_NAME,
+                strategySymbol,
                 SHUTTER_TREASURY,
                 _keeper,
                 SHUTTER_TREASURY,
@@ -211,6 +214,7 @@ contract ShutterDAOIntegrationTest is Test {
                     MorphoCompounderStrategyFactory.createStrategy,
                     (
                         STRATEGY_NAME,
+                        "osSHU",
                         SHUTTER_TREASURY,
                         keeperBot,
                         SHUTTER_TREASURY,
@@ -426,12 +430,14 @@ contract ShutterDAOGasProfilingTest is Test {
     ) internal view returns (bytes32 parameterHash, bytes memory strategyBytecode) {
         address ysUsdc = MorphoCompounderStrategyFactory(MORPHO_STRATEGY_FACTORY).YS_USDC();
         address usdc = MorphoCompounderStrategyFactory(MORPHO_STRATEGY_FACTORY).USDC();
+        string memory strategySymbol = "osSHU";
 
         parameterHash = keccak256(
             abi.encode(
                 ysUsdc,
                 usdc,
                 STRATEGY_NAME,
+                strategySymbol,
                 SHUTTER_TREASURY,
                 keeper,
                 SHUTTER_TREASURY,
@@ -447,6 +453,7 @@ contract ShutterDAOGasProfilingTest is Test {
                 ysUsdc,
                 usdc,
                 STRATEGY_NAME,
+                strategySymbol,
                 SHUTTER_TREASURY,
                 keeper,
                 SHUTTER_TREASURY,
@@ -507,6 +514,7 @@ contract ShutterDAOGasProfilingTest is Test {
                     MorphoCompounderStrategyFactory.createStrategy,
                     (
                         STRATEGY_NAME,
+                        "osSHU",
                         SHUTTER_TREASURY,
                         keeperBot,
                         SHUTTER_TREASURY,

@@ -19,6 +19,7 @@ contract MockStrategy is BaseStrategy {
         BaseStrategy(
             _asset,
             "Test Strategy",
+            "tsSYMBOL",
             msg.sender,
             msg.sender,
             msg.sender,

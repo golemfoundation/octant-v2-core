@@ -113,6 +113,7 @@ contract SkyCompounderTest is Test {
         vm.startPrank(params.management);
         address strategyAddress = factory.createStrategy(
             params.vaultSharesName,
+            "osSKY",
             params.management,
             params.keeper,
             params.emergencyAdmin,

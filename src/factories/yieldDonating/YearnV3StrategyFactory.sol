@@ -42,6 +42,7 @@ contract YearnV3StrategyFactory is BaseStrategyFactory {
      * @param _yearnVault Yearn v3 vault address to compound into
      * @param _asset Underlying asset address
      * @param _name Strategy share token name
+     * @param _symbol Strategy share token symbol
      * @param _management Management address (can update params)
      * @param _keeper Keeper address (calls report)
      * @param _emergencyAdmin Emergency admin address
@@ -54,6 +55,7 @@ contract YearnV3StrategyFactory is BaseStrategyFactory {
         address _yearnVault,
         address _asset,
         string memory _name,
+        string memory _symbol,
         address _management,
         address _keeper,
         address _emergencyAdmin,
@@ -67,6 +69,7 @@ contract YearnV3StrategyFactory is BaseStrategyFactory {
                 _yearnVault,
                 _asset,
                 _name,
+                _symbol,
                 _management,
                 _keeper,
                 _emergencyAdmin,
@@ -83,6 +86,7 @@ contract YearnV3StrategyFactory is BaseStrategyFactory {
                 _yearnVault,
                 _asset,
                 _name,
+                _symbol,
                 _management,
                 _keeper,
                 _emergencyAdmin,

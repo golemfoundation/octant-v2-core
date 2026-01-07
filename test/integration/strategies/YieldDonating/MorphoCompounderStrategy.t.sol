@@ -101,6 +101,7 @@ contract MorphoCompounderDonatingStrategyTest is Test {
         strategy = MorphoCompounderStrategy(
             factory.createStrategy(
                 params.strategyName,
+                "osMORPHO",
                 params.management,
                 params.keeper,
                 params.emergencyAdmin,
@@ -525,6 +526,7 @@ contract MorphoCompounderDonatingStrategyTest is Test {
             MORPHO_VAULT,
             address(0x123), // Wrong asset
             strategyName,
+            "osMORPHO",
             management,
             keeper,
             emergencyAdmin,

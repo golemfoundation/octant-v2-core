@@ -153,6 +153,7 @@ contract LidoStrategyTest is Test {
         vm.startPrank(params.management);
         address strategyAddress = factory.createStrategy(
             params.vaultSharesName,
+            "osLIDO",
             params.management,
             params.keeper,
             params.emergencyAdmin,

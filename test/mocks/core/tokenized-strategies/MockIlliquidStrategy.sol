@@ -21,6 +21,7 @@ contract MockIlliquidStrategy is BaseStrategy {
         BaseStrategy(
             _asset,
             "Test Strategy",
+            "tsSYMBOL",
             _management,
             _keeper,
             _emergencyAdmin,
