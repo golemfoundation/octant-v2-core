@@ -35,7 +35,7 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
  *    - Users cannot transfer locked shares to other addresses
  *    - Available shares = total balance - locked shares
  *    - Prevents rage quit cooldown bypass through share transfers
- *    - Use `getTransferableShares()` to check available balance for transfers
+ *    - Check `custodyInfo(user).lockedShares` to calculate available balance for transfers
  *
  * 4. **Withdrawal Rules:**
  *    - Users can only withdraw shares if they have active custody
@@ -44,10 +44,10 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
  *    - New rage quit required after custody is fully withdrawn
  *    - `maxWithdraw()` and `maxRedeem()` return 0 if no custody or still in cooldown
  *
- * 5. **Utility Functions:**
- *    - `getTransferableShares(user)`: Returns shares available for transfer
- *    - `getRageQuitableShares(user)`: Returns shares available for rage quit initiation
- *    - `custodyInfo(user)`: Returns custody details (locked shares, unlock time)
+ * 5. **Querying Custody State:**
+ *    - `custodyInfo(user)`: Returns custody details (lockedShares, unlockTime)
+ *    - Transferable shares = `balanceOf(user) - custodyInfo(user).lockedShares`
+ *    - User can initiate rage quit if `custodyInfo(user).lockedShares == 0`
  *
  * ## Two-Step Cooldown Period Changes:
  *
@@ -78,7 +78,7 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
  * **Scenario A - Basic Custody Flow:**
  * 1. User has 1000 shares, initiates rage quit for 500 shares
  * 2. 500 shares locked in custody, 500 shares remain transferable
- * 3. `getTransferableShares(user)` returns 500, `getRageQuitableShares(user)` returns 0
+ * 3. `custodyInfo(user).lockedShares` returns 500, user cannot initiate another rage quit
  * 4. After cooldown, user can withdraw up to 500 shares
  * 5. User withdraws 300 shares, 200 shares remain in custody
  * 6. User can later withdraw remaining 200 shares without new rage quit
@@ -90,13 +90,13 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
  * 4. Change finalized after grace period
  * 5. User B rage quits after finalization → uses 14-day cooldown
  *
- * **Scenario C - Utility Function Usage:**
+ * **Scenario C - Querying Custody State:**
  * 1. User has 1000 shares, no active rage quit
- * 2. `getTransferableShares(user)` returns 1000
- * 3. `getRageQuitableShares(user)` returns 1000
+ * 2. `custodyInfo(user).lockedShares` returns 0, transferable = 1000
+ * 3. User can initiate rage quit (no active custody)
  * 4. User initiates rage quit for 400 shares
- * 5. `getTransferableShares(user)` returns 600
- * 6. `getRageQuitableShares(user)` returns 0 (already has active rage quit)
+ * 5. `custodyInfo(user).lockedShares` returns 400, transferable = 600
+ * 6. User cannot initiate another rage quit (already has active custody)
  */
 contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVault {
     // ============================================
@@ -134,15 +134,15 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
 
     /// @notice Initial rage quit cooldown period set at deployment
     /// @dev 7 days in seconds. Applied until governance changes it
-    uint256 public constant INITIAL_RAGE_QUIT_COOLDOWN_PERIOD = 7 days;
+    uint256 private constant INITIAL_RAGE_QUIT_COOLDOWN_PERIOD = 7 days;
 
     /// @notice Minimum allowed rage quit cooldown period
     /// @dev 1 day in seconds. Prevents cooldown from being set too short
-    uint256 public constant RANGE_MINIMUM_RAGE_QUIT_COOLDOWN_PERIOD = 1 days;
+    uint256 private constant RANGE_MINIMUM_RAGE_QUIT_COOLDOWN_PERIOD = 1 days;
 
     /// @notice Maximum allowed rage quit cooldown period
     /// @dev 30 days in seconds. Prevents cooldown from being set too long
-    uint256 public constant RANGE_MAXIMUM_RAGE_QUIT_COOLDOWN_PERIOD = 30 days;
+    uint256 private constant RANGE_MAXIMUM_RAGE_QUIT_COOLDOWN_PERIOD = 30 days;
 
     /// @notice Grace period delay for cooldown changes
     /// @dev 14 days in seconds. Users have this time to rage quit under old terms
@@ -534,19 +534,15 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
             revert SharesStillLocked();
         }
 
-        // Ensure user has sufficient balance
-        uint256 userBalance = balanceOf(owner);
-        if (userBalance < shares) {
-            revert InsufficientBalance();
-        }
-
         // Can only withdraw up to locked amount
         if (shares > custody.lockedShares) {
             revert ExceedsCustodiedAmount();
         }
 
         // Reduce locked shares by withdrawn amount
-        custody.lockedShares -= shares;
+        unchecked {
+            custody.lockedShares -= shares;
+        }
 
         // If all custodied shares withdrawn, reset custody info
         if (custody.lockedShares == 0) {
@@ -572,7 +568,11 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
 
         if (custody.lockedShares > 0) {
             uint256 senderBalance = balanceOf(sender_);
-            uint256 availableShares = senderBalance - custody.lockedShares;
+
+            uint256 availableShares;
+            unchecked {
+                availableShares = senderBalance - custody.lockedShares;
+            }
 
             // Revert if trying to transfer more than available shares
             if (amount_ > availableShares) {
@@ -625,7 +625,7 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
     function maxWithdraw(
         address owner_,
         uint256 maxLoss_
-    ) public view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
+    ) external view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
         return maxWithdraw(owner_, maxLoss_, new address[](0));
     }
 
@@ -670,11 +670,8 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
             balanceOf(owner_)
         );
 
-        // Get custody info to determine locked shares
-        uint256 lockedShares = custody.lockedShares;
-
         // Return minimum of parent max and custody limit
-        return Math.min(parentMax, lockedShares);
+        return Math.min(parentMax, custody.lockedShares);
     }
 
     /**
@@ -689,7 +686,7 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
     function maxRedeem(
         address owner_,
         uint256 maxLoss_
-    ) public view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
+    ) external view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
         return maxRedeem(owner_, maxLoss_, new address[](0));
     }
 
@@ -700,7 +697,9 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
      * @param owner_ Address that owns the shares
      * @return max Maximum redeemable shares (constrained by custody)
      */
-    function maxRedeem(address owner_) public view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
+    function maxRedeem(
+        address owner_
+    ) external view override(MultistrategyVault, IMultistrategyVault) returns (uint256) {
         return maxRedeem(owner_, MAX_BPS, new address[](0));
     }
 }
