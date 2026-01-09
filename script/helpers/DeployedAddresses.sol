@@ -47,6 +47,11 @@ contract DeployedAddresses is Script {
         address yieldDonatingTokenizedStrategy;
         address yearnV3StrategyFactory;
         address lidoStrategyFactory;
+        // AddressSet Factory and Contracts (for allowlists/blocklists)
+        address addressSetFactory;
+        address stakerAllowset;
+        address stakerBlockset;
+        address allocationMechanismAllowset;
     }
 
     /**
@@ -99,7 +104,12 @@ contract DeployedAddresses is Script {
                 // External strategy contracts - existing mainnet deployments
                 yieldDonatingTokenizedStrategy: 0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c,
                 yearnV3StrategyFactory: 0x6D8c4E4A158083E30B53ba7df3cFB885fC096fF6,
-                lidoStrategyFactory: address(0)
+                lidoStrategyFactory: address(0),
+                // AddressSet factory and contracts - to be deployed
+                addressSetFactory: address(0),
+                stakerAllowset: address(0),
+                stakerBlockset: address(0),
+                allocationMechanismAllowset: address(0)
             });
     }
 
@@ -127,7 +137,11 @@ contract DeployedAddresses is Script {
                 allocationMechanismFactory: address(0),
                 yieldDonatingTokenizedStrategy: address(0),
                 yearnV3StrategyFactory: address(0),
-                lidoStrategyFactory: address(0)
+                lidoStrategyFactory: address(0),
+                addressSetFactory: address(0),
+                stakerAllowset: address(0),
+                stakerBlockset: address(0),
+                allocationMechanismAllowset: address(0)
             });
     }
 
@@ -161,7 +175,12 @@ contract DeployedAddresses is Script {
                 // External strategy contracts - reuse existing mainnet deployments
                 yieldDonatingTokenizedStrategy: 0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c,
                 yearnV3StrategyFactory: 0x6D8c4E4A158083E30B53ba7df3cFB885fC096fF6,
-                lidoStrategyFactory: address(0)
+                lidoStrategyFactory: address(0),
+                // AddressSet factory and contracts - deploy fresh (protocol-specific)
+                addressSetFactory: address(0),
+                stakerAllowset: address(0),
+                stakerBlockset: address(0),
+                allocationMechanismAllowset: address(0)
             });
     }
 
@@ -189,7 +208,11 @@ contract DeployedAddresses is Script {
                 allocationMechanismFactory: address(0),
                 yieldDonatingTokenizedStrategy: address(0),
                 yearnV3StrategyFactory: address(0),
-                lidoStrategyFactory: address(0)
+                lidoStrategyFactory: address(0),
+                addressSetFactory: address(0),
+                stakerAllowset: address(0),
+                stakerBlockset: address(0),
+                allocationMechanismAllowset: address(0)
             });
     }
 }
