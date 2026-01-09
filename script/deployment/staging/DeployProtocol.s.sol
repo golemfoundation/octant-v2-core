@@ -13,7 +13,7 @@ import { DeployModuleProxyFactory } from "script/deploy/DeployModuleProxyFactory
 import { DeployPaymentSplitterFactory } from "script/deploy/DeployPaymentSplitterFactory.sol";
 import { DeploySkyCompounderStrategyFactory } from "script/deploy/DeploySkyCompounderStrategyFactory.sol";
 import { DeployMorphoCompounderStrategyFactory } from "script/deploy/DeployMorphoCompounderStrategyFactory.sol";
-import { DeployRegenStakerFactory } from "script/deploy/DeployRegenStakerFactory.sol";
+import { DeployRegenStakerFactory } from "script/deploy/DeployRegenStakerFactory.s.sol";
 import { DeployAllocationMechanismFactory } from "script/deploy/DeployAllocationMechanismFactory.sol";
 import { DeployYearnV3StrategyFactory } from "script/deploy/DeployYearnV3StrategyFactory.s.sol";
 import { DeployLidoStrategyFactory } from "script/deploy/DeployLidoStrategyFactory.sol";
