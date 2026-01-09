@@ -90,7 +90,7 @@ jobs:
           VERIFIER_URL: "${{ vars.TENDERLY_MAINNET_RPC_URL }}/verify/etherscan"
           MAX_OPEX_SPLIT: "5"
           MIN_METAPOOL_SPLIT: "0"
-          CONTRACT_ADDRESSES: "/app/ci/contract_addresses.txt"
+          CONTRACT_ADDRESSES: "/app/contract_addresses.txt"
           VERSION_TAG: "${{ github.ref_name }}"
         run: |
           cd /app
@@ -109,68 +109,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: contract_addresses
-          path: /app/ci/contract_addresses.txt
-
-  update-contract-secret:
-    name: Update secret
-    runs-on:
-      - general
-    needs:
-      - deploy-contract
-    container:
-      image: gcr.io/google.com/cloudsdktool/cloud-sdk:stable
-    steps:
-      - name: Checkout source code
-        uses: actions/checkout@v4
-
-      - name: Install dependencies
-        run: |
-          apt-get update && apt-get install -y --no-install-recommends jq
-
-      - name: Download artifact with contract addresses
-        uses: actions/download-artifact@v4
-        with:
-          name: contract_addresses
-
-      - name: Add new secret version
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS_B64: ${{ secrets.GCP_SECRET_VERSION_ADDER_SERVICE_ACCOUNT }}
-          GCP_PROJECT: ${{ vars.GCP_PROJECT }}
-        run: ci/update_gcp_secret.sh develop
-
-  restart-services:
-    name: Restart develop services
-    runs-on: general
-    needs:
-      - update-contract-secret
-
-    steps:
-      - name: Update frontend contracts
-        uses: benc-uk/workflow-dispatch@v1
-        with:
-          repo: golemfoundation/octant-v2-frontend
-          workflow: update-secret-version.yml
-          ref: develop
-          inputs: '{"run-id":"${{ github.run_id }}","env-type":"develop"}'
-          token: "${{ secrets.GH_BOT_TOKEN }}"
-
-      - name: Get last subgraph tag
-        id: last-subgraph-tag
-        run: |
-          echo "Fetching last subgraph tag..."
-          TAG=$(curl -s -H "Authorization: Bearer ${{ secrets.GH_BOT_TOKEN }}" 'https://api.github.com/repos/golemfoundation/octant-v2-subgraph/releases?per_page=1' | jq -r '.[0].tag_name')
-          if [ -z "$TAG" ] || [ $TAG == 'null' ]; then
-            echo "No tags found, exiting."
-            exit 1
-          fi
-          echo "Last subgraph tag: $TAG"
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-
-      - name: Redeploy subgraph
-        uses: benc-uk/workflow-dispatch@v1
-        with:
-          repo: golemfoundation/octant-v2-subgraph
-          workflow: tpl-deploy-app.yml
-          ref: develop
-          inputs: '{"core-run-id":"${{ github.run_id }}","env-type":"develop","image-tag":"${{ steps.last-subgraph-tag.outputs.tag }}"}'
-          token: "${{ secrets.GH_BOT_TOKEN }}"
+          path: /app/contract_addresses.txt

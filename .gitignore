@@ -25,7 +25,7 @@ docs/*
 .env
 .envrc
 .DS_Store
-ci/contract_addresses.txt
+contract_addresses.txt
 lcov.info
 gasreport.txt
 output.json
