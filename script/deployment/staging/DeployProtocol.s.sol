@@ -266,7 +266,7 @@ contract DeployProtocol is Script {
         console2.log("Branch Hat ID:             ", vm.toString(deployHatsProtocol.branchHatId()));
         console2.log("------------------");
 
-        string memory contractAddressFilename = "./ci/contract_addresses.txt";
+        string memory contractAddressFilename = "./contract_addresses.txt";
         if (vm.exists(contractAddressFilename)) {
             vm.removeFile(contractAddressFilename);
         }
