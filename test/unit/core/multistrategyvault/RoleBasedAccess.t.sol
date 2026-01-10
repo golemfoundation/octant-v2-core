@@ -531,7 +531,7 @@ contract RoleBasedAccessTest is Test {
         vault.add_role(bunny, IMultistrategyVault.Roles.QUEUE_MANAGER);
 
         // Get initial queue
-        address[] memory initialQueue = vault.defaultQueue();
+        address[] memory initialQueue = vault.get_default_queue();
         assertGt(initialQueue.length, 0, "Initial queue should not be empty");
 
         // Set default queue with bunny
@@ -539,7 +539,7 @@ contract RoleBasedAccessTest is Test {
         vault.set_default_queue(new address[](0));
 
         // Verify new state
-        address[] memory newQueue = vault.defaultQueue();
+        address[] memory newQueue = vault.get_default_queue();
         assertEq(newQueue.length, 0, "Queue should be empty after setting");
     }
 
@@ -729,7 +729,7 @@ contract RoleBasedAccessTest is Test {
         // Verify bunny can't set name
         vm.prank(bunny);
         vm.expectRevert(IMultistrategyVault.NotAllowed.selector);
-        vault.set_name(newName);
+        vault.setName(newName);
 
         // Give bunny ALL roles
         vm.prank(gov);
@@ -738,14 +738,14 @@ contract RoleBasedAccessTest is Test {
         // Verify bunny still can't set name (only roleManager can)
         vm.prank(bunny);
         vm.expectRevert(IMultistrategyVault.NotAllowed.selector);
-        vault.set_name(newName);
+        vault.setName(newName);
 
         // Verify name unchanged
         assertEq(vault.name(), initialName, "Name should be unchanged");
 
         // Set name with gov (roleManager)
         vm.prank(gov);
-        vault.set_name(newName);
+        vault.setName(newName);
 
         // Verify name changed
         assertEq(vault.name(), newName, "Name should be changed");
@@ -760,7 +760,7 @@ contract RoleBasedAccessTest is Test {
         // Verify bunny can't set symbol
         vm.prank(bunny);
         vm.expectRevert(IMultistrategyVault.NotAllowed.selector);
-        vault.set_symbol(newSymbol);
+        vault.setSymbol(newSymbol);
 
         // Give bunny ALL roles
         vm.prank(gov);
@@ -769,14 +769,14 @@ contract RoleBasedAccessTest is Test {
         // Verify bunny still can't set symbol (only roleManager can)
         vm.prank(bunny);
         vm.expectRevert(IMultistrategyVault.NotAllowed.selector);
-        vault.set_symbol(newSymbol);
+        vault.setSymbol(newSymbol);
 
         // Verify symbol unchanged
         assertEq(vault.symbol(), initialSymbol, "Symbol should be unchanged");
 
         // Set symbol with gov (roleManager)
         vm.prank(gov);
-        vault.set_symbol(newSymbol);
+        vault.setSymbol(newSymbol);
 
         // Verify symbol changed
         assertEq(vault.symbol(), newSymbol, "Symbol should be changed");
