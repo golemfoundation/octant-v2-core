@@ -1919,15 +1919,11 @@ contract MultistrategyVault is IMultistrategyVault {
     /**
      * @notice Assess the share of unrealised losses that a strategy has.
      * @param strategy The address of the strategy.
-     * @param currentDebt The current debt of the strategy
      * @param assetsNeeded The amount of assets needed to be withdrawn
      * @return The share of unrealised losses that the strategy has
      */
-    function assess_share_of_unrealised_losses(
-        address strategy,
-        uint256 currentDebt,
-        uint256 assetsNeeded
-    ) external view returns (uint256) {
+    function assess_share_of_unrealised_losses(address strategy, uint256 assetsNeeded) external view returns (uint256) {
+        uint256 currentDebt = _strategies[strategy].currentDebt;
         require(currentDebt >= assetsNeeded, NotEnoughDebt());
         return _assess_share_of_unrealised_losses(strategy, currentDebt, assetsNeeded);
     }

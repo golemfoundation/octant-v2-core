@@ -403,11 +403,7 @@ interface IMultistrategyVault {
 
     function FACTORY() external view returns (address);
     function apiVersion() external pure returns (string memory);
-    function assess_share_of_unrealised_losses(
-        address strategy,
-        uint256 currentDebt,
-        uint256 assetsNeeded
-    ) external view returns (uint256);
+    function assess_share_of_unrealised_losses(address strategy, uint256 assetsNeeded) external view returns (uint256);
 
     function profitMaxUnlockTime() external view returns (uint256);
     function fullProfitUnlockDate() external view returns (uint256);
