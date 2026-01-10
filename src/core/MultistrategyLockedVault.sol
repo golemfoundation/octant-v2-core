@@ -360,7 +360,7 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
     }
 
     /**
-     * @notice Withdraws assets with default parameters (maxLoss = 10000, default queue)
+     * @notice Withdraws assets with default parameters (maxLoss = 0, default queue)
      * @dev Overload to match Vyper's default parameters behavior
      *      Enforces custody withdrawal rules - requires active rage quit with cooldown passed
      * @param assets Amount of assets to withdraw
