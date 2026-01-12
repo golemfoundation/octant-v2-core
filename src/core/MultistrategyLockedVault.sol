@@ -146,7 +146,7 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
 
     /// @notice Grace period delay for cooldown changes
     /// @dev 14 days in seconds. Users have this time to rage quit under old terms
-    uint256 public constant RAGE_QUIT_COOLDOWN_CHANGE_DELAY = 14 days;
+    uint256 private constant RAGE_QUIT_COOLDOWN_CHANGE_DELAY = 14 days;
 
     /**
      * @dev Modifier to restrict access to regen governance only

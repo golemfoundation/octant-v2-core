@@ -23,6 +23,7 @@ contract LockedVaultTest is Test {
     address public fish = address(0x2);
     address public feeRecipient = address(0x3);
     address constant ZERO_ADDRESS = address(0);
+    uint256 internal constant RAGE_QUIT_COOLDOWN_CHANGE_DELAY = 14 days;
 
     uint256 public fishAmount = 10_000e18;
     uint256 public defaultProfitMaxUnlockTime = 7 days;
@@ -86,7 +87,7 @@ contract LockedVaultTest is Test {
         assertEq(vault.pendingRageQuitCooldownPeriod(), cooldownPeriod, "Pending period should be set");
 
         // Fast forward past delay period
-        vm.warp(block.timestamp + vault.RAGE_QUIT_COOLDOWN_CHANGE_DELAY() + 1);
+        vm.warp(block.timestamp + RAGE_QUIT_COOLDOWN_CHANGE_DELAY + 1);
 
         vault.finalizeRageQuitCooldownPeriodChange();
         assertEq(vault.rageQuitCooldownPeriod(), cooldownPeriod, "Rage quit cooldown period should be updated");
@@ -535,7 +536,7 @@ contract LockedVaultTest is Test {
         vm.stopPrank();
         vm.startPrank(gov);
         vault.proposeRageQuitCooldownPeriodChange(newCooldown);
-        vm.warp(block.timestamp + vault.RAGE_QUIT_COOLDOWN_CHANGE_DELAY() + 1);
+        vm.warp(block.timestamp + RAGE_QUIT_COOLDOWN_CHANGE_DELAY + 1);
         vault.finalizeRageQuitCooldownPeriodChange();
         vm.stopPrank();
 

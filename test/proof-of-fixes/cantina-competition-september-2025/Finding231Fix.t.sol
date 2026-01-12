@@ -19,6 +19,7 @@ contract Finding231Fix is Test {
     address internal governance = address(0x1);
     address internal feeRecipient = address(0x2);
     uint256 internal constant DEFAULT_PROFIT_MAX_UNLOCK = 7 days;
+    uint256 internal constant RAGE_QUIT_COOLDOWN_CHANGE_DELAY = 14 days;
     uint256 internal constant MAX_INT = type(uint256).max;
 
     function setUp() public {
@@ -51,7 +52,7 @@ contract Finding231Fix is Test {
         vault.proposeRageQuitCooldownPeriodChange(newPeriod);
 
         uint256 proposedAt = vault.rageQuitCooldownPeriodChangeTimestamp();
-        uint256 cancelTime = proposedAt + vault.RAGE_QUIT_COOLDOWN_CHANGE_DELAY() - 1;
+        uint256 cancelTime = proposedAt + RAGE_QUIT_COOLDOWN_CHANGE_DELAY - 1;
         vm.warp(cancelTime);
 
         vm.expectEmit(false, false, false, true);
@@ -72,7 +73,7 @@ contract Finding231Fix is Test {
         vault.proposeRageQuitCooldownPeriodChange(newPeriod);
 
         uint256 proposedAt = vault.rageQuitCooldownPeriodChangeTimestamp();
-        vm.warp(proposedAt + vault.RAGE_QUIT_COOLDOWN_CHANGE_DELAY());
+        vm.warp(proposedAt + RAGE_QUIT_COOLDOWN_CHANGE_DELAY);
 
         vm.expectRevert(IMultistrategyLockedVault.RageQuitCooldownPeriodChangeDelayElapsed.selector);
         vault.cancelRageQuitCooldownPeriodChange();
