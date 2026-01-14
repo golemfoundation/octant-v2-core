@@ -100,7 +100,7 @@ abstract contract BatchScript is Script {
         // Set the Safe API base URL and multisend address based on chain
         // Note: Safe API migrated to api.safe.global/tx-service/{network}/...
         if (chainId == 1) {
-            SAFE_API_BASE_URL = "https://api.safe.global/tx-service/mainnet/api/v1/safes/";
+            SAFE_API_BASE_URL = "https://api.safe.global/tx-service/eth/api/v1/safes/";
             SAFE_MULTISEND_ADDRESS = 0x40A2aCCbd92BCA938b02010E17A5b8929b49130D;
         } else if (chainId == 137) {
             SAFE_API_BASE_URL = "https://api.safe.global/tx-service/polygon/api/v1/safes/";
