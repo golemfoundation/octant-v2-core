@@ -4,10 +4,28 @@ out = "out"
 libs = ["dependencies"]
 evm_version = "prague"
 optimizer = true
-# Runs changed from 10M to 25k to fit code in EVM
-optimizer_runs = 5
+# Default runs target balanced gas/size; size-limited contracts override below.
+optimizer_runs = 1048576
+additional_compiler_profiles = [
+    { name = "enormous", optimizer = true, optimizer_runs = 1 },
+    { name = "gigantic", optimizer = true, optimizer_runs = 16 },
+    { name = "huge", optimizer = true, optimizer_runs = 256 },
+    { name = "large", optimizer = true, optimizer_runs = 4096 },
+    { name = "medium", optimizer = true, optimizer_runs = 65536 },
+]
+compilation_restrictions = [
+    { paths = "src/zodiac-core/vaults/Passport.sol", optimizer_runs = 1 },
+    { paths = "src/core/MultistrategyLockedVault.sol", optimizer_runs = 16 },
+    { paths = "src/core/MultistrategyVault.sol", optimizer_runs = 16 },
+    { paths = "src/regen/RegenStaker.sol", optimizer_runs = 16 },
+    { paths = "src/regen/RegenStakerWithoutDelegateSurrogateVotes.sol", optimizer_runs = 16 },
+    { paths = "src/guards/KeeperBotGuard.sol", optimizer_runs = 4096 },
+    { paths = "src/utils/routers-transformers/Trader.sol", optimizer_runs = 65536 },
+]
+
 via_ir = false
-solc = "0.8.30"
+solc = "0.8.33"
+auto_detect_solc = false
 verbosity = 3
 ast = true
 fs_permissions = [
@@ -18,6 +36,8 @@ fs_permissions = [
 build_info = true
 extra_output = ["storageLayout"]
 fuzz = { runs = 256, max_test_rejects = 65536, seed = "0xDEADC0DE" }
+deny = "warnings"
+ignored_error_codes = [2424, 3860, 4591, 5574, 8429, 9207]
 lint = { severity = ["high"], exclude_lints = ["erc20-unchecked-transfer", "unsafe-typecast", "incorrect-shift"] }
 
 

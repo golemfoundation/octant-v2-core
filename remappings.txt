@@ -4,7 +4,7 @@
 @tokenized-strategy-periphery/=dependencies/tokenized-strategy-periphery-3.0.2/src/
 abdk-libraries-solidity/=dependencies/abdk-libraries-solidity-3.2/
 erc4626-tests/=dependencies/erc4626-tests-0.0.0/
-forge-std/=dependencies/forge-std-1.9.7/src/
+forge-std/=dependencies/forge-std-1.14.0/src/
 hats-protocol/=dependencies/hats-protocol-1.0/src/
 kontrol-cheatcodes/=dependencies/kontrol-cheatcodes-v0.0.1/
 lib/ERC1155/=dependencies/hats-protocol-1.0/lib/ERC1155/

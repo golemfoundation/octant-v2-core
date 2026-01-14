@@ -350,6 +350,7 @@ contract Trader is ITransformer, Ownable, Pausable {
         spent = spent + saleValue;
 
         if (BASE == NATIVE_TOKEN) {
+            //slither-disable-next-line arbitrary-send-eth
             payable(swapper).transfer(saleValue);
         } else {
             IERC20(BASE).safeTransfer(swapper, saleValue);
