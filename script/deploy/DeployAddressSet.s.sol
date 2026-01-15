@@ -153,7 +153,7 @@ contract DeployAddressSet is Script, BatchScript {
         string memory envKey,
         bytes32 defaultSalt,
         string memory defaultLabel
-    ) internal returns (bytes32 salt, string memory label) {
+    ) internal view returns (bytes32 salt, string memory label) {
         label = vm.envOr(envKey, string(""));
         if (bytes(label).length == 0) {
             label = defaultLabel;
