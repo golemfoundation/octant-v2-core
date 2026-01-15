@@ -19,6 +19,8 @@ compilation_restrictions = [
     { paths = "src/core/MultistrategyVault.sol", optimizer_runs = 16 },
     { paths = "src/regen/RegenStaker.sol", optimizer_runs = 16 },
     { paths = "src/regen/RegenStakerWithoutDelegateSurrogateVotes.sol", optimizer_runs = 16 },
+    { paths = "src/mechanisms/TokenizedAllocationMechanism.sol", optimizer_runs = 16 },
+    { paths = "src/strategies/yieldSkimming/YieldSkimmingTokenizedStrategy.sol", optimizer_runs = 4096 },
     { paths = "src/guards/KeeperBotGuard.sol", optimizer_runs = 4096 },
     { paths = "src/utils/routers-transformers/Trader.sol", optimizer_runs = 65536 },
 ]
@@ -37,7 +39,7 @@ build_info = true
 extra_output = ["storageLayout"]
 fuzz = { runs = 256, max_test_rejects = 65536, seed = "0xDEADC0DE" }
 deny = "warnings"
-ignored_error_codes = [2424, 3860, 4591, 5574, 8429, 9207]
+ignored_error_codes = [2424, 3860, 4591, 5574, 8429, 9207, 9170]
 lint = { severity = ["high"], exclude_lints = ["erc20-unchecked-transfer", "unsafe-typecast", "incorrect-shift"] }
 
 
