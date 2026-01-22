@@ -862,7 +862,7 @@
             <tr>
               <td>SHUGrantPool Strategy</td>
               <td>Generate yield for public goods funding</td>
-              <td><strong>1M USDC</strong></td>
+              <td><strong>1.2M USDC</strong></td>
             </tr>
             <!-- /PARTNER -->
           </tbody>
@@ -875,14 +875,14 @@
 
       <!-- PREREQUISITES -->
       <section class="section" id="prerequisites">
-        <h2>Prerequisites (Pending Items)</h2>
-        <p>The following items must be resolved before executing the DAO proposal:</p>
+        <h2>Prerequisites (Resolved)</h2>
+        <p>All prerequisites have been resolved. The following addresses are configured:</p>
 
         <table>
           <thead>
             <tr>
               <th>Item</th>
-              <th>Status</th>
+              <th>Address</th>
               <th>Owner</th>
               <th>Notes</th>
             </tr>
@@ -891,28 +891,28 @@
             <!-- PARTNER: prerequisites_table -->
             <tr>
               <td>Dragon Funding Pool address</td>
-              <td class="status-pending">⏳ Pending</td>
+              <td class="status-deployed"><code>0x4B4505dEdE6408642511Fc0586b62676111e4904</code></td>
               <td>Shutter DAO</td>
-              <td>Strategy donation recipient</td>
+              <td>Strategy donation recipient - yield flows here</td>
             </tr>
             <tr>
               <td>Keeper Bot address</td>
-              <td class="status-pending">⏳ Pending</td>
+              <td class="status-deployed"><code>0x06c2c4dB3776D500636DE63e4F109386dCBa6Ae2</code></td>
               <td>Shutter DAO</td>
-              <td>Strategy keeper for harvesting</td>
+              <td>Dedicated EOA for calling report()</td>
             </tr>
             <tr>
               <td>Emergency Shutdown Admin address</td>
-              <td class="status-pending">⏳ Pending</td>
+              <td class="status-deployed"><code>0x36bD3044ab68f600f6d3e081056F34f2a58432c4</code></td>
               <td>Shutter DAO</td>
-              <td>Can shutdown strategy and perform emergency withdrawals</td>
+              <td>Treasury multisig - can shutdown and emergency withdraw</td>
             </tr>
             <!-- /PARTNER -->
           </tbody>
         </table>
 
-        <div class="callout callout-warning">
-          <p><strong>⚠️ Action Required:</strong> Update this document with actual addresses before submitting the proposal.</p>
+        <div class="callout callout-success">
+          <p><strong>All Prerequisites Resolved:</strong> Dragon Pool, Keeper Bot, and Emergency Admin addresses have been configured.</p>
         </div>
       </section>
 
@@ -950,13 +950,13 @@
               <td>Ethereum</td>
             </tr>
             <tr>
-              <td>Morpho Strategy Factory</td>
-              <td><a href="https://etherscan.io/address/0x052d20B0e0b141988bD32772C735085e45F357c1" class="address-link"><code class="address">0x052d20B0e0b141988bD32772C735085e45F357c1</code></a></td>
+              <td>Morpho Strategy Factory V2</td>
+              <td><a href="https://etherscan.io/address/0xd8Df22cB3c3876487961aC2500889664632674d7" class="address-link"><code class="address">0xd8Df22cB3c3876487961aC2500889664632674d7</code></a></td>
               <td>Ethereum</td>
             </tr>
             <tr>
-              <td>Tokenized Strategy</td>
-              <td><a href="https://etherscan.io/address/0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c" class="address-link"><code class="address">0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c</code></a></td>
+              <td>Tokenized Strategy V2</td>
+              <td><a href="https://etherscan.io/address/0xea648c313b497fECfBC629e73cB61Db34181F067" class="address-link"><code class="address">0xea648c313b497fECfBC629e73cB61Db34181F067</code></a></td>
               <td>Ethereum</td>
             </tr>
             <tr>
@@ -965,11 +965,21 @@
               <td>Ethereum</td>
             </tr>
             <tr>
-              <td>PaymentSplitter Factory</td>
-              <td><a href="https://etherscan.io/address/0x5711765E0756B45224fc1FdA1B41ab344682bBcb" class="address-link"><code class="address">0x5711765E0756B45224fc1FdA1B41ab344682bBcb</code></a></td>
+              <td>Dragon Funding Pool</td>
+              <td><a href="https://etherscan.io/address/0x4B4505dEdE6408642511Fc0586b62676111e4904" class="address-link"><code class="address">0x4B4505dEdE6408642511Fc0586b62676111e4904</code></a></td>
+              <td>Ethereum</td>
+            </tr>
+            <tr>
+              <td>Keeper Bot</td>
+              <td><a href="https://etherscan.io/address/0x06c2c4dB3776D500636DE63e4F109386dCBa6Ae2" class="address-link"><code class="address">0x06c2c4dB3776D500636DE63e4F109386dCBa6Ae2</code></a></td>
               <td>Ethereum</td>
             </tr>
             <!-- /PARTNER -->
+            <tr>
+              <td>SHUGrantPool Strategy (predicted)</td>
+              <td><a href="https://etherscan.io/address/0xC85d46B8954892495c9D9f19627e10a69D100CAB" class="address-link"><code class="address">0xC85d46B8954892495c9D9f19627e10a69D100CAB</code></a></td>
+              <td>Ethereum</td>
+            </tr>
           </tbody>
         </table>
       </section>
@@ -1166,19 +1176,20 @@
         <h3>Transaction Details</h3>
 
         <h4>Transaction 1: Deploy Strategy</h4>
-        <pre><code>Target:   0x052d20B0e0b141988bD32772C735085e45F357c1 (Morpho Strategy Factory)
-Function: createStrategy(string,address,address,address,address,bool,address)
-Selector: 0x31d89943
+        <pre><code>Target:   0xd8Df22cB3c3876487961aC2500889664632674d7 (Morpho Strategy Factory V2)
+Function: createStrategy(string,string,address,address,address,address,bool,address)
+Selector: 0xb414cb1f
 Value:    0
 
 Parameters:
   _name:                     "SHUGrantPool"
+  _symbol:                   "yvSHU"
   _management:               0x36bD3044ab68f600f6d3e081056F34f2a58432c4
-  _keeper:                   [KEEPER_ADDRESS] (dedicated bot)
-  _emergencyAdmin:           [EMERGENCY_ADMIN_ADDRESS]
-  _donationAddress:          [DRAGON_FUNDING_POOL_ADDRESS]
+  _keeper:                   0x06c2c4dB3776D500636DE63e4F109386dCBa6Ae2
+  _emergencyAdmin:           0x36bD3044ab68f600f6d3e081056F34f2a58432c4 (Treasury)
+  _donationAddress:          0x4B4505dEdE6408642511Fc0586b62676111e4904
   _enableBurning:            false
-  _tokenizedStrategyAddress: 0xb27064a2c51b8c5b39a5bb911ad34db039c3ab9c</code></pre>
+  _tokenizedStrategyAddress: 0xea648c313b497fECfBC629e73cB61Db34181F067</code></pre>
 
         <h4>Transaction 2: Approve USDC</h4>
         <pre><code>Target:   0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 (USDC)
@@ -1187,17 +1198,17 @@ Selector: 0x095ea7b3
 Value:    0
 
 Parameters:
-  spender: [STRATEGY_ADDRESS] (from Tx 1)
-  amount:  1000000000000 (1M USDC with 6 decimals)</code></pre>
+  spender: 0xC85d46B8954892495c9D9f19627e10a69D100CAB (CREATE2 predicted)
+  amount:  1200000000000 (1.2M USDC with 6 decimals)</code></pre>
 
         <h4>Transaction 3: Deposit USDC</h4>
-        <pre><code>Target:   [STRATEGY_ADDRESS] (from Tx 1)
+        <pre><code>Target:   0xC85d46B8954892495c9D9f19627e10a69D100CAB (CREATE2 predicted)
 Function: deposit(uint256,address)
 Selector: 0x6e553f65
 Value:    0
 
 Parameters:
-  assets:   1000000000000 (1M USDC with 6 decimals)
+  assets:   1200000000000 (1.2M USDC with 6 decimals)
   receiver: 0x36bD3044ab68f600f6d3e081056F34f2a58432c4 (Treasury)</code></pre>
 
         <h3>Generate Calldata</h3>
@@ -1209,7 +1220,7 @@ Parameters:
         <h2>Post-Deployment Operations</h2>
 
         <h3>Harvest Operation</h3>
-        <pre><code>Target:   [STRATEGY_ADDRESS]
+        <pre><code>Target:   0xC85d46B8954892495c9D9f19627e10a69D100CAB (predicted)
 Function: report()
 Selector: 0x2606a10b
 Value:    0
@@ -1221,7 +1232,7 @@ Note: Called by management or keeper to harvest yield.</code></pre>
         <h3>Emergency Operations</h3>
 
         <h4>Shutdown Strategy</h4>
-        <pre><code>Target:   [STRATEGY_ADDRESS]
+        <pre><code>Target:   0xC85d46B8954892495c9D9f19627e10a69D100CAB (predicted)
 Function: shutdownStrategy()
 Selector: 0xbe8f1668
 
@@ -1229,7 +1240,7 @@ Effect: Stops new deposits/mints, allows withdrawals.
 Access:  management or emergencyAdmin</code></pre>
 
         <h4>Emergency Withdraw</h4>
-        <pre><code>Target:   [STRATEGY_ADDRESS]
+        <pre><code>Target:   0xC85d46B8954892495c9D9f19627e10a69D100CAB (predicted)
 Function: emergencyWithdraw(uint256)
 Selector: 0x5312ea8e
 

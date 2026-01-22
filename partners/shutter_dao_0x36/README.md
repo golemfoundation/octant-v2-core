@@ -7,23 +7,32 @@ Shutter DAO 0x36 will integrate with Octant v2 through the **SHUGrantPool Strate
 
 | Component | Purpose | Capital |
 |-----------|---------|---------|
-| SHUGrantPool Strategy | Generate yield for public goods funding | 1M USDC |
+| SHUGrantPool Strategy | Generate yield for public goods funding | 1.2M USDC |
 
 > **Architecture Note**: The strategy IS the ERC-4626 vault. No MultistrategyVault wrapper is needed since only one strategy is approved by the DAO. This simplifies deployment, reduces gas costs, and eliminates unnecessary complexity.
 
 ---
 
-## Prerequisites (Pending Items)
+## Prerequisites
 
-The following items must be resolved before executing the DAO proposal:
+The following items have been resolved for the DAO proposal:
 
-| Item | Status | Owner | Notes |
-|------|--------|-------|-------|
-| Dragon Funding Pool address | ⏳ Pending | Shutter DAO | Strategy donation recipient |
-| Keeper Bot address | ⏳ Pending | Shutter DAO | Strategy keeper for harvesting |
-| Emergency Shutdown Admin address | ⏳ Pending | Shutter DAO | Can shutdown strategy and perform emergency withdrawals |
+| Item | Status | Address | Notes |
+|------|--------|---------|-------|
+| Dragon Funding Pool | Resolved | `0x4B4505dEdE6408642511Fc0586b62676111e4904` | Strategy donation recipient |
+| Keeper Bot | Resolved | `0x06c2c4dB3776D500636DE63e4F109386dCBa6Ae2` | Strategy keeper for harvesting |
+| Emergency Shutdown Admin | Resolved | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` | Treasury - can shutdown strategy and perform emergency withdrawals |
 
-> ⚠️ **Action Required**: Update this document with actual addresses before submitting the proposal.
+### V2 Contract Deployments
+
+The proposal uses **V2 contracts** with symbol parameter support (deployed 2025-01-22):
+
+| Contract | Address | Tx Hash |
+|----------|---------|---------|
+| MorphoCompounderStrategyFactory V2 | [`0xd8Df22cB3c3876487961aC2500889664632674d7`](https://etherscan.io/address/0xd8Df22cB3c3876487961aC2500889664632674d7) | [`0x21da599d...`](https://etherscan.io/tx/0x21da599d0259e3d4caf6f0510598630a66a290099afb105a43b0c2a4d96e7c08) |
+| YieldDonatingTokenizedStrategy V2 | [`0xea648c313b497fECfBC629e73cB61Db34181F067`](https://etherscan.io/address/0xea648c313b497fECfBC629e73cB61Db34181F067) | [`0xa8b239d1...`](https://etherscan.io/tx/0xa8b239d1302d650cd0dc2c3b0a2b9f1bdbb85d24e01d666f7b55c6cef76a87c4) |
+
+> **Note**: V1 contracts at `0x052d20B...` and `0xb27064A...` do not support the `symbol` parameter and are not used.
 
 ---
 
@@ -35,10 +44,9 @@ The following items must be resolved before executing the DAO proposal:
 | Azorius Module | [`0xAA6BfA174d2f803b517026E93DBBEc1eBa26258e`](https://etherscan.io/address/0xAA6BfA174d2f803b517026E93DBBEc1eBa26258e) | Ethereum |
 | SHU Token | [`0xe485E2f1bab389C08721B291f6b59780feC83Fd7`](https://etherscan.io/token/0xe485E2f1bab389C08721B291f6b59780feC83Fd7) | Ethereum |
 | USDC | [`0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48`](https://etherscan.io/token/0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48) | Ethereum |
-| Morpho Strategy Factory | [`0x052d20B0e0b141988bD32772C735085e45F357c1`](https://etherscan.io/address/0x052d20B0e0b141988bD32772C735085e45F357c1) | Ethereum |
-| Tokenized Strategy | [`0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c`](https://etherscan.io/address/0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c) | Ethereum |
+| Morpho Strategy Factory V2 | [`0xd8Df22cB3c3876487961aC2500889664632674d7`](https://etherscan.io/address/0xd8Df22cB3c3876487961aC2500889664632674d7) | Ethereum |
+| Tokenized Strategy V2 | [`0xea648c313b497fECfBC629e73cB61Db34181F067`](https://etherscan.io/address/0xea648c313b497fECfBC629e73cB61Db34181F067) | Ethereum |
 | Yearn Strategy USDC | [`0x074134A2784F4F66b6ceD6f68849382990Ff3215`](https://etherscan.io/address/0x074134A2784F4F66b6ceD6f68849382990Ff3215) | Ethereum |
-| PaymentSplitter Factory | [`0x5711765E0756B45224fc1FdA1B41ab344682bBcb`](https://etherscan.io/address/0x5711765E0756B45224fc1FdA1B41ab344682bBcb) | Ethereum |
 
 ---
 
@@ -50,7 +58,7 @@ The MorphoCompounderStrategy is itself an ERC-4626 vault (via Yearn's TokenizedS
 
 [**Yearn Strategy USDC**](https://etherscan.io/address/0x074134A2784F4F66b6ceD6f68849382990Ff3215) — Deposits into Morpho lending markets via Yearn's aggregator vault.
 
-The `MorphoCompounderStrategyFactory` at `0x052d20B...` deploys strategies that target the Yearn Strategy USDC vault, which optimizes across Morpho lending markets.
+The `MorphoCompounderStrategyFactory V2` at [`0xd8Df22cB...`](https://etherscan.io/address/0xd8Df22cB3c3876487961aC2500889664632674d7) deploys strategies that target the Yearn Strategy USDC vault, which optimizes across Morpho lending markets.
 
 
 ### Role Assignments
@@ -154,7 +162,7 @@ If the Decent UI doesn't support DELEGATECALL batching, submit as **3 individual
 
 | TX | Target | Function | Notes |
 |----|--------|----------|-------|
-| 0 | MorphoCompounderStrategyFactory | `createStrategy(name, mgmt, keeper, admin, donationAddr, false, tokenizedStrategy)` | Returns Strategy address |
+| 0 | MorphoCompounderStrategyFactory | `createStrategy(name, symbol, mgmt, keeper, admin, donationAddr, false, tokenizedStrategy)` | Returns Strategy address |
 | 1 | USDC | `approve(strategyAddress, amount)` | Use Strategy address from TX 0 |
 | 2 | Strategy | `deposit(amount, treasury)` | Deposits treasury USDC |
 
@@ -180,22 +188,23 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 
 | Field | Value |
 |-------|-------|
-| Title | `Deploy Octant SHUGrantPool Strategy and Deposit 1M USDC` |
+| Title | `Deploy Octant SHUGrantPool Strategy and Deposit 1.2M USDC` |
 | Description | See [Proposal Template](#proposal-template) below |
 
 **1.5 — Add Transaction 1: Deploy Strategy**
 
 | Field | Value |
 |-------|-------|
-| Target Contract | `0x052d20B0e0b141988bD32772C735085e45F357c1` (Morpho Strategy Factory) |
-| Function | `createStrategy(string,address,address,address,address,bool,address)` |
+| Target Contract | `0xd8Df22cB3c3876487961aC2500889664632674d7` (Morpho Strategy Factory V2) |
+| Function | `createStrategy(string,string,address,address,address,address,bool,address)` |
 | `_name` | `SHUGrantPool` |
+| `_symbol` | `yvSHU` |
 | `_management` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` |
-| `_keeper` | `[KEEPER_BOT_ADDRESS]` |
-| `_emergencyAdmin` | `[EMERGENCY_ADMIN_ADDRESS]` |
-| `_donationAddress` | `[DRAGON_FUNDING_POOL_ADDRESS]` |
+| `_keeper` | `0x06c2c4dB3776D500636DE63e4F109386dCBa6Ae2` |
+| `_emergencyAdmin` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` |
+| `_donationAddress` | `0x4B4505dEdE6408642511Fc0586b62676111e4904` |
 | `_enableBurning` | `false` |
-| `_tokenizedStrategyAddress` | `0xb27064a2c51b8c5b39a5bb911ad34db039c3ab9c` |
+| `_tokenizedStrategyAddress` | `0xea648c313b497fECfBC629e73cB61Db34181F067` |
 
 > **Note**: The strategy IS the ERC-4626 vault. No additional vault wrapper is needed.
 
@@ -206,7 +215,7 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 | Target Contract | `0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48` (USDC) |
 | Function | `approve(address spender, uint256 amount)` |
 | `spender` | `[STRATEGY_ADDRESS]` *(from Tx 1)* |
-| `amount` | `1000000000000` (1M USDC) |
+| `amount` | `1200000000000` (1.2M USDC) |
 
 **1.7 — Add Transaction 3: Deposit USDC**
 
@@ -214,7 +223,7 @@ Navigate to the Proposals tab and click the "Create Proposal" button.
 |-------|-------|
 | Target Contract | `[STRATEGY_ADDRESS]` *(from Tx 1)* |
 | Function | `deposit(uint256 assets, address receiver)` |
-| `assets` | `1000000000000` (1M USDC) |
+| `assets` | `1200000000000` (1.2M USDC) |
 | `receiver` | `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` |
 
 **1.8 — Submit Proposal**
@@ -262,7 +271,7 @@ After execution, verify:
 ## Summary
 
 This proposal deploys the Octant SHUGrantPool Strategy and deposits
-1,000,000 USDC from Shutter DAO 0x36 treasury as part of the Octant v2 pilot.
+1,200,000 USDC from Shutter DAO 0x36 treasury as part of the Octant v2 pilot.
 
 ## Background
 
@@ -272,8 +281,8 @@ See: [Octant v2 Pilot Proposal](https://shutternetwork.discourse.group/t/octant-
 ## Transactions (3 total)
 
 1. **Deploy Strategy**: Create ERC-4626 yield-donating strategy (yield → Dragon Funding Pool)
-2. **Approve USDC**: Allow Strategy to spend 1M USDC
-3. **Deposit USDC**: Deposit 1M USDC, receiving shares to Treasury
+2. **Approve USDC**: Allow Strategy to spend 1.2M USDC
+3. **Deposit USDC**: Deposit 1.2M USDC, receiving shares to Treasury
 
 ## Architecture
 
@@ -293,7 +302,8 @@ No additional vault wrapper is needed since only one strategy is approved by the
 ## Links
 
 - [Yearn Strategy USDC](https://etherscan.io/address/0x074134A2784F4F66b6ceD6f68849382990Ff3215)
-- [Morpho Strategy Factory](https://etherscan.io/address/0x052d20B0e0b141988bD32772C735085e45F357c1)
+- [Morpho Strategy Factory V2](https://etherscan.io/address/0xd8Df22cB3c3876487961aC2500889664632674d7)
+- [YieldDonatingTokenizedStrategy V2](https://etherscan.io/address/0xea648c313b497fECfBC629e73cB61Db34181F067)
 ```
 
 ### Prepared Calldata
@@ -304,10 +314,10 @@ Complete transaction calldata can be generated programmatically using the provid
 forge script partners/shutter_dao_0x36/script/GenerateProposalCalldata.s.sol --fork-url $ETH_RPC_URL -vvvv
 ```
 
-Before running, update the configuration in the script:
-- `DRAGON_FUNDING_POOL` — Actual Dragon Funding Pool address
-- `KEEPER_BOT` — Dedicated keeper EOA/bot address
-- `EMERGENCY_ADMIN` — Emergency shutdown admin address
+The script is configured with:
+- `DRAGON_FUNDING_POOL` — `0x4B4505dEdE6408642511Fc0586b62676111e4904`
+- `KEEPER_BOT` — `0x06c2c4dB3776D500636DE63e4F109386dCBa6Ae2`
+- `EMERGENCY_ADMIN` — `0x36bD3044ab68f600f6d3e081056F34f2a58432c4` (Treasury)
 
 The script outputs:
 - Precomputed CREATE2 address for Strategy
@@ -321,19 +331,20 @@ The script outputs:
 ### Transaction 1: Deploy Strategy
 
 ```
-Target:   0x052d20B0e0b141988bD32772C735085e45F357c1 (Morpho Strategy Factory)
-Function: createStrategy(string,address,address,address,address,bool,address)
-Selector: 0x31d89943
+Target:   0xd8Df22cB3c3876487961aC2500889664632674d7 (Morpho Strategy Factory V2)
+Function: createStrategy(string,string,address,address,address,address,bool,address)
+Selector: 0xb414cb1f
 Value:    0
 
 Parameters:
   _name:                     "SHUGrantPool"
+  _symbol:                   "yvSHU"
   _management:               0x36bD3044ab68f600f6d3e081056F34f2a58432c4
-  _keeper:                   [KEEPER_ADDRESS] (dedicated bot)
-  _emergencyAdmin:           [EMERGENCY_ADMIN_ADDRESS]
-  _donationAddress:          [DRAGON_FUNDING_POOL_ADDRESS]
+  _keeper:                   0x06c2c4dB3776D500636DE63e4F109386dCBa6Ae2
+  _emergencyAdmin:           0x36bD3044ab68f600f6d3e081056F34f2a58432c4
+  _donationAddress:          0x4B4505dEdE6408642511Fc0586b62676111e4904
   _enableBurning:            false
-  _tokenizedStrategyAddress: 0xb27064a2c51b8c5b39a5bb911ad34db039c3ab9c
+  _tokenizedStrategyAddress: 0xea648c313b497fECfBC629e73cB61Db34181F067
 ```
 
 ### Transaction 2: Approve USDC
@@ -346,7 +357,7 @@ Value:    0
 
 Parameters:
   spender: [STRATEGY_ADDRESS] (from Tx 1)
-  amount:  1000000000000 (1M USDC with 6 decimals)
+  amount:  1200000000000 (1.2M USDC with 6 decimals)
 ```
 
 ### Transaction 3: Deposit USDC
@@ -358,7 +369,7 @@ Selector: 0x6e553f65
 Value:    0
 
 Parameters:
-  assets:   1000000000000 (1M USDC with 6 decimals)
+  assets:   1200000000000 (1.2M USDC with 6 decimals)
   receiver: 0x36bD3044ab68f600f6d3e081056F34f2a58432c4 (Treasury)
 ```
 
@@ -420,7 +431,7 @@ Access:       management or emergencyAdmin
 
 | Function | Selector | Target | Purpose |
 |----------|----------|--------|---------|
-| `createStrategy(...)` | `0x31d89943` | Morpho Factory | Deploy strategy |
+| `createStrategy(...)` | `0xb414cb1f` | Morpho Factory | Deploy strategy |
 | `approve(address,uint256)` | `0x095ea7b3` | USDC | Allow spending |
 | `deposit(uint256,address)` | `0x6e553f65` | Strategy | Deposit funds |
 | `withdraw(uint256,address,address)` | `0xb460af94` | Strategy | Withdraw funds |
@@ -447,6 +458,119 @@ The strategy provides instant liquidity (no lockup). Withdrawals are straightfor
 2. Receive underlying USDC immediately
 
 The strategy will automatically unwind positions in Morpho markets as needed.
+
+---
+
+## Risk Disclosure
+
+### Emergency Withdrawal Loss Acceptance
+
+The strategy accepts up to 100% loss on emergency withdrawals via the `emergencyWithdraw()` function
+(`maxLoss = 10000 BPS`), callable only by the Emergency Admin (`emergencyAdmin` role).
+This emergency `maxLoss` value is hardcoded in the strategy contract and cannot be
+modified post-deployment by the Emergency Admin or any other party. This is necessary because:
+
+- Underlying Yearn/Morpho vaults may have temporary unrealized losses during market stress
+- Emergency admin can always withdraw, even at a loss, rather than being locked out
+- This ensures the Treasury is never permanently locked in the strategy
+
+Normal withdrawals through `withdraw()` default to `maxLoss = 0`, reverting if any loss would occur.
+Redemptions through `redeem()` default to `maxLoss = MAX_BPS` (accepts any loss). Users can specify
+explicit `maxLoss` parameters when calling the 4-argument versions of these functions.
+
+### Dependency Chain
+
+Yield flows through a multi-layer dependency chain:
+
+```
+Treasury USDC
+    |
+    v
+MorphoCompounderStrategy (SHUGrantPool)
+    |
+    v
+Yearn Strategy USDC (0x074134A2784F4F66b6ceD6f68849382990Ff3215)
+    |
+    v
+Morpho "Steakhouse" USDC Vault
+    |
+    v
+Morpho Lending Markets
+```
+
+**Risk implications:**
+- Smart contract risk across all layers (Octant, Yearn, Morpho)
+- Morpho market risk (borrower defaults, liquidation delays)
+- Oracle risk (price feed failures affecting Morpho)
+- Yearn operational risk (strategy mismanagement)
+
+The Treasury accepts these layered risks in exchange for optimized yield (~4-6% APY).
+
+### Failure Mode Analysis
+
+| Failure Mode | Impact | Recovery |
+|--------------|--------|----------|
+| CREATE2 address prediction mismatch | Proposal fails atomically | Re-submit with corrected prediction |
+| Azorius rejects DELEGATECALL | Batched proposal fails | Use 3 separate transactions |
+| Yearn vault shutdown | Deposit reverts | USDC stays in Treasury, no loss |
+| Morpho market pause | Withdrawals delayed | Wait for unpause or accept loss |
+| Strategy keeper offline | Yield not harvested | Management can call report() |
+
+**No permanent fund loss scenarios identified** - all failure modes are recoverable.
+
+### Fallback: Separate Transactions
+
+If the DAO UI (Decent/Fractal) doesn't support DELEGATECALL batching, the proposal can be executed as 3 separate transactions:
+
+1. **TX 1: Deploy Strategy**
+   - Target: MorphoCompounderStrategyFactory
+   - Note the returned strategy address from transaction logs
+
+2. **TX 2: Approve USDC**
+   - Target: USDC
+   - Spender: Strategy address from TX 1
+
+3. **TX 3: Deposit USDC**
+   - Target: Strategy address from TX 1
+   - Receiver: Treasury
+
+Each transaction must be executed sequentially and approved separately through DAO governance.
+
+See `partners/shutter_dao_0x36/test/ShutterDAOCalldataVerification.t.sol` for verification tests that cover both execution paths.
+
+---
+
+## Verification Scripts
+
+### Pre-Submission Verification
+
+Run the calldata verification test before submitting the DAO proposal:
+
+```bash
+ETH_RPC_URL=<mainnet-rpc> forge test --match-contract ShutterDAOCalldataVerification -vvv
+```
+
+This verifies:
+- CREATE2 predicted address matches actual factory deployment
+- Batched MultiSend calldata executes successfully
+- 3-transaction fallback works if needed
+
+### Post-Execution Verification
+
+After the DAO executes the proposal:
+
+```bash
+# Update STRATEGY_ADDRESS in the script, then run:
+forge script partners/shutter_dao_0x36/script/VerifyProposalExecution.s.sol \
+  --fork-url $ETH_RPC_URL -vvvv
+```
+
+This verifies:
+- Strategy deployed at expected address
+- Treasury holds expected shares (~1.2M)
+- Dragon Funding Pool set as yield recipient
+- Keeper configured correctly
+- Management roles assigned to Treasury
 
 ---
 
