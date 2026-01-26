@@ -37,12 +37,42 @@ abstract contract BaseStrategyFactory {
 
     // Custom errors
     error StrategyAlreadyExists(address existingStrategy);
+    error InvalidVault(address provided, address expected);
+    error InvalidAsset(address provided, address expected);
 
     // Note: Child factories should declare and emit their own `StrategyDeploy` event for compatibility.
 
     /**
-     * @notice Predict deployment address using strategy parameter hash
-     * @dev Combines parameter hash with deployer address for deterministic deployment
+     * @notice Compute the deterministic address where a strategy will be deployed
+     * @dev Must be implemented by child factories using their own bytecode
+     * @param _vault Vault address (e.g., Yearn vault, or factory constant for hardcoded vaults)
+     * @param _asset Underlying asset address (or factory constant for hardcoded assets)
+     * @param _name Strategy share token name
+     * @param _symbol Strategy share token symbol
+     * @param _management Management address
+     * @param _keeper Keeper address
+     * @param _emergencyAdmin Emergency admin address
+     * @param _donationAddress Donation address
+     * @param _enableBurning Enable burning flag
+     * @param _tokenizedStrategyAddress TokenizedStrategy implementation
+     * @param _deployer Address that will deploy the strategy
+     * @return Predicted strategy address
+     */
+    function computeStrategyAddress(
+        address _vault,
+        address _asset,
+        string memory _name,
+        string memory _symbol,
+        address _management,
+        address _keeper,
+        address _emergencyAdmin,
+        address _donationAddress,
+        bool _enableBurning,
+        address _tokenizedStrategyAddress,
+        address _deployer
+    ) public view virtual returns (address);
+
+    /**
      * @param _parameterHash Hash of all strategy parameters
      * @param deployer Deployer address
      * @param bytecode Deployment bytecode (including constructor args)

@@ -3,6 +3,7 @@ pragma solidity >=0.8.25;
 
 import { BaseStrategyFactory } from "./BaseStrategyFactory.sol";
 import { SkyCompounderStrategy } from "src/strategies/yieldDonating/SkyCompounderStrategy.sol";
+import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 
 /**
  * @title SkyCompounderStrategyFactory
@@ -12,8 +13,11 @@ import { SkyCompounderStrategy } from "src/strategies/yieldDonating/SkyCompounde
  * @dev Inherits deterministic deployment from BaseStrategyFactory
  */
 contract SkyCompounderStrategyFactory is BaseStrategyFactory {
-    /// @notice USDS reward address on mainnet
-    address constant USDS_REWARD_ADDRESS = 0x0650CAF159C5A49f711e8169D4336ECB9b950275;
+    /// @notice USDS staking/reward contract address on mainnet
+    address public constant USDS_REWARD_ADDRESS = 0x0650CAF159C5A49f711e8169D4336ECB9b950275;
+
+    /// @notice USDS token address on mainnet (staking token)
+    address public constant USDS = 0xdC035D45d973E3EC169d2276DDab16f1e407384F;
 
     /// @notice Emitted when a new SkyCompounderStrategy is deployed
     /// @param deployer Address that deployed the strategy
@@ -87,5 +91,55 @@ contract SkyCompounderStrategyFactory is BaseStrategyFactory {
 
         // Record the deployment
         _recordStrategy(_name, _donationAddress, strategyAddress);
+    }
+
+    /// @inheritdoc BaseStrategyFactory
+    function computeStrategyAddress(
+        address _vault,
+        address _asset,
+        string memory _name,
+        string memory _symbol,
+        address _management,
+        address _keeper,
+        address _emergencyAdmin,
+        address _donationAddress,
+        bool _enableBurning,
+        address _tokenizedStrategyAddress,
+        address _deployer
+    ) public view override returns (address) {
+        if (_vault != USDS_REWARD_ADDRESS) revert InvalidVault(_vault, USDS_REWARD_ADDRESS);
+        if (_asset != USDS) revert InvalidAsset(_asset, USDS);
+
+        bytes32 parameterHash = keccak256(
+            abi.encode(
+                USDS_REWARD_ADDRESS,
+                _name,
+                _symbol,
+                _management,
+                _keeper,
+                _emergencyAdmin,
+                _donationAddress,
+                _enableBurning,
+                _tokenizedStrategyAddress
+            )
+        );
+
+        bytes memory bytecode = abi.encodePacked(
+            type(SkyCompounderStrategy).creationCode,
+            abi.encode(
+                USDS_REWARD_ADDRESS,
+                _name,
+                _symbol,
+                _management,
+                _keeper,
+                _emergencyAdmin,
+                _donationAddress,
+                _enableBurning,
+                _tokenizedStrategyAddress
+            )
+        );
+
+        bytes32 finalSalt = keccak256(abi.encodePacked(parameterHash, _deployer));
+        return Create2.computeAddress(finalSalt, keccak256(bytecode));
     }
 }

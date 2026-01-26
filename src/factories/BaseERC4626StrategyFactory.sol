@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity >=0.8.25;
 
+import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 import { BaseStrategyFactory } from "src/factories/BaseStrategyFactory.sol";
 
 /**
@@ -90,6 +91,40 @@ abstract contract BaseERC4626StrategyFactory is BaseStrategyFactory {
      * @return The bytecode of the strategy contract (without constructor args)
      */
     function _getCreationCode() internal pure virtual returns (bytes memory);
+
+    /// @inheritdoc BaseStrategyFactory
+    function computeStrategyAddress(
+        address _vault,
+        address _asset,
+        string memory _name,
+        string memory _symbol,
+        address _management,
+        address _keeper,
+        address _emergencyAdmin,
+        address _donationAddress,
+        bool _enableBurning,
+        address _tokenizedStrategyAddress,
+        address _deployer
+    ) public view override returns (address) {
+        bytes memory constructorArgs = abi.encode(
+            _vault,
+            _asset,
+            _name,
+            _symbol,
+            _management,
+            _keeper,
+            _emergencyAdmin,
+            _donationAddress,
+            _enableBurning,
+            _tokenizedStrategyAddress
+        );
+
+        bytes32 parameterHash = keccak256(constructorArgs);
+        bytes memory bytecode = abi.encodePacked(_getCreationCode(), constructorArgs);
+
+        bytes32 finalSalt = keccak256(abi.encodePacked(parameterHash, _deployer));
+        return Create2.computeAddress(finalSalt, keccak256(bytecode));
+    }
 
     /**
      * @dev Internal function to deploy strategy with given parameters

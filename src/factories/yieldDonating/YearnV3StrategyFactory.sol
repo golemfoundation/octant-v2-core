@@ -3,6 +3,7 @@ pragma solidity >=0.8.25;
 
 import { BaseStrategyFactory } from "src/factories/BaseStrategyFactory.sol";
 import { YearnV3Strategy } from "src/strategies/yieldDonating/YearnV3Strategy.sol";
+import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 
 /**
  * @title YearnV3StrategyFactory
@@ -107,5 +108,54 @@ contract YearnV3StrategyFactory is BaseStrategyFactory {
 
         emit StrategyDeploy(_management, _donationAddress, strategyAddress, _name);
         return strategyAddress;
+    }
+
+    /// @inheritdoc BaseStrategyFactory
+    function computeStrategyAddress(
+        address _vault,
+        address _asset,
+        string memory _name,
+        string memory _symbol,
+        address _management,
+        address _keeper,
+        address _emergencyAdmin,
+        address _donationAddress,
+        bool _enableBurning,
+        address _tokenizedStrategyAddress,
+        address _deployer
+    ) public view override returns (address) {
+        bytes32 parameterHash = keccak256(
+            abi.encode(
+                _vault,
+                _asset,
+                _name,
+                _symbol,
+                _management,
+                _keeper,
+                _emergencyAdmin,
+                _donationAddress,
+                _enableBurning,
+                _tokenizedStrategyAddress
+            )
+        );
+
+        bytes memory bytecode = abi.encodePacked(
+            type(YearnV3Strategy).creationCode,
+            abi.encode(
+                _vault,
+                _asset,
+                _name,
+                _symbol,
+                _management,
+                _keeper,
+                _emergencyAdmin,
+                _donationAddress,
+                _enableBurning,
+                _tokenizedStrategyAddress
+            )
+        );
+
+        bytes32 finalSalt = keccak256(abi.encodePacked(parameterHash, _deployer));
+        return Create2.computeAddress(finalSalt, keccak256(bytecode));
     }
 }
