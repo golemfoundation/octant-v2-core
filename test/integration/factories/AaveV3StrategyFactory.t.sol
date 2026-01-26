@@ -78,6 +78,60 @@ contract AaveV3StrategyFactoryTest is BaseFactoryIntegrationTest {
         vm.label(TOKENIZED_STRATEGY_ADDRESS, "TokenizedStrategy");
     }
 
+    function _vault() internal pure override returns (address) {
+        return 0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e; // AAVE_ADDRESSES_PROVIDER
+    }
+
+    function _factoryValidatesVaultAsset() internal pure override returns (bool) {
+        return true;
+    }
+
+    function _computeStrategyAddress(
+        string memory name,
+        string memory symbol,
+        address mgmt,
+        address deployer
+    ) internal view override returns (address) {
+        return
+            factory.computeStrategyAddress(
+                0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e, // AAVE_ADDRESSES_PROVIDER
+                USDC,
+                name,
+                symbol,
+                mgmt,
+                keeper,
+                emergencyAdmin,
+                donationAddress,
+                false, // enableBurning
+                address(implementation),
+                deployer
+            );
+    }
+
+    function _computeStrategyAddressWithVault(
+        address vault,
+        address asset,
+        string memory name,
+        string memory symbol,
+        address mgmt,
+        address deployer
+    ) internal view override returns (address) {
+        return
+            factory.computeStrategyAddress(
+                vault,
+                asset,
+                name,
+                symbol,
+                mgmt,
+                keeper,
+                emergencyAdmin,
+                donationAddress,
+                false, // enableBurning
+                address(implementation),
+                deployer
+            );
+    }
+
     // ========== CONCRETE TESTS ==========
 
     /// @notice Test creating a strategy through the factory
@@ -98,5 +152,30 @@ contract AaveV3StrategyFactoryTest is BaseFactoryIntegrationTest {
     /// @notice Test for deterministic addressing and duplicate prevention
     function testDeterministicAddressingAave() public {
         _testDeterministicAddressing();
+    }
+
+    /// @notice Test computeStrategyAddress matches actual deployment
+    function testComputeStrategyAddressMatchesDeploymentAave() public {
+        _testComputeStrategyAddressMatchesDeployment("Aave Compute Test", "osAAVE_CT");
+    }
+
+    /// @notice Test computeStrategyAddress with different deployers
+    function testComputeStrategyAddressDifferentDeployersAave() public {
+        _testComputeStrategyAddressDifferentDeployers();
+    }
+
+    /// @notice Test computeStrategyAddress with different parameters
+    function testComputeStrategyAddressDifferentParamsAave() public {
+        _testComputeStrategyAddressDifferentParams();
+    }
+
+    /// @notice Test computeStrategyAddress reverts on invalid vault
+    function testComputeStrategyAddressInvalidVaultAave() public {
+        _testComputeStrategyAddressInvalidVault();
+    }
+
+    /// @notice Test computeStrategyAddress reverts on invalid asset
+    function testComputeStrategyAddressInvalidAssetAave() public {
+        _testComputeStrategyAddressInvalidAsset();
     }
 }

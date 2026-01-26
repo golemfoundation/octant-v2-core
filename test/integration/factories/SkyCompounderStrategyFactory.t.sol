@@ -79,6 +79,60 @@ contract SkyCompounderStrategyFactoryTest is BaseFactoryIntegrationTest {
         vm.label(TOKENIZED_STRATEGY_ADDRESS, "TokenizedStrategy");
     }
 
+    function _vault() internal pure override returns (address) {
+        return STAKING;
+    }
+
+    function _factoryValidatesVaultAsset() internal pure override returns (bool) {
+        return true;
+    }
+
+    function _computeStrategyAddress(
+        string memory name,
+        string memory symbol,
+        address mgmt,
+        address deployer
+    ) internal view override returns (address) {
+        return
+            factory.computeStrategyAddress(
+                STAKING,
+                USDS,
+                name,
+                symbol,
+                mgmt,
+                keeper,
+                emergencyAdmin,
+                donationAddress,
+                true, // enableBurning
+                address(tokenizedStrategy),
+                deployer
+            );
+    }
+
+    function _computeStrategyAddressWithVault(
+        address vault,
+        address asset,
+        string memory name,
+        string memory symbol,
+        address mgmt,
+        address deployer
+    ) internal view override returns (address) {
+        return
+            factory.computeStrategyAddress(
+                vault,
+                asset,
+                name,
+                symbol,
+                mgmt,
+                keeper,
+                emergencyAdmin,
+                donationAddress,
+                true, // enableBurning
+                address(tokenizedStrategy),
+                deployer
+            );
+    }
+
     // ========== CONCRETE TESTS ==========
 
     /// @notice Test creating a strategy through the factory
@@ -99,5 +153,30 @@ contract SkyCompounderStrategyFactoryTest is BaseFactoryIntegrationTest {
     /// @notice Test for deterministic addressing and duplicate prevention
     function testDeterministicAddressingSky() public {
         _testDeterministicAddressing();
+    }
+
+    /// @notice Test computeStrategyAddress matches actual deployment
+    function testComputeStrategyAddressMatchesDeploymentSky() public {
+        _testComputeStrategyAddressMatchesDeployment("Sky Compute Test", "osSKY_CT");
+    }
+
+    /// @notice Test computeStrategyAddress with different deployers
+    function testComputeStrategyAddressDifferentDeployersSky() public {
+        _testComputeStrategyAddressDifferentDeployers();
+    }
+
+    /// @notice Test computeStrategyAddress with different parameters
+    function testComputeStrategyAddressDifferentParamsSky() public {
+        _testComputeStrategyAddressDifferentParams();
+    }
+
+    /// @notice Test computeStrategyAddress reverts on invalid vault
+    function testComputeStrategyAddressInvalidVaultSky() public {
+        _testComputeStrategyAddressInvalidVault();
+    }
+
+    /// @notice Test computeStrategyAddress reverts on invalid asset
+    function testComputeStrategyAddressInvalidAssetSky() public {
+        _testComputeStrategyAddressInvalidAsset();
     }
 }

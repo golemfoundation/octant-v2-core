@@ -41,6 +41,15 @@ abstract contract BaseFactoryIntegrationTest is Test {
     /// @notice Returns the expected asset address for strategies
     function _asset() internal pure virtual returns (address);
 
+    /// @notice Returns the expected vault address for strategies (used by computeStrategyAddress)
+    function _vault() internal view virtual returns (address);
+
+    /// @notice Returns true if the factory validates vault/asset parameters
+    /// @dev Override to return true for factories with hardcoded vault/asset that validate inputs
+    function _factoryValidatesVaultAsset() internal pure virtual returns (bool) {
+        return false;
+    }
+
     /// @notice Returns the strategy symbol prefix
     function _strategySymbolPrefix() internal pure virtual returns (string memory);
 
@@ -59,6 +68,19 @@ abstract contract BaseFactoryIntegrationTest is Test {
 
     /// @notice Labels factory-specific addresses
     function _labelFactoryAddresses() internal virtual;
+
+    /// @notice Computes the strategy address using the factory's computeStrategyAddress function
+    /// @param name The strategy name
+    /// @param symbol The strategy symbol
+    /// @param mgmt The management address
+    /// @param deployer The deployer address
+    /// @return The computed strategy address
+    function _computeStrategyAddress(
+        string memory name,
+        string memory symbol,
+        address mgmt,
+        address deployer
+    ) internal view virtual returns (address);
 
     // ========== SHARED SETUP ==========
 
@@ -185,5 +207,108 @@ abstract contract BaseFactoryIntegrationTest is Test {
         vm.stopPrank();
 
         assertTrue(firstAddr != secondAddr, "Different params should create different address");
+    }
+
+    /// @notice Shared test: computeStrategyAddress matches actual deployment
+    /// @param vaultName The vault name to use
+    /// @param symbol The symbol to use
+    function _testComputeStrategyAddressMatchesDeployment(
+        string memory vaultName,
+        string memory symbol
+    ) internal virtual {
+        // Compute expected address before deployment
+        address expectedAddress = _computeStrategyAddress(vaultName, symbol, management, management);
+
+        // Deploy the strategy
+        vm.startPrank(management);
+        address actualAddress = _createStrategy(vaultName, symbol, management);
+        vm.stopPrank();
+
+        // Verify computed address matches actual deployment
+        assertEq(expectedAddress, actualAddress, "Computed address should match deployed address");
+    }
+
+    /// @notice Shared test: computeStrategyAddress with different deployers
+    function _testComputeStrategyAddressDifferentDeployers() internal virtual {
+        string memory vaultName = "Deployer Test Vault";
+        string memory symbol = string.concat(_strategySymbolPrefix(), "DEP");
+
+        address deployer1 = address(0x1111);
+        address deployer2 = address(0x2222);
+
+        // Compute addresses for different deployers
+        address addr1 = _computeStrategyAddress(vaultName, symbol, management, deployer1);
+        address addr2 = _computeStrategyAddress(vaultName, symbol, management, deployer2);
+
+        // Different deployers should result in different addresses
+        assertTrue(addr1 != addr2, "Different deployers should produce different addresses");
+    }
+
+    /// @notice Shared test: computeStrategyAddress with different parameters
+    function _testComputeStrategyAddressDifferentParams() internal virtual {
+        string memory symbol = string.concat(_strategySymbolPrefix(), "PARAM");
+
+        // Same params should give same address
+        address addr1 = _computeStrategyAddress("Same Vault", symbol, management, management);
+        address addr2 = _computeStrategyAddress("Same Vault", symbol, management, management);
+        assertEq(addr1, addr2, "Same params should produce same address");
+
+        // Different name should give different address
+        address addr3 = _computeStrategyAddress("Different Vault", symbol, management, management);
+        assertTrue(addr1 != addr3, "Different name should produce different address");
+
+        // Different symbol should give different address
+        address addr4 = _computeStrategyAddress("Same Vault", "DIFF", management, management);
+        assertTrue(addr1 != addr4, "Different symbol should produce different address");
+    }
+
+    /// @notice Shared test: computeStrategyAddress reverts on invalid vault (for factories with validation)
+    /// @dev Only call this for factories where _factoryValidatesVaultAsset() returns true
+    function _testComputeStrategyAddressInvalidVault() internal virtual {
+        require(_factoryValidatesVaultAsset(), "Factory does not validate vault/asset");
+
+        address invalidVault = address(0xDEAD);
+        string memory name = "Invalid Vault Test";
+        string memory symbol = string.concat(_strategySymbolPrefix(), "INV");
+
+        vm.expectRevert(abi.encodeWithSelector(BaseStrategyFactory.InvalidVault.selector, invalidVault, _vault()));
+
+        // Call computeStrategyAddress with invalid vault - this will need to be implemented
+        // by calling the factory's computeStrategyAddress directly with the invalid vault
+        _computeStrategyAddressWithVault(invalidVault, _asset(), name, symbol, management, management);
+    }
+
+    /// @notice Shared test: computeStrategyAddress reverts on invalid asset (for factories with validation)
+    /// @dev Only call this for factories where _factoryValidatesVaultAsset() returns true
+    function _testComputeStrategyAddressInvalidAsset() internal virtual {
+        require(_factoryValidatesVaultAsset(), "Factory does not validate vault/asset");
+
+        address invalidAsset = address(0xBEEF);
+        string memory name = "Invalid Asset Test";
+        string memory symbol = string.concat(_strategySymbolPrefix(), "INV");
+
+        vm.expectRevert(abi.encodeWithSelector(BaseStrategyFactory.InvalidAsset.selector, invalidAsset, _asset()));
+
+        _computeStrategyAddressWithVault(_vault(), invalidAsset, name, symbol, management, management);
+    }
+
+    /// @notice Helper to call computeStrategyAddress with custom vault/asset (for validation tests)
+    /// @dev Override in factories that need to test invalid vault/asset validation
+    function _computeStrategyAddressWithVault(
+        address vault,
+        address asset,
+        string memory name,
+        string memory symbol,
+        address mgmt,
+        address deployer
+    ) internal view virtual returns (address) {
+        // Default implementation - override in factory tests that validate vault/asset
+        vault;
+        asset;
+        name;
+        symbol;
+        mgmt;
+        deployer;
+        revert("Override _computeStrategyAddressWithVault for vault/asset validation tests");
     }
 }

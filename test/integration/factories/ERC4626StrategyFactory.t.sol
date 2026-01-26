@@ -440,4 +440,156 @@ contract ERC4626StrategyFactoryTest is Test {
         assertEq(deployerAddress, management, "Deployer should be tracked");
         assertEq(name, strategyName, "Name should match");
     }
+
+    // ========== COMPUTE STRATEGY ADDRESS TESTS ==========
+
+    /// @notice Test computeStrategyAddress matches actual deployment
+    function testComputeStrategyAddressMatchesDeployment() public {
+        string memory strategyName = "Compute Test Strategy";
+        string memory symbol = "osCT";
+
+        // Compute expected address before deployment
+        address expectedAddress = factory.computeStrategyAddress(
+            USDC_SPARK_VAULT,
+            USDC,
+            strategyName,
+            symbol,
+            management,
+            keeper,
+            emergencyAdmin,
+            donationAddress,
+            false,
+            address(implementation),
+            management
+        );
+
+        // Deploy the strategy
+        vm.startPrank(management);
+        address actualAddress = factory.createStrategy(
+            USDC_SPARK_VAULT,
+            USDC,
+            strategyName,
+            symbol,
+            management,
+            keeper,
+            emergencyAdmin,
+            donationAddress,
+            false,
+            address(implementation)
+        );
+        vm.stopPrank();
+
+        // Verify computed address matches actual deployment
+        assertEq(expectedAddress, actualAddress, "Computed address should match deployed address");
+    }
+
+    /// @notice Test computeStrategyAddress with different deployers produces different addresses
+    function testComputeStrategyAddressDifferentDeployers() public view {
+        string memory strategyName = "Deployer Test Strategy";
+        string memory symbol = "osDEP";
+
+        address deployer1 = address(0x1111);
+        address deployer2 = address(0x2222);
+
+        address addr1 = factory.computeStrategyAddress(
+            USDC_SPARK_VAULT,
+            USDC,
+            strategyName,
+            symbol,
+            management,
+            keeper,
+            emergencyAdmin,
+            donationAddress,
+            false,
+            address(implementation),
+            deployer1
+        );
+
+        address addr2 = factory.computeStrategyAddress(
+            USDC_SPARK_VAULT,
+            USDC,
+            strategyName,
+            symbol,
+            management,
+            keeper,
+            emergencyAdmin,
+            donationAddress,
+            false,
+            address(implementation),
+            deployer2
+        );
+
+        assertTrue(addr1 != addr2, "Different deployers should produce different addresses");
+    }
+
+    /// @notice Test computeStrategyAddress with different vaults produces different addresses
+    function testComputeStrategyAddressDifferentVaults() public view {
+        string memory strategyName = "Vault Test Strategy";
+
+        address addr1 = factory.computeStrategyAddress(
+            USDC_SPARK_VAULT,
+            USDC,
+            strategyName,
+            "osVT1",
+            management,
+            keeper,
+            emergencyAdmin,
+            donationAddress,
+            false,
+            address(implementation),
+            management
+        );
+
+        address addr2 = factory.computeStrategyAddress(
+            WETH_SPARK_VAULT,
+            WETH,
+            strategyName,
+            "osVT1",
+            management,
+            keeper,
+            emergencyAdmin,
+            donationAddress,
+            false,
+            address(implementation),
+            management
+        );
+
+        assertTrue(addr1 != addr2, "Different vaults should produce different addresses");
+    }
+
+    /// @notice Test computeStrategyAddress with same params produces same address
+    function testComputeStrategyAddressSameParams() public view {
+        string memory strategyName = "Same Params Strategy";
+        string memory symbol = "osSP";
+
+        address addr1 = factory.computeStrategyAddress(
+            USDC_SPARK_VAULT,
+            USDC,
+            strategyName,
+            symbol,
+            management,
+            keeper,
+            emergencyAdmin,
+            donationAddress,
+            false,
+            address(implementation),
+            management
+        );
+
+        address addr2 = factory.computeStrategyAddress(
+            USDC_SPARK_VAULT,
+            USDC,
+            strategyName,
+            symbol,
+            management,
+            keeper,
+            emergencyAdmin,
+            donationAddress,
+            false,
+            address(implementation),
+            management
+        );
+
+        assertEq(addr1, addr2, "Same params should produce same address");
+    }
 }

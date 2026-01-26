@@ -116,7 +116,7 @@ contract AaveV3StrategyFactory is BaseStrategyFactory {
         bytes32 parameterHash = keccak256(
             abi.encode(
                 AAVE_ADDRESSES_PROVIDER,
-                _asset,
+                USDC,
                 _name,
                 _symbol,
                 _management,
@@ -132,7 +132,7 @@ contract AaveV3StrategyFactory is BaseStrategyFactory {
             type(AaveV3Strategy).creationCode,
             abi.encode(
                 AAVE_ADDRESSES_PROVIDER,
-                _asset,
+                USDC,
                 _name,
                 _symbol,
                 _management,

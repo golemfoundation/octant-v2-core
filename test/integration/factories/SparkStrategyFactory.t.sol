@@ -75,6 +75,32 @@ contract SparkStrategyFactoryTest is BaseFactoryIntegrationTest {
         vm.label(SparkTestConfig.TOKENIZED_STRATEGY_ADDRESS, "TokenizedStrategy");
     }
 
+    function _vault() internal pure override returns (address) {
+        return SparkTestConfig.USDC_SPARK_VAULT;
+    }
+
+    function _computeStrategyAddress(
+        string memory name,
+        string memory symbol,
+        address mgmt,
+        address deployer
+    ) internal view override returns (address) {
+        return
+            factory.computeStrategyAddress(
+                SparkTestConfig.USDC_SPARK_VAULT,
+                SparkTestConfig.USDC,
+                name,
+                symbol,
+                mgmt,
+                keeper,
+                emergencyAdmin,
+                donationAddress,
+                false, // enableBurning
+                address(implementation),
+                deployer
+            );
+    }
+
     // ========== CONCRETE TESTS ==========
 
     /// @notice Test creating a strategy through the factory
@@ -137,5 +163,20 @@ contract SparkStrategyFactoryTest is BaseFactoryIntegrationTest {
         SparkStrategy strategy = SparkStrategy(strategyAddress);
         assertEq(strategy.targetVault(), SparkTestConfig.WETH_SPARK_VAULT, "Target vault incorrect");
         assertEq(IERC4626(strategyAddress).asset(), SparkTestConfig.WETH, "Asset incorrect");
+    }
+
+    /// @notice Test computeStrategyAddress matches actual deployment
+    function testComputeStrategyAddressMatchesDeploymentSpark() public {
+        _testComputeStrategyAddressMatchesDeployment("Spark Compute Test", "osSpark_CT");
+    }
+
+    /// @notice Test computeStrategyAddress with different deployers
+    function testComputeStrategyAddressDifferentDeployersSpark() public {
+        _testComputeStrategyAddressDifferentDeployers();
+    }
+
+    /// @notice Test computeStrategyAddress with different parameters
+    function testComputeStrategyAddressDifferentParamsSpark() public {
+        _testComputeStrategyAddressDifferentParams();
     }
 }

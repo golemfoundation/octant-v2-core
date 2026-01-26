@@ -117,7 +117,7 @@ contract MorphoCompounderStrategyFactory is BaseStrategyFactory {
         bytes32 parameterHash = keccak256(
             abi.encode(
                 YS_USDC,
-                _asset,
+                USDC,
                 _name,
                 _symbol,
                 _management,
@@ -133,7 +133,7 @@ contract MorphoCompounderStrategyFactory is BaseStrategyFactory {
             type(MorphoCompounderStrategy).creationCode,
             abi.encode(
                 YS_USDC,
-                _asset,
+                USDC,
                 _name,
                 _symbol,
                 _management,

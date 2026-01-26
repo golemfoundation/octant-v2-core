@@ -74,6 +74,60 @@ contract LidoStrategyFactoryTest is BaseFactoryIntegrationTest {
         vm.label(TOKENIZED_STRATEGY_ADDRESS, "TokenizedStrategy");
     }
 
+    function _vault() internal pure override returns (address) {
+        return WSTETH;
+    }
+
+    function _factoryValidatesVaultAsset() internal pure override returns (bool) {
+        return true;
+    }
+
+    function _computeStrategyAddress(
+        string memory name,
+        string memory symbol,
+        address mgmt,
+        address deployer
+    ) internal view override returns (address) {
+        return
+            factory.computeStrategyAddress(
+                WSTETH,
+                WSTETH,
+                name,
+                symbol,
+                mgmt,
+                keeper,
+                emergencyAdmin,
+                donationAddress,
+                false, // enableBurning
+                address(implementation),
+                deployer
+            );
+    }
+
+    function _computeStrategyAddressWithVault(
+        address vault,
+        address asset,
+        string memory name,
+        string memory symbol,
+        address mgmt,
+        address deployer
+    ) internal view override returns (address) {
+        return
+            factory.computeStrategyAddress(
+                vault,
+                asset,
+                name,
+                symbol,
+                mgmt,
+                keeper,
+                emergencyAdmin,
+                donationAddress,
+                false, // enableBurning
+                address(implementation),
+                deployer
+            );
+    }
+
     // ========== CONCRETE TESTS ==========
 
     /// @notice Test creating a strategy through the factory
@@ -94,5 +148,30 @@ contract LidoStrategyFactoryTest is BaseFactoryIntegrationTest {
     /// @notice Test for deterministic addressing and duplicate prevention
     function testDeterministicAddressingLido() public {
         _testDeterministicAddressing();
+    }
+
+    /// @notice Test computeStrategyAddress matches actual deployment
+    function testComputeStrategyAddressMatchesDeploymentLido() public {
+        _testComputeStrategyAddressMatchesDeployment("Lido Compute Test", "osLIDO_CT");
+    }
+
+    /// @notice Test computeStrategyAddress with different deployers
+    function testComputeStrategyAddressDifferentDeployersLido() public {
+        _testComputeStrategyAddressDifferentDeployers();
+    }
+
+    /// @notice Test computeStrategyAddress with different parameters
+    function testComputeStrategyAddressDifferentParamsLido() public {
+        _testComputeStrategyAddressDifferentParams();
+    }
+
+    /// @notice Test computeStrategyAddress reverts on invalid vault
+    function testComputeStrategyAddressInvalidVaultLido() public {
+        _testComputeStrategyAddressInvalidVault();
+    }
+
+    /// @notice Test computeStrategyAddress reverts on invalid asset
+    function testComputeStrategyAddressInvalidAssetLido() public {
+        _testComputeStrategyAddressInvalidAsset();
     }
 }
