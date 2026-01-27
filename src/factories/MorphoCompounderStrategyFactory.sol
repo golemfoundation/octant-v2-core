@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity >=0.8.25;
 
-import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 import { MorphoCompounderStrategy } from "src/strategies/yieldDonating/MorphoCompounderStrategy.sol";
 import { BaseStrategyFactory } from "src/factories/BaseStrategyFactory.sol";
 
@@ -145,7 +144,6 @@ contract MorphoCompounderStrategyFactory is BaseStrategyFactory {
             )
         );
 
-        bytes32 finalSalt = keccak256(abi.encodePacked(parameterHash, _deployer));
-        return Create2.computeAddress(finalSalt, keccak256(bytecode));
+        return _predictStrategyAddress(parameterHash, _deployer, bytecode);
     }
 }

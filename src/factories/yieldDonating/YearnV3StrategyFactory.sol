@@ -3,7 +3,6 @@ pragma solidity >=0.8.25;
 
 import { BaseStrategyFactory } from "src/factories/BaseStrategyFactory.sol";
 import { YearnV3Strategy } from "src/strategies/yieldDonating/YearnV3Strategy.sol";
-import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 
 /**
  * @title YearnV3StrategyFactory
@@ -155,7 +154,6 @@ contract YearnV3StrategyFactory is BaseStrategyFactory {
             )
         );
 
-        bytes32 finalSalt = keccak256(abi.encodePacked(parameterHash, _deployer));
-        return Create2.computeAddress(finalSalt, keccak256(bytecode));
+        return _predictStrategyAddress(parameterHash, _deployer, bytecode);
     }
 }

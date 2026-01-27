@@ -78,40 +78,20 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
 
         string memory vaultSymbol = "osMORPHO";
 
-        // Generate parameter hash for prediction
-        bytes32 parameterHash = keccak256(
-            abi.encode(
-                0x074134A2784F4F66b6ceD6f68849382990Ff3215, // YS_USDC
-                0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, // USDC
-                vaultSharesName,
-                vaultSymbol,
-                management,
-                keeper,
-                emergencyAdmin,
-                donationAddress,
-                false, // enableBurning
-                address(implementation)
-            )
+        // Predict address using computeStrategyAddress
+        address expectedStrategyAddress = factory.computeStrategyAddress(
+            0x074134A2784F4F66b6ceD6f68849382990Ff3215, // YS_USDC (vault)
+            0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, // USDC (asset)
+            vaultSharesName,
+            vaultSymbol,
+            management,
+            keeper,
+            emergencyAdmin,
+            donationAddress,
+            false, // enableBurning
+            address(implementation),
+            management // deployer
         );
-
-        // Build the bytecode for address prediction
-        bytes memory bytecode = abi.encodePacked(
-            type(MorphoCompounderStrategy).creationCode,
-            abi.encode(
-                0x074134A2784F4F66b6ceD6f68849382990Ff3215, // YS_USDC
-                0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, // USDC
-                vaultSharesName,
-                vaultSymbol,
-                management,
-                keeper,
-                emergencyAdmin,
-                donationAddress,
-                false, // enableBurning
-                address(implementation)
-            )
-        );
-
-        address expectedStrategyAddress = factory.predictStrategyAddress(parameterHash, management, bytecode);
 
         // Create a strategy and check events
         vm.startPrank(management);

@@ -3,7 +3,6 @@ pragma solidity >=0.8.25;
 
 import { BaseStrategyFactory } from "./BaseStrategyFactory.sol";
 import { SkyCompounderStrategy } from "src/strategies/yieldDonating/SkyCompounderStrategy.sol";
-import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 
 /**
  * @title SkyCompounderStrategyFactory
@@ -139,7 +138,6 @@ contract SkyCompounderStrategyFactory is BaseStrategyFactory {
             )
         );
 
-        bytes32 finalSalt = keccak256(abi.encodePacked(parameterHash, _deployer));
-        return Create2.computeAddress(finalSalt, keccak256(bytecode));
+        return _predictStrategyAddress(parameterHash, _deployer, bytecode);
     }
 }

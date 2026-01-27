@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity >=0.8.25;
 
-import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 import { BaseStrategyFactory } from "src/factories/BaseStrategyFactory.sol";
 
 /**
@@ -122,8 +121,7 @@ abstract contract BaseERC4626StrategyFactory is BaseStrategyFactory {
         bytes32 parameterHash = keccak256(constructorArgs);
         bytes memory bytecode = abi.encodePacked(_getCreationCode(), constructorArgs);
 
-        bytes32 finalSalt = keccak256(abi.encodePacked(parameterHash, _deployer));
-        return Create2.computeAddress(finalSalt, keccak256(bytecode));
+        return _predictStrategyAddress(parameterHash, _deployer, bytecode);
     }
 
     /**
