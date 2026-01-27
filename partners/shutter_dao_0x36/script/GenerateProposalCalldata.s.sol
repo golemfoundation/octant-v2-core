@@ -7,7 +7,6 @@ import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import { IMorphoCompounderStrategyFactoryV1 } from "src/interfaces/IMorphoCompounderStrategyFactoryV1.sol";
 import { MorphoCompounderStrategy } from "src/strategies/yieldDonating/MorphoCompounderStrategy.sol";
-import { BaseStrategyFactory } from "src/factories/BaseStrategyFactory.sol";
 
 import {
     USDC_MAINNET,
@@ -99,7 +98,7 @@ contract GenerateProposalCalldata is Script {
         bytes32 bytecodeHash = keccak256(strategyBytecode);
         console.log("Strategy Bytecode Hash:", vm.toString(bytecodeHash));
 
-        address predictedAddress = BaseStrategyFactory(MORPHO_STRATEGY_FACTORY).predictStrategyAddress(
+        address predictedAddress = IMorphoCompounderStrategyFactoryV1(MORPHO_STRATEGY_FACTORY).predictStrategyAddress(
             parameterHash,
             SHUTTER_TREASURY,
             strategyBytecode

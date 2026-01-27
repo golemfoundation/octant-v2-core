@@ -8,7 +8,6 @@ import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 
 import { MorphoCompounderStrategy } from "src/strategies/yieldDonating/MorphoCompounderStrategy.sol";
 import { IMorphoCompounderStrategyFactoryV1 } from "src/interfaces/IMorphoCompounderStrategyFactoryV1.sol";
-import { BaseStrategyFactory } from "src/factories/BaseStrategyFactory.sol";
 
 import {
     USDC_MAINNET,
@@ -130,7 +129,7 @@ contract VerifyProposalExecution is Script {
             )
         );
 
-        return BaseStrategyFactory(MORPHO_STRATEGY_FACTORY).predictStrategyAddress(
+        return IMorphoCompounderStrategyFactoryV1(MORPHO_STRATEGY_FACTORY).predictStrategyAddress(
             parameterHash, SHUTTER_TREASURY, strategyBytecode
         );
     }

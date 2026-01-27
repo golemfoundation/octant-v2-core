@@ -99,8 +99,10 @@ contract ShutterDAOCalldataVerificationTest is Test {
             )
         );
 
-        // Predict address using local bytecode
-        address predictedAddress = factory.predictStrategyAddress(parameterHash, SHUTTER_TREASURY, strategyBytecode);
+        // Predict address using local bytecode (V1 interface)
+        address predictedAddress = IMorphoCompounderStrategyFactoryV1(address(factory)).predictStrategyAddress(
+            parameterHash, SHUTTER_TREASURY, strategyBytecode
+        );
         console2.log("Predicted (local bytecode):", predictedAddress);
 
         // Deploy via factory to get actual address
