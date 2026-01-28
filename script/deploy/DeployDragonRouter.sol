@@ -5,8 +5,8 @@ import "forge-std/Test.sol";
 import { DeploySplitChecker } from "./DeploySplitChecker.sol";
 /**
  * @title DeployDragonRouter
- * @notice Script to deploy the DragonRouter with transparent proxy pattern
- * @dev Uses OpenZeppelin Upgrades plugin to handle proxy deployment
+ * @notice Script to wire a pre-deployed DragonRouter and deploy SplitChecker
+ * @dev Reads DragonRouter implementation/proxy addresses from env; does not deploy DragonRouter
  */
 
 contract DeployDragonRouter is DeploySplitChecker {
@@ -18,8 +18,10 @@ contract DeployDragonRouter is DeploySplitChecker {
     function deploy() public virtual override {
         // First deploy SplitChecker
         DeploySplitChecker.deploy();
-        dragonRouterSingleton = vm.envAddress("DRAGON_ROUTER_IMPLEMENTATION");
-        dragonRouterProxy = vm.envAddress("DRAGON_ROUTER_ADDRESS");
+        dragonRouterSingleton = vm.envOr("DRAGON_ROUTER_IMPLEMENTATION", address(0));
+        require(dragonRouterSingleton != address(0), "DRAGON_ROUTER_IMPLEMENTATION not set");
+        dragonRouterProxy = vm.envOr("DRAGON_ROUTER_ADDRESS", address(0));
+        require(dragonRouterProxy != address(0), "DRAGON_ROUTER_ADDRESS not set");
 
         // Log deployment info
         // console2.log("DragonRouter Singleton deployed at:", address(dragonRouterSingleton));

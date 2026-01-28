@@ -10,6 +10,7 @@ import { MockModule } from "test/mocks/zodiac-core/MockModule.sol";
 import { MockSafe } from "test/mocks/zodiac-core/MockSafe.sol";
 import { MockLinearAllowance } from "test/mocks/zodiac-core/MockLinearAllowance.sol";
 import { MockSafeDragonRouter } from "test/mocks/zodiac-core/MockSafeDragonRouter.sol";
+import { MockDragonRouterSetup } from "test/mocks/zodiac-core/MockDragonRouterSetup.sol";
 import { MultiSendCallOnly } from "src/utils/libs/Safe/MultiSendCallOnly.sol";
 import { SplitChecker } from "src/zodiac-core/SplitChecker.sol";
 
@@ -65,6 +66,34 @@ contract ModuleProxyFactoryTest is BaseTest {
     function setupFailsWithZeroDragonRouter() public {
         vm.expectRevert("ZeroAddress");
         new ModuleProxyFactory(governance, regenGovernance, metapool, splitChecker, address(0));
+    }
+
+    function testDeployDragonRouterInitializesProxy() public {
+        MockDragonRouterSetup mockImplementation = new MockDragonRouterSetup();
+        ModuleProxyFactory localFactory = new ModuleProxyFactory(
+            governance,
+            regenGovernance,
+            metapool,
+            splitCheckerImpl,
+            address(mockImplementation)
+        );
+
+        address[] memory localStrategies = new address[](2);
+        localStrategies[0] = makeAddr("strategy1");
+        localStrategies[1] = makeAddr("strategy2");
+
+        address payable proxy = localFactory.deployDragonRouter(owner, localStrategies, opexVault, 1234);
+
+        MockDragonRouterSetup deployed = MockDragonRouterSetup(proxy);
+
+        assertEq(deployed.owner(), owner, "Owner not set");
+        assertEq(deployed.governance(), governance, "Governance not set");
+        assertEq(deployed.regenGovernance(), regenGovernance, "Regen governance not set");
+        assertEq(deployed.splitChecker(), localFactory.SPLIT_CHECKER(), "SplitChecker not set");
+        assertEq(deployed.opexVault(), opexVault, "Opex vault not set");
+        assertEq(deployed.metapool(), metapool, "Metapool not set");
+        assertEq(deployed.strategiesLength(), localStrategies.length, "Strategies length not set");
+        assertEq(deployed.strategiesHash(), keccak256(abi.encode(localStrategies)), "Strategies hash mismatch");
     }
 
     function testSplitCheckerDeployedAtExpectedAddress() public view {
