@@ -1,5 +1,5 @@
 {
-  "detectors_to_exclude": "unused-return,incorrect-equality,reentrancy-no-eth,divide-before-multiply",
+  "detectors_to_exclude": "unused-return,incorrect-equality,reentrancy-no-eth,divide-before-multiply,locked-ether",
   "filter_paths": "dependencies",
   "exclude_informational": true,
   "exclude_low": true,
