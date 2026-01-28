@@ -29,7 +29,7 @@ contract MockStrategySkimming is BaseStrategy {
         address _management,
         address _keeper,
         address _emergencyAdmin,
-        address _donationAddress,
+        address _dragonRouter,
         address _tokenizedStrategyAddress
     )
         BaseStrategy(
@@ -39,7 +39,7 @@ contract MockStrategySkimming is BaseStrategy {
             _management,
             _keeper,
             _emergencyAdmin,
-            _donationAddress,
+            _dragonRouter,
             false,
             _tokenizedStrategyAddress
         )

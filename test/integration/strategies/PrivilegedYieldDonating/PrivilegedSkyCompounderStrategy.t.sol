@@ -74,7 +74,7 @@ contract PrivilegedSkyCompounderStrategyTest is BasePrivilegedYieldDonatingInteg
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             true, // enableBurning
             address(implementation)
         );
@@ -93,7 +93,7 @@ contract PrivilegedSkyCompounderStrategyTest is BasePrivilegedYieldDonatingInteg
         vm.label(management, "Management");
         vm.label(keeper, "Keeper");
         vm.label(emergencyAdmin, "Emergency Admin");
-        vm.label(donationAddress, "Donation Address");
+        vm.label(dragonRouter, "DragonRouter");
         vm.label(user, "Test User");
         vm.label(privilegedUser, "Privileged User");
         vm.label(nonPrivilegedUser, "Non-Privileged User");

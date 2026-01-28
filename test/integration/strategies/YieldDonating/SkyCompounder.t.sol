@@ -17,8 +17,8 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
     SkyCompounderStrategy public strategy;
     SkyCompounderStrategyFactory public factory;
 
-    // Donation recipient for transfer tests
-    address public donationRecipient = address(0x5678);
+    // DragonRouter recipient for transfer tests
+    address public dragonRouterRecipient = address(0x5678);
 
     // ========== CONFIGURATION OVERRIDES ==========
 
@@ -77,7 +77,7 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             true, // enableBurning
             address(implementation)
         );
@@ -96,7 +96,7 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         vm.label(management, "Management");
         vm.label(keeper, "Keeper");
         vm.label(emergencyAdmin, "Emergency Admin");
-        vm.label(donationAddress, "Donation Address");
+        vm.label(dragonRouter, "DragonRouter");
         vm.label(user, "Test User");
     }
 
@@ -113,13 +113,13 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         assertEq(strategy.useUniV3(), false, "Use UniV3 should default to false");
 
         // Verify that the strategy was recorded in the factory
-        (address deployerAddress, , string memory name, address stratDonationAddress) = factory.strategies(
+        (address deployerAddress, , string memory name, address stratDragonRouterAddress) = factory.strategies(
             management,
             0
         );
         assertEq(deployerAddress, management, "Deployer address incorrect in factory");
         assertEq(name, _strategyName(), "Vault shares name incorrect in factory");
-        assertEq(stratDonationAddress, donationAddress, "Donation address incorrect in factory");
+        assertEq(stratDragonRouterAddress, dragonRouter, "DragonRouter incorrect in factory");
     }
 
     function testDepositSky() public {
@@ -177,7 +177,7 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         vm.stopPrank();
 
         assertEq(assetsReceived, depositAmount, "User should only receive original deposit");
-        assertEq(vault.balanceOf(donationAddress), profitAmount, "Donation address should receive profit in shares");
+        assertEq(vault.balanceOf(dragonRouter), profitAmount, "DragonRouter should receive profit in shares");
     }
 
     /// @notice Test the harvesting functionality
@@ -397,8 +397,8 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         assertApproxEqRel(assetsReceived, depositAmount, 0.05e18, "User should receive approximately original deposit");
     }
 
-    /// @notice Test profit cycle with UniswapV2 and verify profits are minted to donation address
-    function testUniswapV2ProfitDonation() public {
+    /// @notice Test profit cycle with UniswapV2 and verify profits are minted to dragonRouter
+    function testUniswapV2ProfitDragonRouter() public {
         uint256 depositAmount = 5000e18;
 
         vm.startPrank(management);
@@ -420,7 +420,7 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         vm.roll(block.number + 6500 * 45);
 
         uint256 totalAssetsBefore = vault.totalAssets();
-        uint256 donationSharesBefore = vault.balanceOf(donationAddress);
+        uint256 dragonRouterSharesBefore = vault.balanceOf(dragonRouter);
 
         vm.startPrank(management);
         uint256 claimableRewardsBefore = strategy.claimableRewards();
@@ -447,11 +447,16 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         uint256 totalAssetsAfter = vault.totalAssets();
         assertGt(totalAssetsAfter, totalAssetsBefore, "Total assets should increase after report");
 
-        uint256 donationSharesAfter = vault.balanceOf(donationAddress);
-        assertGt(donationSharesAfter, donationSharesBefore, "Donation address should receive shares from profit");
+        uint256 dragonRouterSharesAfter = vault.balanceOf(dragonRouter);
+        assertGt(dragonRouterSharesAfter, dragonRouterSharesBefore, "DragonRouter should receive shares from profit");
 
-        uint256 donationSharesIncrease = donationSharesAfter - donationSharesBefore;
-        assertApproxEqRel(donationSharesIncrease, profit, 0.01e18, "Donation shares increase should match profit");
+        uint256 dragonRouterSharesIncrease = dragonRouterSharesAfter - dragonRouterSharesBefore;
+        assertApproxEqRel(
+            dragonRouterSharesIncrease,
+            profit,
+            0.01e18,
+            "DragonRouter shares increase should match profit"
+        );
 
         vm.startPrank(user);
         uint256 userShares = vault.balanceOf(user);
@@ -460,15 +465,15 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
 
         assertApproxEqRel(assetsReceived, depositAmount, 0.05e18, "User should receive approximately original deposit");
 
-        vm.startPrank(donationAddress);
-        uint256 donationAssets = vault.redeem(donationSharesAfter, donationAddress, donationAddress);
+        vm.startPrank(dragonRouter);
+        uint256 dragonRouterAssets = vault.redeem(dragonRouterSharesAfter, dragonRouter, dragonRouter);
         vm.stopPrank();
 
-        assertGt(donationAssets, 0, "Donation address should receive assets from profit");
+        assertGt(dragonRouterAssets, 0, "DragonRouter should receive assets from profit");
     }
 
-    /// @notice Test donation shares can be transferred to another address
-    function testDonationSharesTransfer() public {
+    /// @notice Test dragonRouter shares can be transferred to another address
+    function testDragonRouterSharesTransfer() public {
         uint256 depositAmount = 5000e18;
 
         vm.startPrank(management);
@@ -501,28 +506,28 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
 
         assertGt(profit, 0, "Profit should be greater than 0");
 
-        uint256 donationShares = vault.balanceOf(donationAddress);
-        assertEq(donationShares, profit, "Donation address should receive shares equal to profit");
+        uint256 dragonRouterShares = vault.balanceOf(dragonRouter);
+        assertEq(dragonRouterShares, profit, "DragonRouter should receive shares equal to profit");
 
-        vm.label(donationRecipient, "Donation Recipient");
+        vm.label(dragonRouterRecipient, "DragonRouter Recipient");
 
-        uint256 sharesAmountToTransfer = donationShares / 2;
-        vm.startPrank(donationAddress);
-        vault.transfer(donationRecipient, sharesAmountToTransfer);
+        uint256 sharesAmountToTransfer = dragonRouterShares / 2;
+        vm.startPrank(dragonRouter);
+        vault.transfer(dragonRouterRecipient, sharesAmountToTransfer);
         vm.stopPrank();
 
-        uint256 donationAddressSharesAfterTransfer = vault.balanceOf(donationAddress);
-        uint256 recipientShares = vault.balanceOf(donationRecipient);
+        uint256 dragonRouterSharesAfterTransfer = vault.balanceOf(dragonRouter);
+        uint256 recipientShares = vault.balanceOf(dragonRouterRecipient);
 
         assertEq(
-            donationAddressSharesAfterTransfer,
-            donationShares - sharesAmountToTransfer,
-            "Donation address should have correct remaining shares"
+            dragonRouterSharesAfterTransfer,
+            dragonRouterShares - sharesAmountToTransfer,
+            "DragonRouter should have correct remaining shares"
         );
         assertEq(recipientShares, sharesAmountToTransfer, "Recipient should have received correct shares amount");
 
-        vm.startPrank(donationRecipient);
-        uint256 assetsReceived = vault.redeem(recipientShares, donationRecipient, donationRecipient);
+        vm.startPrank(dragonRouterRecipient);
+        uint256 assetsReceived = vault.redeem(recipientShares, dragonRouterRecipient, dragonRouterRecipient);
         vm.stopPrank();
 
         assertGt(assetsReceived, 0, "Recipient should receive assets from redeemed shares");
@@ -533,24 +538,20 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
             "Recipient should receive approximately half of the profit in assets"
         );
 
-        vm.startPrank(donationAddress);
-        uint256 donationAssetsReceived = vault.redeem(
-            donationAddressSharesAfterTransfer,
-            donationAddress,
-            donationAddress
-        );
+        vm.startPrank(dragonRouter);
+        uint256 dragonRouterAssetsReceived = vault.redeem(dragonRouterSharesAfterTransfer, dragonRouter, dragonRouter);
         vm.stopPrank();
 
-        assertGt(donationAssetsReceived, 0, "Donation address should receive assets from remaining shares");
+        assertGt(dragonRouterAssetsReceived, 0, "DragonRouter should receive assets from remaining shares");
         assertApproxEqRel(
-            donationAssetsReceived,
+            dragonRouterAssetsReceived,
             profit / 2,
             0.01e18,
-            "Donation address should receive approximately half of the profit in assets"
+            "DragonRouter should receive approximately half of the profit in assets"
         );
 
         assertApproxEqRel(
-            assetsReceived + donationAssetsReceived,
+            assetsReceived + dragonRouterAssetsReceived,
             profit,
             0.01e18,
             "Total assets distributed should match the original profit amount"
@@ -656,23 +657,23 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         assertGt(rewardsAfter, 0, "Rewards should remain unswapped");
     }
 
-    /// @notice Test loss tracking with sufficient dragon router shares for full burning
-    function testLossTracking_WithSufficientDragonShares() public {
+    /// @notice Test loss tracking with sufficient dragonRouter shares for full burning
+    function testLossTracking_WithSufficientDragonRouterShares() public {
         uint256 userDeposit = 1000e18;
-        uint256 dragonDeposit = 500e18;
+        uint256 dragonRouterDeposit = 500e18;
         uint256 lossAmount = 200e18;
 
         vm.startPrank(user);
         vault.deposit(userDeposit, user);
         vm.stopPrank();
 
-        airdrop(ERC20(_asset()), donationAddress, dragonDeposit);
-        vm.startPrank(donationAddress);
+        airdrop(ERC20(_asset()), dragonRouter, dragonRouterDeposit);
+        vm.startPrank(dragonRouter);
         ERC20(_asset()).approve(address(strategy), type(uint256).max);
-        vault.deposit(dragonDeposit, donationAddress);
+        vault.deposit(dragonRouterDeposit, dragonRouter);
         vm.stopPrank();
 
-        uint256 initialDragonShares = vault.balanceOf(donationAddress);
+        uint256 initialDragonRouterShares = vault.balanceOf(dragonRouter);
 
         vm.startPrank(management);
         strategy.setDoHealthCheck(false);
@@ -690,12 +691,12 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         (, uint256 reportedLoss) = vault.report();
         vm.stopPrank();
 
-        uint256 dragonSharesAfterLoss = vault.balanceOf(donationAddress);
-        uint256 sharesBurned = initialDragonShares - dragonSharesAfterLoss;
+        uint256 dragonRouterSharesAfterLoss = vault.balanceOf(dragonRouter);
+        uint256 sharesBurned = initialDragonRouterShares - dragonRouterSharesAfterLoss;
 
         assertEq(reportedLoss, lossAmount, "Full loss should be reported");
-        assertLt(dragonSharesAfterLoss, initialDragonShares, "Some dragon shares should be burned");
-        assertGt(dragonSharesAfterLoss, 0, "Not all dragon shares should be burned");
+        assertLt(dragonRouterSharesAfterLoss, initialDragonRouterShares, "Some dragonRouter shares should be burned");
+        assertGt(dragonRouterSharesAfterLoss, 0, "Not all dragonRouter shares should be burned");
         assertEq(sharesBurned, lossAmount, "Shares burned should equal loss amount with 1:1 share price");
 
         // Recovery verification
@@ -714,8 +715,8 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         vm.stopPrank();
 
         assertEq(
-            vault.balanceOf(donationAddress),
-            dragonSharesAfterLoss + smallProfit,
+            vault.balanceOf(dragonRouter),
+            dragonRouterSharesAfterLoss + smallProfit,
             "All profit should mint shares"
         );
 
@@ -732,8 +733,8 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         vm.stopPrank();
 
         assertEq(
-            vault.balanceOf(donationAddress),
-            dragonSharesAfterLoss + smallProfit + additionalProfit,
+            vault.balanceOf(dragonRouter),
+            dragonRouterSharesAfterLoss + smallProfit + additionalProfit,
             "All additional profit should mint shares"
         );
     }

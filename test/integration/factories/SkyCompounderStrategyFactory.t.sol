@@ -66,7 +66,7 @@ contract SkyCompounderStrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                donationAddress,
+                dragonRouter,
                 true, // enableBurning
                 address(tokenizedStrategy)
             );
@@ -102,7 +102,7 @@ contract SkyCompounderStrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                donationAddress,
+                dragonRouter,
                 true, // enableBurning
                 address(tokenizedStrategy),
                 deployer
@@ -126,7 +126,7 @@ contract SkyCompounderStrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                donationAddress,
+                dragonRouter,
                 true, // enableBurning
                 address(tokenizedStrategy),
                 deployer

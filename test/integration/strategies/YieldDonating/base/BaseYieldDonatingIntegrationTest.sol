@@ -191,9 +191,9 @@ abstract contract BaseYieldDonatingIntegrationTest is BaseIntegrationTest {
         // Total assets should increase
         assertGt(vault.totalAssets(), totalAssetsBefore, "Total assets should increase");
 
-        // Donation address should have received profit shares
-        uint256 donationBalance = ERC20(address(vault)).balanceOf(donationAddress);
-        assertGt(donationBalance, 0, "Donation address should receive profit shares");
+        // DragonRouter should have received profit shares
+        uint256 dragonRouterBalance = ERC20(address(vault)).balanceOf(dragonRouter);
+        assertGt(dragonRouterBalance, 0, "DragonRouter should receive profit shares");
     }
 
     /// @notice Test multiple users with fair profit distribution
@@ -257,16 +257,16 @@ abstract contract BaseYieldDonatingIntegrationTest is BaseIntegrationTest {
         uint256 user2Assets = vault.redeem(user2Shares, user2, user2);
         vm.stopPrank();
 
-        // Users should receive approximately their original deposits (profit goes to donation address)
+        // Users should receive approximately their original deposits (profit goes to dragonRouter)
         uint256 user1ProfitPercentage = ((user1Assets - depositAmount1) * 1e18) / depositAmount1;
         uint256 user2ProfitPercentage = ((user2Assets - depositAmount2) * 1e18) / depositAmount2;
 
         assertEq(user1ProfitPercentage, 0, "User 1 should have received no profit");
         assertEq(user1ProfitPercentage, user2ProfitPercentage, "Users should have received no profit");
 
-        // Check donation address received profit shares
-        uint256 donationShares = vault.balanceOf(donationAddress);
-        assertGt(donationShares, 0, "Donation address should receive shares from profit");
+        // Check dragonRouter received profit shares
+        uint256 dragonRouterShares = vault.balanceOf(dragonRouter);
+        assertGt(dragonRouterShares, 0, "DragonRouter should receive shares from profit");
     }
 
     /// @notice Returns the asset decimals for calculations

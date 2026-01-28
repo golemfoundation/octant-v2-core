@@ -64,7 +64,7 @@ contract KeeperBotGuardTest is Test {
     address public management = makeAddr("management");
     address public keeper = makeAddr("keeper");
     address public emergencyAdmin = makeAddr("emergencyAdmin");
-    address public donationAddress = makeAddr("donationAddress");
+    address public dragonRouter = makeAddr("dragonRouter");
 
     // Test user
     address public user = makeAddr("user");
@@ -145,7 +145,7 @@ contract KeeperBotGuardTest is Test {
                 address(safeMultisig), // Use Safe as management directly
                 address(safeMultisig), // Use Safe as keeper too
                 emergencyAdmin,
-                donationAddress,
+                dragonRouter,
                 false, // enableBurning
                 address(implementation)
             )

@@ -13,10 +13,10 @@ struct TestState {
     uint256 initialExchangeRate;
     uint256 newExchangeRate1;
     uint256 newExchangeRate2;
-    uint256 donationBalanceBefore1;
-    uint256 donationBalanceAfter1;
-    uint256 donationBalanceBefore2;
-    uint256 donationBalanceAfter2;
+    uint256 dragonRouterBalanceBefore1;
+    uint256 dragonRouterBalanceAfter1;
+    uint256 dragonRouterBalanceBefore2;
+    uint256 dragonRouterBalanceAfter2;
     uint256 user1Shares;
     uint256 user2Shares;
     uint256 user1Assets;
@@ -33,9 +33,9 @@ struct FuzzTestState {
     uint256 profitRate;
     uint256 firstLossRate;
     uint256 secondLossRate;
-    uint256 donationSharesAfterProfit;
-    uint256 donationSharesAfterFirstLoss;
-    uint256 donationSharesAfterSecondLoss;
+    uint256 dragonRouterSharesAfterProfit;
+    uint256 dragonRouterSharesAfterFirstLoss;
+    uint256 dragonRouterSharesAfterSecondLoss;
     uint256 assetsReceived;
 }
 
@@ -44,12 +44,12 @@ struct ProfitFuzzTestState {
     uint256 totalAssetsBefore;
     uint256 initialExchangeRate;
     uint256 newExchangeRate;
-    uint256 donationAddressBalanceBefore;
-    uint256 donationAddressBalanceAfter;
+    uint256 dragonRouterBalanceBefore;
+    uint256 dragonRouterBalanceAfter;
     uint256 totalAssetsAfter;
     uint256 sharesToRedeem;
     uint256 assetsReceived;
-    uint256 donationAssetsReceived;
+    uint256 dragonRouterAssetsReceived;
 }
 
 /// @dev Struct for profit/loss test data
@@ -64,16 +64,16 @@ struct ProfitLossTestData {
     uint256 user2Shares;
     uint256 profit1;
     uint256 loss1;
-    uint256 dragonShares;
+    uint256 dragonRouterShares;
     uint256 user1Assets;
     uint256 user2Assets;
     uint256 profit2;
     uint256 loss2;
-    uint256 dragonSharesAfterLoss;
+    uint256 dragonRouterSharesAfterLoss;
 }
 
-/// @dev Struct for dragon withdrawal test scenarios
-struct DragonWithdrawalTestData {
+/// @dev Struct for dragonRouter withdrawal test scenarios
+struct DragonRouterWithdrawalTestData {
     address user1;
     uint256 depositAmount;
     uint256 initialRate;
@@ -81,8 +81,8 @@ struct DragonWithdrawalTestData {
     uint256 decreasedRate;
     uint256 finalRate;
     uint256 user1Shares;
-    uint256 dragonSharesAfterProfit;
-    uint256 dragonAssets;
+    uint256 dragonRouterSharesAfterProfit;
+    uint256 dragonRouterAssets;
     uint256 profit1;
     uint256 loss1;
     uint256 profit2;
@@ -97,7 +97,7 @@ struct SetupParams {
     address management;
     address keeper;
     address emergencyAdmin;
-    address donationAddress;
+    address dragonRouter;
     string vaultSharesName;
     bytes32 strategySalt;
     address implementationAddress;

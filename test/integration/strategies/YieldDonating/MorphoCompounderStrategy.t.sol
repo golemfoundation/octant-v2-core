@@ -6,7 +6,7 @@ import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { MorphoCompounderStrategy } from "src/strategies/yieldDonating/MorphoCompounderStrategy.sol";
 import { MorphoCompounderStrategyFactory } from "src/factories/MorphoCompounderStrategyFactory.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
-import { IMockStrategy } from "test/mocks/zodiac-core/IMockStrategy.sol";
+import { IMockStrategy } from "test/mocks/core/tokenized-strategies/IMockStrategy.sol";
 import { BaseYieldDonatingIntegrationTest } from "./base/BaseYieldDonatingIntegrationTest.sol";
 import { MorphoTestConfig } from "../config/MorphoTestConfig.sol";
 
@@ -75,7 +75,7 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false, // enableBurning
             address(implementation)
         );
@@ -93,7 +93,7 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
         vm.label(management, "Management");
         vm.label(keeper, "Keeper");
         vm.label(emergencyAdmin, "Emergency Admin");
-        vm.label(donationAddress, "Donation Address");
+        vm.label(dragonRouter, "DragonRouter");
         vm.label(user, "Test User");
     }
 
@@ -117,8 +117,8 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
 
     // ========== MORPHO-SPECIFIC TESTS ==========
 
-    /// @notice Fuzz test the harvesting functionality with profit donation
-    function testFuzzHarvestWithProfitDonationMorpho(uint256 depositAmount, uint256 profitAmount) public {
+    /// @notice Fuzz test the harvesting functionality with profit dragonRouter
+    function testFuzzHarvestWithProfitDragonRouterMorpho(uint256 depositAmount, uint256 profitAmount) public {
         depositAmount = bound(depositAmount, _minDeposit(), _maxDeposit());
         profitAmount = bound(profitAmount, 1e5, depositAmount);
 
@@ -134,7 +134,7 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
 
         uint256 totalAssetsBefore = IERC4626(address(vault)).totalAssets();
         uint256 userSharesBefore = IERC4626(address(vault)).balanceOf(user);
-        uint256 donationBalanceBefore = ERC20(address(vault)).balanceOf(donationAddress);
+        uint256 dragonRouterBalanceBefore = ERC20(address(vault)).balanceOf(dragonRouter);
 
         // Mock profit by mocking Morpho vault return value
         uint256 balanceOfMorphoVault = IERC4626(_compounderVault()).balanceOf(address(strategy));
@@ -159,9 +159,9 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
         // User shares should remain the same (no dilution)
         assertEq(IERC4626(address(vault)).balanceOf(user), userSharesBefore, "User shares should not change");
 
-        // Donation address should have received the profit
-        uint256 donationBalanceAfter = ERC20(address(vault)).balanceOf(donationAddress);
-        assertGt(donationBalanceAfter, donationBalanceBefore, "Donation address should receive profit");
+        // DragonRouter should have received the profit
+        uint256 dragonRouterBalanceAfter = ERC20(address(vault)).balanceOf(dragonRouter);
+        assertGt(dragonRouterBalanceAfter, dragonRouterBalanceBefore, "DragonRouter should receive profit");
 
         // Total assets should increase by the profit amount
         assertGt(IERC4626(address(vault)).totalAssets(), totalAssetsBefore, "Total assets should increase");
@@ -307,8 +307,8 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
         );
     }
 
-    /// @notice Test that _harvestAndReport includes idle funds and donations work correctly
-    function testHarvestAndReportIncludesIdleFundsWithDonation() public {
+    /// @notice Test that _harvestAndReport includes idle funds and dragonRouters work correctly
+    function testHarvestAndReportIncludesIdleFundsWithDragonRouter() public {
         uint256 depositAmount = 10000e6;
         uint256 vaultProfit = 500e6;
         uint256 idleProfit = 500e6;
@@ -332,7 +332,7 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
 
         airdrop(ERC20(_asset()), address(strategy), idleProfit);
 
-        uint256 donationBalanceBefore = ERC20(address(vault)).balanceOf(donationAddress);
+        uint256 dragonRouterBalanceBefore = ERC20(address(vault)).balanceOf(dragonRouter);
 
         vm.prank(keeper);
         (uint256 reportedProfit, uint256 loss) = IMockStrategy(address(strategy)).report();
@@ -342,12 +342,12 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
         assertEq(reportedProfit, totalProfit, "Reported profit should include both vault and idle profits");
         assertEq(loss, 0, "Should have no loss");
 
-        uint256 donationBalanceAfter = ERC20(address(vault)).balanceOf(donationAddress);
-        assertGt(donationBalanceAfter, donationBalanceBefore, "Donation address should receive profit");
+        uint256 dragonRouterBalanceAfter = ERC20(address(vault)).balanceOf(dragonRouter);
+        assertGt(dragonRouterBalanceAfter, dragonRouterBalanceBefore, "DragonRouter should receive profit");
         assertEq(
-            donationBalanceAfter - donationBalanceBefore,
+            dragonRouterBalanceAfter - dragonRouterBalanceBefore,
             totalProfit,
-            "Donation should equal the total profit (vault + idle)"
+            "DragonRouter should equal the total profit (vault + idle)"
         );
 
         uint256 finalTotalAssets = IERC4626(address(vault)).totalAssets();
@@ -370,7 +370,7 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             true,
             address(implementation)
         );

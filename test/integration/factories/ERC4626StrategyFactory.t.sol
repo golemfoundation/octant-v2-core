@@ -73,7 +73,7 @@ contract ERC4626StrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                donationAddress,
+                dragonRouter,
                 false, // enableBurning
                 address(implementation)
             );
@@ -103,7 +103,7 @@ contract ERC4626StrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                donationAddress,
+                dragonRouter,
                 false, // enableBurning
                 address(implementation),
                 deployer
@@ -158,7 +158,7 @@ contract ERC4626StrategyFactoryTest is BaseFactoryIntegrationTest {
         emit BaseERC4626StrategyFactory.StrategyDeploy(
             management,
             WETH_SPARK_VAULT,
-            donationAddress,
+            dragonRouter,
             address(0),
             strategyName
         );
@@ -171,7 +171,7 @@ contract ERC4626StrategyFactoryTest is BaseFactoryIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false,
             address(implementation)
         );
@@ -196,7 +196,7 @@ contract ERC4626StrategyFactoryTest is BaseFactoryIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false,
             address(implementation)
         );
@@ -209,7 +209,7 @@ contract ERC4626StrategyFactoryTest is BaseFactoryIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false,
             address(implementation)
         );
@@ -239,7 +239,7 @@ contract ERC4626StrategyFactoryTest is BaseFactoryIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false,
             address(implementation)
         );
@@ -255,7 +255,7 @@ contract ERC4626StrategyFactoryTest is BaseFactoryIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false,
             address(implementation)
         );
@@ -275,7 +275,7 @@ contract ERC4626StrategyFactoryTest is BaseFactoryIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             true, // enableBurning = true
             address(implementation)
         );
@@ -296,7 +296,7 @@ contract ERC4626StrategyFactoryTest is BaseFactoryIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false,
             address(implementation),
             management
@@ -310,7 +310,7 @@ contract ERC4626StrategyFactoryTest is BaseFactoryIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false,
             address(implementation),
             management

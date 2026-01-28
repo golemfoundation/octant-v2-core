@@ -6,7 +6,7 @@ import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 
 import { TokenizedStrategy } from "src/core/TokenizedStrategy.sol";
 import { MockFactory } from "test/mocks/MockFactory.sol";
-import { IMockStrategy } from "test/mocks/zodiac-core/IMockStrategy.sol";
+import { IMockStrategy } from "test/mocks/core/tokenized-strategies/IMockStrategy.sol";
 import { MockFaultyStrategy } from "test/mocks/core/tokenized-strategies/MockFaultyStrategy.sol";
 import { MockIlliquidStrategy } from "test/mocks/core/tokenized-strategies/MockIlliquidStrategy.sol";
 import { MockYieldSourceSkimming } from "test/mocks/core/tokenized-strategies/MockYieldSourceSkimming.sol";
@@ -31,7 +31,7 @@ contract Setup is Test {
     address public emergencyAdmin = address(4);
     address public protocolFeeRecipient = address(5);
     address public performanceFeeRecipient = address(6);
-    address public donationAddress = address(7);
+    address public dragonRouter = address(7);
 
     address public TOKENIZED_STRATEGY_ADDRESS = address(0x8cf7246a74704bBE59c9dF614ccB5e3d9717d8Ac);
 
@@ -71,7 +71,7 @@ contract Setup is Test {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false // enableBurning
         );
 
@@ -105,7 +105,7 @@ contract Setup is Test {
                     management,
                     keeper,
                     emergencyAdmin,
-                    donationAddress,
+                    dragonRouter,
                     address(implementation)
                 )
             )
@@ -135,7 +135,7 @@ contract Setup is Test {
                     management,
                     keeper,
                     emergencyAdmin,
-                    donationAddress,
+                    dragonRouter,
                     address(implementation)
                 )
             )
@@ -166,7 +166,7 @@ contract Setup is Test {
                     management,
                     keeper,
                     emergencyAdmin,
-                    donationAddress,
+                    dragonRouter,
                     address(implementation)
                 )
             )

@@ -63,7 +63,7 @@ contract LidoStrategyTest is BaseYieldSkimmingIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             true, // enableBurning
             address(implementation)
         );
@@ -81,7 +81,7 @@ contract LidoStrategyTest is BaseYieldSkimmingIntegrationTest {
         vm.label(management, "Management");
         vm.label(keeper, "Keeper");
         vm.label(emergencyAdmin, "Emergency Admin");
-        vm.label(donationAddress, "Donation Address");
+        vm.label(dragonRouter, "DragonRouter");
         vm.label(user, "Test User");
     }
 
@@ -163,16 +163,16 @@ contract LidoStrategyTest is BaseYieldSkimmingIntegrationTest {
         _testFuzzHarvestWithLoss(depositAmount, profitPercentage, lossPercentage);
     }
 
-    function testLossExceedingDonationSharesLido() public {
-        _testLossExceedingDonationShares();
+    function testLossExceedingDragonRouterSharesLido() public {
+        _testLossExceedingDragonRouterShares();
     }
 
     function testConsecutiveLossesLido() public {
         _testConsecutiveLosses();
     }
 
-    function testLossWithZeroDonationSharesLido() public {
-        _testLossWithZeroDonationShares();
+    function testLossWithZeroDragonRouterSharesLido() public {
+        _testLossWithZeroDragonRouterShares();
     }
 
     function testFuzzConsecutiveLossesLido(
@@ -184,8 +184,8 @@ contract LidoStrategyTest is BaseYieldSkimmingIntegrationTest {
         _testFuzzConsecutiveLosses(depositAmount, profitPercentage, firstLossPercentage, secondLossPercentage);
     }
 
-    function test_profitThenLoss_dragonSharesBurnCorrectly() public {
-        _test_profitThenLoss_dragonSharesBurnCorrectly();
+    function test_profitThenLoss_dragonRouterSharesBurnCorrectly() public {
+        _test_profitThenLoss_dragonRouterSharesBurnCorrectly();
     }
 
     function test_dragonRouterWithdrawal_rateRecovery_userNoLoss() public {

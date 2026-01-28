@@ -78,7 +78,7 @@ contract PrivilegedMorphoCompounderStrategyTest is BasePrivilegedYieldDonatingIn
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false, // enableBurning
             address(implementation)
         );
@@ -96,7 +96,7 @@ contract PrivilegedMorphoCompounderStrategyTest is BasePrivilegedYieldDonatingIn
         vm.label(management, "Management");
         vm.label(keeper, "Keeper");
         vm.label(emergencyAdmin, "Emergency Admin");
-        vm.label(donationAddress, "Donation Address");
+        vm.label(dragonRouter, "DragonRouter");
         vm.label(user, "Test User");
         vm.label(privilegedUser, "Privileged User");
         vm.label(nonPrivilegedUser, "Non-Privileged User");

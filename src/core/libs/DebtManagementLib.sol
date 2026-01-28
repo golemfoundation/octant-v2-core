@@ -2,7 +2,7 @@
 pragma solidity ^0.8.25;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { IERC4626Payable } from "src/zodiac-core/interfaces/IERC4626Payable.sol";
+import { IERC4626Payable } from "src/core/interfaces/IERC4626Payable.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { IMultistrategyVault } from "src/core/interfaces/IMultistrategyVault.sol";
 import { ERC20SafeApproveLib } from "src/core/libs/ERC20SafeApproveLib.sol";

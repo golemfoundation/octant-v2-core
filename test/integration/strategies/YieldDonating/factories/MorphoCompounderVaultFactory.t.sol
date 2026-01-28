@@ -28,7 +28,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
     address public management;
     address public keeper;
     address public emergencyAdmin;
-    address public donationAddress;
+    address public dragonRouter;
 
     // Mainnet addresses
     address public constant MORPHO_VAULT = 0x074134A2784F4F66b6ceD6f68849382990Ff3215; // Steakhouse USDC vault
@@ -56,7 +56,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         management = address(0x1);
         keeper = address(0x2);
         emergencyAdmin = address(0x3);
-        donationAddress = address(0x4);
+        dragonRouter = address(0x4);
 
         // Deploy factory
         factory = new MorphoCompounderStrategyFactory();
@@ -69,7 +69,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         vm.label(management, "Management");
         vm.label(keeper, "Keeper");
         vm.label(emergencyAdmin, "Emergency Admin");
-        vm.label(donationAddress, "Donation Address");
+        vm.label(dragonRouter, "DragonRouter");
     }
 
     /// @notice Test creating a strategy through the factory
@@ -87,7 +87,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false, // enableBurning
             address(implementation),
             management // deployer
@@ -98,7 +98,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
         vm.expectEmit(true, true, true, false); // Check first 3 indexed params, ignore the non-indexed timestamp
         emit MorphoCompounderStrategyFactory.StrategyDeploy(
             management,
-            donationAddress,
+            dragonRouter,
             expectedStrategyAddress,
             vaultSharesName
         );
@@ -109,19 +109,19 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false, // enableBurning
             address(implementation)
         );
         vm.stopPrank();
 
         // Verify strategy is tracked in factory
-        (address deployerAddress, uint256 timestamp, string memory name, address stratDonationAddress) = factory
+        (address deployerAddress, uint256 timestamp, string memory name, address stratDragonRouterAddress) = factory
             .strategies(management, 0);
 
         assertEq(deployerAddress, management, "Deployer address incorrect in factory");
         assertEq(name, vaultSharesName, "Vault shares name incorrect in factory");
-        assertEq(stratDonationAddress, donationAddress, "Donation address incorrect in factory");
+        assertEq(stratDragonRouterAddress, dragonRouter, "DragonRouter incorrect in factory");
         assertTrue(timestamp > 0, "Timestamp should be set");
 
         // Verify strategy was initialized correctly
@@ -141,7 +141,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false, // enableBurning
             address(implementation)
         );
@@ -155,7 +155,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false, // enableBurning
             address(implementation)
         );
@@ -189,7 +189,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
             firstUser,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false, // enableBurning
             address(implementation)
         );
@@ -205,7 +205,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
             secondUser,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false, // enableBurning
             address(implementation)
         );
@@ -236,7 +236,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false, // enableBurning
             address(implementation)
         );
@@ -251,7 +251,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false, // enableBurning
             address(implementation)
         );
@@ -266,7 +266,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false, // enableBurning
             address(implementation)
         );
@@ -288,7 +288,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false, // enableBurning
             address(implementation)
         );
@@ -299,7 +299,7 @@ contract MorphoCompounderDonatingVaultFactoryTest is Test {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false, // enableBurning
             address(implementation)
         );

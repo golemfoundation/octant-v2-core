@@ -9,7 +9,7 @@ import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/Yie
 import { BaseStrategy, ERC20 } from "src/core/BaseStrategy.sol";
 import { MockYieldSource } from "test/mocks/core/tokenized-strategies/MockYieldSource.sol";
 import { MockStrategy } from "test/mocks/core/tokenized-strategies/MockStrategy.sol";
-import { IMockStrategy } from "test/mocks/zodiac-core/IMockStrategy.sol";
+import { IMockStrategy } from "test/mocks/core/tokenized-strategies/IMockStrategy.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { DeployYieldDonatingStrategy } from "script/deploy/DeployYieldDonatingStrategy.s.sol";
 
@@ -83,7 +83,7 @@ contract YieldDonatingTokenizedStrategyTest is Test {
 
     /**
      * @notice Test that we can access functions from the parent contract
-     * @dev The strategy inherits functionality from DragonTokenizedStrategy
+     * @dev The strategy inherits functionality from DragonRouterTokenizedStrategy
      */
     function testInheritedFunctions() public view {
         // Test accessing the API version

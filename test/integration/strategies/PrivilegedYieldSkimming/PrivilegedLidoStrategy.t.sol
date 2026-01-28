@@ -75,7 +75,7 @@ contract PrivilegedLidoStrategyTest is BasePrivilegedYieldSkimmingIntegrationTes
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             true, // enableBurning
             address(implementation)
         );
@@ -93,7 +93,7 @@ contract PrivilegedLidoStrategyTest is BasePrivilegedYieldSkimmingIntegrationTes
         vm.label(management, "Management");
         vm.label(keeper, "Keeper");
         vm.label(emergencyAdmin, "Emergency Admin");
-        vm.label(donationAddress, "Donation Address");
+        vm.label(dragonRouter, "DragonRouter");
         vm.label(user, "Test User");
         vm.label(privilegedUser, "Privileged User");
         vm.label(nonPrivilegedUser, "Non-Privileged User");
@@ -255,7 +255,7 @@ contract PrivilegedLidoStrategyTest is BasePrivilegedYieldSkimmingIntegrationTes
         _testConsecutiveLosses();
     }
 
-    function test_profitThenLoss_dragonSharesBurnCorrectlyPrivilegedLido() public {
+    function test_profitThenLoss_dragonRouterSharesBurnCorrectlyPrivilegedLido() public {
         // Make test users privileged
         address user1 = makeAddr("user1");
         address user2 = makeAddr("user2");
@@ -264,7 +264,7 @@ contract PrivilegedLidoStrategyTest is BasePrivilegedYieldSkimmingIntegrationTes
         IPrivilegedStrategy(address(vault)).setPrivileged(user2, true);
         vm.stopPrank();
 
-        _test_profitThenLoss_dragonSharesBurnCorrectly();
+        _test_profitThenLoss_dragonRouterSharesBurnCorrectly();
     }
 
     function test_dragonRouterWithdrawal_rateRecovery_userNoLossPrivilegedLido() public {

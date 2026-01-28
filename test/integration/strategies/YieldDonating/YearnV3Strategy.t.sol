@@ -7,7 +7,7 @@ import { YearnV3Strategy } from "src/strategies/yieldDonating/YearnV3Strategy.so
 import { YearnV3StrategyFactory } from "src/factories/yieldDonating/YearnV3StrategyFactory.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 import { ITokenizedStrategy } from "src/core/interfaces/ITokenizedStrategy.sol";
-import { IMockStrategy } from "test/mocks/zodiac-core/IMockStrategy.sol";
+import { IMockStrategy } from "test/mocks/core/tokenized-strategies/IMockStrategy.sol";
 import { BaseYieldDonatingIntegrationTest } from "./base/BaseYieldDonatingIntegrationTest.sol";
 import { YearnV3TestConfig } from "../config/YearnV3TestConfig.sol";
 
@@ -75,7 +75,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false, // enableBurning
             address(implementation)
         );
@@ -92,7 +92,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         vm.label(management, "Management");
         vm.label(keeper, "Keeper");
         vm.label(emergencyAdmin, "Emergency Admin");
-        vm.label(donationAddress, "Donation Address");
+        vm.label(dragonRouter, "DragonRouter");
         vm.label(user, "Test User");
     }
 
@@ -125,8 +125,8 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
 
     // ========== YEARN-SPECIFIC TESTS ==========
 
-    /// @notice Fuzz test the harvesting functionality with profit donation
-    function testFuzzHarvestWithProfitDonationYearn(uint256 depositAmount, uint256 profitAmount) public {
+    /// @notice Fuzz test the harvesting functionality with profit dragonRouter
+    function testFuzzHarvestWithProfitDragonRouterYearn(uint256 depositAmount, uint256 profitAmount) public {
         depositAmount = bound(depositAmount, _minDeposit(), _maxDeposit());
         profitAmount = bound(profitAmount, 1e5, depositAmount / 2);
 
@@ -141,7 +141,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
 
         uint256 totalAssetsBefore = IERC4626(address(vault)).totalAssets();
         uint256 userSharesBefore = IERC4626(address(vault)).balanceOf(user);
-        uint256 donationBalanceBefore = ERC20(address(vault)).balanceOf(donationAddress);
+        uint256 dragonRouterBalanceBefore = ERC20(address(vault)).balanceOf(dragonRouter);
 
         // Mock Yearn vault to return profit
         uint256 balanceOfYearnVault = ITokenizedStrategy(_compounderVault()).balanceOf(address(strategy));
@@ -166,9 +166,9 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         // User shares should remain the same (no dilution)
         assertEq(IERC4626(address(vault)).balanceOf(user), userSharesBefore, "User shares should not change");
 
-        // Donation address should have received the profit
-        uint256 donationBalanceAfter = ERC20(address(vault)).balanceOf(donationAddress);
-        assertGt(donationBalanceAfter, donationBalanceBefore, "Donation address should receive profit");
+        // DragonRouter should have received the profit
+        uint256 dragonRouterBalanceAfter = ERC20(address(vault)).balanceOf(dragonRouter);
+        assertGt(dragonRouterBalanceAfter, dragonRouterBalanceBefore, "DragonRouter should receive profit");
 
         // Total assets should increase by the profit amount
         assertGt(IERC4626(address(vault)).totalAssets(), totalAssetsBefore, "Total assets should increase");
@@ -355,7 +355,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
 
         airdrop(ERC20(_asset()), address(strategy), idleProfit);
 
-        uint256 donationBalanceBefore = ERC20(address(vault)).balanceOf(donationAddress);
+        uint256 dragonRouterBalanceBefore = ERC20(address(vault)).balanceOf(dragonRouter);
 
         vm.prank(keeper);
         (uint256 reportedProfit, uint256 loss) = IMockStrategy(address(strategy)).report();
@@ -366,8 +366,12 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         assertEq(reportedProfit, totalProfit, "Reported profit should include both vault and idle profits");
         assertEq(loss, 0, "Should have no loss");
 
-        uint256 donationBalanceAfter = ERC20(address(vault)).balanceOf(donationAddress);
-        assertEq(donationBalanceAfter - donationBalanceBefore, totalProfit, "Donation should equal total profit");
+        uint256 dragonRouterBalanceAfter = ERC20(address(vault)).balanceOf(dragonRouter);
+        assertEq(
+            dragonRouterBalanceAfter - dragonRouterBalanceBefore,
+            totalProfit,
+            "DragonRouter should equal total profit"
+        );
     }
 
     /// @notice Test constructor validates asset compatibility
@@ -381,7 +385,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false,
             address(implementation)
         );
@@ -669,8 +673,8 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         );
     }
 
-    /// @notice Test harvest with losses - verify no donation occurs
-    function testHarvestWithLossesNoDonationYearn() public {
+    /// @notice Test harvest with losses - verify no dragonRouter occurs
+    function testHarvestWithLossesNoDragonRouterYearn() public {
         uint256 depositAmount = 10000e6;
         uint256 lossAmount = 500e6;
 
@@ -684,7 +688,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         vm.prank(management);
         strategy.setLossLimitRatio(500); // 5%
 
-        uint256 donationBalanceBefore = ERC20(address(vault)).balanceOf(donationAddress);
+        uint256 dragonRouterBalanceBefore = ERC20(address(vault)).balanceOf(dragonRouter);
 
         uint256 yearnShares = ITokenizedStrategy(_compounderVault()).balanceOf(address(strategy));
         vm.mockCall(
@@ -701,8 +705,8 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         assertEq(profit, 0, "Should have no profit");
         assertEq(loss, lossAmount, "Should report loss");
 
-        uint256 donationBalanceAfter = ERC20(address(vault)).balanceOf(donationAddress);
-        assertEq(donationBalanceAfter, donationBalanceBefore, "Donation address balance should not change on loss");
+        uint256 dragonRouterBalanceAfter = ERC20(address(vault)).balanceOf(dragonRouter);
+        assertEq(dragonRouterBalanceAfter, dragonRouterBalanceBefore, "DragonRouter balance should not change on loss");
     }
 
     /// @notice Fuzz test for partial loss scenarios

@@ -62,7 +62,7 @@ contract SparkStrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                donationAddress,
+                dragonRouter,
                 false, // enableBurning
                 address(implementation)
             );
@@ -94,7 +94,7 @@ contract SparkStrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                donationAddress,
+                dragonRouter,
                 false, // enableBurning
                 address(implementation),
                 deployer
@@ -135,7 +135,7 @@ contract SparkStrategyFactoryTest is BaseFactoryIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false,
             address(implementation)
         );
@@ -153,7 +153,7 @@ contract SparkStrategyFactoryTest is BaseFactoryIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false,
             address(implementation)
         );

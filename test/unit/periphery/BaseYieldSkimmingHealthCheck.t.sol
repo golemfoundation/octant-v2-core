@@ -27,7 +27,7 @@ contract YieldSkimmingHealthCheckLogic is BaseYieldSkimmingHealthCheck {
             _management,
             address(0x2), // keeper
             address(0x3), // emergencyAdmin
-            address(0x4), // donationAddress
+            address(0x4), // dragonRouter
             true, // enableBurning
             _tokenizedStrategy
         )

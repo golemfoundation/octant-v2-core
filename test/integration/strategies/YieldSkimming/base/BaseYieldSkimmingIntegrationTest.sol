@@ -13,7 +13,7 @@ import { IYieldSkimmingStrategy } from "src/strategies/yieldSkimming/IYieldSkimm
 import { YieldSkimmingTokenizedStrategy } from "src/strategies/yieldSkimming/YieldSkimmingTokenizedStrategy.sol";
 import { WadRayMath } from "src/utils/libs/Maths/WadRay.sol";
 import { BaseIntegrationTest } from "../../base/BaseIntegrationTest.sol";
-import { TestState, FuzzTestState, ProfitFuzzTestState, ProfitLossTestData, DragonWithdrawalTestData } from "../../base/TestStructs.sol";
+import { TestState, FuzzTestState, ProfitFuzzTestState, ProfitLossTestData, DragonRouterWithdrawalTestData } from "../../base/TestStructs.sol";
 
 /// @title BaseYieldSkimmingIntegrationTest
 /// @notice Base contract for all yield skimming strategy integration tests
@@ -157,7 +157,7 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
 
         _mockExchangeRate(state.newExchangeRate);
 
-        state.donationAddressBalanceBefore = ERC20(address(vault)).balanceOf(donationAddress);
+        state.dragonRouterBalanceBefore = ERC20(address(vault)).balanceOf(dragonRouter);
 
         vm.startPrank(keeper);
         (uint256 profit, uint256 loss) = vault.report();
@@ -168,12 +168,12 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         assertGt(profit, 0, "Profit should be positive");
         assertEq(loss, 0, "There should be no loss");
 
-        state.donationAddressBalanceAfter = ERC20(address(vault)).balanceOf(donationAddress);
+        state.dragonRouterBalanceAfter = ERC20(address(vault)).balanceOf(dragonRouter);
 
         assertGt(
-            state.donationAddressBalanceAfter,
-            state.donationAddressBalanceBefore,
-            "Donation address should have received profit"
+            state.dragonRouterBalanceAfter,
+            state.dragonRouterBalanceBefore,
+            "DragonRouter should have received profit"
         );
 
         state.totalAssetsAfter = vault.totalAssets();
@@ -182,8 +182,8 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         // Maintain solvency for redemption
         _mockExchangeRate(state.newExchangeRate);
 
-        vm.startPrank(donationAddress);
-        state.donationAssetsReceived = vault.redeem(vault.balanceOf(donationAddress), donationAddress, donationAddress);
+        vm.startPrank(dragonRouter);
+        state.dragonRouterAssetsReceived = vault.redeem(vault.balanceOf(dragonRouter), dragonRouter, dragonRouter);
         vm.stopPrank();
         _clearMocks();
 
@@ -193,10 +193,10 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         vm.stopPrank();
 
         assertApproxEqRel(
-            state.donationAssetsReceived,
+            state.dragonRouterAssetsReceived,
             (depositAmount * profitPercentage) / (100 + profitPercentage),
             0.1e16,
-            "Donation address should have received profit"
+            "DragonRouter should have received profit"
         );
 
         assertApproxEqRel(
@@ -223,7 +223,7 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         vm.stopPrank();
 
         state.newExchangeRate1 = (state.initialExchangeRate * 110) / 100;
-        state.donationBalanceBefore1 = ERC20(address(vault)).balanceOf(donationAddress);
+        state.dragonRouterBalanceBefore1 = ERC20(address(vault)).balanceOf(dragonRouter);
 
         _mockExchangeRate(state.newExchangeRate1);
 
@@ -231,12 +231,12 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         vault.report();
         vm.stopPrank();
 
-        state.donationBalanceAfter1 = ERC20(address(vault)).balanceOf(donationAddress);
+        state.dragonRouterBalanceAfter1 = ERC20(address(vault)).balanceOf(dragonRouter);
 
         assertGt(
-            state.donationBalanceAfter1,
-            state.donationBalanceBefore1,
-            "Donation address should have received profit after first harvest"
+            state.dragonRouterBalanceAfter1,
+            state.dragonRouterBalanceBefore1,
+            "DragonRouter should have received profit after first harvest"
         );
 
         airdrop(ERC20(_asset()), state.user2, state.depositAmount2);
@@ -249,7 +249,7 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         _clearMocks();
 
         state.newExchangeRate2 = (state.newExchangeRate1 * 105) / 100;
-        state.donationBalanceBefore2 = ERC20(address(vault)).balanceOf(donationAddress);
+        state.dragonRouterBalanceBefore2 = ERC20(address(vault)).balanceOf(dragonRouter);
 
         _mockExchangeRate(state.newExchangeRate2);
 
@@ -259,18 +259,18 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
 
         _clearMocks();
 
-        state.donationBalanceAfter2 = ERC20(address(vault)).balanceOf(donationAddress);
+        state.dragonRouterBalanceAfter2 = ERC20(address(vault)).balanceOf(dragonRouter);
 
         assertGt(
-            state.donationBalanceAfter2,
-            state.donationBalanceBefore2,
-            "Donation address should have received profit after second harvest"
+            state.dragonRouterBalanceAfter2,
+            state.dragonRouterBalanceBefore2,
+            "DragonRouter should have received profit after second harvest"
         );
 
         _mockExchangeRate(state.newExchangeRate2);
 
-        vm.startPrank(donationAddress);
-        vault.redeem(vault.balanceOf(donationAddress), donationAddress, donationAddress);
+        vm.startPrank(dragonRouter);
+        vault.redeem(vault.balanceOf(dragonRouter), dragonRouter, dragonRouter);
         vm.stopPrank();
 
         vm.startPrank(state.user1);
@@ -513,8 +513,8 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
 
         _clearMocks();
 
-        uint256 donationSharesBefore = vault.balanceOf(donationAddress);
-        assertGt(donationSharesBefore, 0, "Donation address should have shares for loss protection");
+        uint256 dragonRouterSharesBefore = vault.balanceOf(dragonRouter);
+        assertGt(dragonRouterSharesBefore, 0, "DragonRouter should have shares for loss protection");
 
         uint256 totalAssetsBefore = vault.totalAssets();
         uint256 userSharesBefore = vault.balanceOf(user);
@@ -531,8 +531,12 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         assertEq(profit, 0, "Profit should be zero");
         assertGt(loss, 0, "Loss should be positive");
 
-        uint256 donationSharesAfter = vault.balanceOf(donationAddress);
-        assertLt(donationSharesAfter, donationSharesBefore, "Donation shares should be burned for loss protection");
+        uint256 dragonRouterSharesAfter = vault.balanceOf(dragonRouter);
+        assertLt(
+            dragonRouterSharesAfter,
+            dragonRouterSharesBefore,
+            "DragonRouter shares should be burned for loss protection"
+        );
 
         uint256 userSharesAfter = vault.balanceOf(user);
         assertEq(userSharesAfter, userSharesBefore, "User shares should not change due to loss protection");
@@ -541,8 +545,8 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         assertEq(totalAssetsAfter, totalAssetsBefore, "Total assets should be the same before and after loss");
     }
 
-    /// @notice Test loss scenario where loss exceeds available donation shares
-    function _testLossExceedingDonationShares() internal {
+    /// @notice Test loss scenario where loss exceeds available dragonRouter shares
+    function _testLossExceedingDragonRouterShares() internal {
         IBaseHealthCheck strat = IBaseHealthCheck(_strategy());
 
         vm.startPrank(management);
@@ -564,7 +568,7 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         vm.stopPrank();
         _clearMocks();
 
-        uint256 donationSharesBefore = vault.balanceOf(donationAddress);
+        uint256 dragonRouterSharesBefore = vault.balanceOf(dragonRouter);
         uint256 userSharesBefore = vault.balanceOf(user);
 
         uint256 largeLossRate = (initialExchangeRate * 90) / 100;
@@ -578,8 +582,8 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         assertEq(profit, 0, "Should have no profit");
         assertGt(loss, 0, "Should have reported loss");
 
-        uint256 donationSharesAfter = vault.balanceOf(donationAddress);
-        assertLt(donationSharesAfter, donationSharesBefore, "Some donation shares should be burned");
+        uint256 dragonRouterSharesAfter = vault.balanceOf(dragonRouter);
+        assertLt(dragonRouterSharesAfter, dragonRouterSharesBefore, "Some dragonRouter shares should be burned");
 
         assertEq(vault.balanceOf(user), userSharesBefore, "User shares should not be burned");
 
@@ -617,8 +621,8 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         vm.stopPrank();
         _clearMocks();
 
-        uint256 donationSharesAfterProfit = vault.balanceOf(donationAddress);
-        assertGt(donationSharesAfterProfit, 0, "Should have donation shares after profit");
+        uint256 dragonRouterSharesAfterProfit = vault.balanceOf(dragonRouter);
+        assertGt(dragonRouterSharesAfterProfit, 0, "Should have dragonRouter shares after profit");
 
         uint256 firstLossRate = (profitRate * 95) / 100;
         _mockExchangeRate(firstLossRate);
@@ -631,11 +635,11 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         assertEq(profit1, 0, "Should have no profit in first loss");
         assertGt(loss1, 0, "Should have loss in first report");
 
-        uint256 donationSharesAfterFirstLoss = vault.balanceOf(donationAddress);
+        uint256 dragonRouterSharesAfterFirstLoss = vault.balanceOf(dragonRouter);
         assertLt(
-            donationSharesAfterFirstLoss,
-            donationSharesAfterProfit,
-            "Donation shares should decrease after first loss"
+            dragonRouterSharesAfterFirstLoss,
+            dragonRouterSharesAfterProfit,
+            "DragonRouter shares should decrease after first loss"
         );
 
         uint256 secondLossRate = (firstLossRate * 95) / 100;
@@ -649,11 +653,11 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         assertEq(profit2, 0, "Should have no profit in second loss");
         assertGt(loss2, 0, "Should have loss in second report");
 
-        uint256 donationSharesAfterSecondLoss = vault.balanceOf(donationAddress);
+        uint256 dragonRouterSharesAfterSecondLoss = vault.balanceOf(dragonRouter);
         assertLe(
-            donationSharesAfterSecondLoss,
-            donationSharesAfterFirstLoss,
-            "Donation shares should decrease or stay same after second loss"
+            dragonRouterSharesAfterSecondLoss,
+            dragonRouterSharesAfterFirstLoss,
+            "DragonRouter shares should decrease or stay same after second loss"
         );
 
         vm.startPrank(user);
@@ -663,8 +667,8 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         assertGt(assetsReceived, 0, "User should receive some assets");
     }
 
-    /// @notice Test that loss protection works correctly with zero donation shares
-    function _testLossWithZeroDonationShares() internal {
+    /// @notice Test that loss protection works correctly with zero dragonRouter shares
+    function _testLossWithZeroDragonRouterShares() internal {
         IBaseHealthCheck strat = IBaseHealthCheck(_strategy());
 
         vm.startPrank(management);
@@ -677,8 +681,8 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         vault.deposit(depositAmount, user);
         vm.stopPrank();
 
-        uint256 donationSharesBefore = vault.balanceOf(donationAddress);
-        assertEq(donationSharesBefore, 0, "Should have no donation shares initially");
+        uint256 dragonRouterSharesBefore = vault.balanceOf(dragonRouter);
+        assertEq(dragonRouterSharesBefore, 0, "Should have no dragonRouter shares initially");
 
         uint256 userSharesBefore = vault.balanceOf(user);
         uint256 totalAssetsBefore = vault.totalAssets();
@@ -695,8 +699,8 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         assertEq(profit, 0, "Should have no profit");
         assertGt(loss, 0, "Should have reported loss");
 
-        uint256 donationSharesAfter = vault.balanceOf(donationAddress);
-        assertEq(donationSharesAfter, 0, "Should still have no donation shares");
+        uint256 dragonRouterSharesAfter = vault.balanceOf(dragonRouter);
+        assertEq(dragonRouterSharesAfter, 0, "Should still have no dragonRouter shares");
 
         assertEq(vault.balanceOf(user), userSharesBefore, "User shares should not change");
 
@@ -755,8 +759,8 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
             "Withdrawable underlying value should match deposit"
         );
 
-        state.donationSharesAfterProfit = vault.balanceOf(donationAddress);
-        assertGt(state.donationSharesAfterProfit, 0, "Should have donation shares after profit");
+        state.dragonRouterSharesAfterProfit = vault.balanceOf(dragonRouter);
+        assertGt(state.dragonRouterSharesAfterProfit, 0, "Should have dragonRouter shares after profit");
 
         state.firstLossRate = (state.profitRate * (100 - firstLossPercentage)) / 100;
         _mockExchangeRate(state.firstLossRate);
@@ -769,11 +773,11 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         assertEq(profit1, 0, "Should have no profit in first loss");
         assertGt(loss1, 0, "Should have loss in first report");
 
-        state.donationSharesAfterFirstLoss = vault.balanceOf(donationAddress);
+        state.dragonRouterSharesAfterFirstLoss = vault.balanceOf(dragonRouter);
         assertLt(
-            state.donationSharesAfterFirstLoss,
-            state.donationSharesAfterProfit,
-            "Donation shares should decrease after first loss"
+            state.dragonRouterSharesAfterFirstLoss,
+            state.dragonRouterSharesAfterProfit,
+            "DragonRouter shares should decrease after first loss"
         );
 
         state.secondLossRate = (state.firstLossRate * (100 - secondLossPercentage)) / 100;
@@ -787,11 +791,11 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         assertEq(profit2, 0, "Should have no profit in second loss");
         assertGt(loss2, 0, "Should have loss in second report");
 
-        state.donationSharesAfterSecondLoss = vault.balanceOf(donationAddress);
+        state.dragonRouterSharesAfterSecondLoss = vault.balanceOf(dragonRouter);
         assertLe(
-            state.donationSharesAfterSecondLoss,
-            state.donationSharesAfterFirstLoss,
-            "Donation shares should decrease or stay same after second loss"
+            state.dragonRouterSharesAfterSecondLoss,
+            state.dragonRouterSharesAfterFirstLoss,
+            "DragonRouter shares should decrease or stay same after second loss"
         );
 
         vm.startPrank(user);
@@ -813,8 +817,8 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         }
     }
 
-    /// @notice Test profit then loss scenario with proper dragon share burning
-    function _test_profitThenLoss_dragonSharesBurnCorrectly() internal {
+    /// @notice Test profit then loss scenario with proper dragonRouter share burning
+    function _test_profitThenLoss_dragonRouterSharesBurnCorrectly() internal {
         ProfitLossTestData memory data;
 
         data.user1 = makeAddr("user1");
@@ -858,12 +862,12 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         vm.startPrank(keeper);
         (data.profit1, data.loss1) = vault.report();
         vm.stopPrank();
-        data.dragonShares = vault.balanceOf(donationAddress);
+        data.dragonRouterShares = vault.balanceOf(dragonRouter);
 
         assertEq(data.profit1, 33333333333333333333, "Should report expected profit");
         assertEq(data.loss1, 0, "Should report no loss in first report");
-        assertEq(data.dragonShares, 50e18, "Dragon shares should be 50e18");
-        assertEq(vault.totalSupply(), 375e18, "Total supply should include dragon shares");
+        assertEq(data.dragonRouterShares, 50e18, "DragonRouter shares should be 50e18");
+        assertEq(vault.totalSupply(), 375e18, "Total supply should include dragonRouter shares");
 
         _clearMocks();
         _mockExchangeRate(data.initialRate);
@@ -878,11 +882,11 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         vm.startPrank(keeper);
         (data.profit2, data.loss2) = vault.report();
         vm.stopPrank();
-        data.dragonSharesAfterLoss = vault.balanceOf(donationAddress);
+        data.dragonRouterSharesAfterLoss = vault.balanceOf(dragonRouter);
 
         assertEq(data.profit2, 0, "Should report no profit in second report");
         assertEq(data.loss2, 91666666666666666666, "Should report expected loss");
-        assertEq(data.dragonSharesAfterLoss, 0, "All dragon shares should be burned");
+        assertEq(data.dragonRouterSharesAfterLoss, 0, "All dragonRouter shares should be burned");
 
         _clearMocks();
         _mockExchangeRate(data.increasedRate);
@@ -895,17 +899,17 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         assertEq(data.user2Assets, 150e18, "User2 should receive expected assets");
         assertEq(vault.balanceOf(data.user2), 0, "User2 should have no shares left");
 
-        uint256 remainingDragonShares = vault.balanceOf(donationAddress);
+        uint256 remainingDragonRouterShares = vault.balanceOf(dragonRouter);
         uint256 remainingAssets = vault.totalAssets();
 
-        assertEq(remainingDragonShares, 0, "All dragon shares should be burned");
+        assertEq(remainingDragonRouterShares, 0, "All dragonRouter shares should be burned");
         assertEq(vault.totalSupply(), 0, "All shares should be withdrawn");
         assertEq(remainingAssets, 33333333333333333334, "Expected remaining assets from uncovered loss");
     }
 
-    /// @notice Test dragon router withdrawal followed by rate recovery - user should have no loss
+    /// @notice Test dragonRouter withdrawal followed by rate recovery - user should have no loss
     function _test_dragonRouterWithdrawal_rateRecovery_userNoLoss() internal {
-        DragonWithdrawalTestData memory data;
+        DragonRouterWithdrawalTestData memory data;
 
         data.user1 = makeAddr("user1");
         data.depositAmount = 100e18;
@@ -938,18 +942,18 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         (data.profit1, data.loss1) = vault.report();
         vm.stopPrank();
 
-        data.dragonSharesAfterProfit = vault.balanceOf(donationAddress);
+        data.dragonRouterSharesAfterProfit = vault.balanceOf(dragonRouter);
 
         assertEq(data.profit1, 33333333333333333333, "Should report expected profit");
         assertEq(data.loss1, 0, "Should report no loss");
-        assertEq(data.dragonSharesAfterProfit, 50e18, "Dragon shares should be 50e18");
+        assertEq(data.dragonRouterSharesAfterProfit, 50e18, "DragonRouter shares should be 50e18");
 
-        vm.startPrank(donationAddress);
-        data.dragonAssets = vault.redeem(vault.balanceOf(donationAddress), donationAddress, donationAddress);
+        vm.startPrank(dragonRouter);
+        data.dragonRouterAssets = vault.redeem(vault.balanceOf(dragonRouter), dragonRouter, dragonRouter);
         vm.stopPrank();
 
-        assertEq(data.dragonAssets, 33333333333333333333, "Dragon should receive expected assets");
-        assertEq(vault.balanceOf(donationAddress), 0, "Dragon should have no shares after withdrawal");
+        assertEq(data.dragonRouterAssets, 33333333333333333333, "DragonRouter should receive expected assets");
+        assertEq(vault.balanceOf(dragonRouter), 0, "DragonRouter should have no shares after withdrawal");
 
         _clearMocks();
 
@@ -961,7 +965,7 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
 
         assertEq(data.profit2, 0, "Should report no profit");
         assertEq(data.loss2, 33333333333333333333, "Should report expected loss");
-        assertEq(vault.balanceOf(donationAddress), 0, "Still no dragon shares to burn");
+        assertEq(vault.balanceOf(dragonRouter), 0, "Still no dragonRouter shares to burn");
 
         _clearMocks();
 
@@ -985,9 +989,9 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         assertApproxEqAbs(withdrawValue, depositValue, 1e15, "User should have no loss in ETH value terms");
     }
 
-    /// @notice Test dragon router withdrawal followed by rate decline - user should experience loss
+    /// @notice Test dragonRouter withdrawal followed by rate decline - user should experience loss
     function _test_dragonRouterWithdrawal_rateDecline_userLoss() internal {
-        DragonWithdrawalTestData memory data;
+        DragonRouterWithdrawalTestData memory data;
 
         data.user1 = makeAddr("user1");
         data.depositAmount = 100e18;
@@ -1021,18 +1025,18 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
         (data.profit1, data.loss1) = vault.report();
         vm.stopPrank();
 
-        data.dragonSharesAfterProfit = vault.balanceOf(donationAddress);
+        data.dragonRouterSharesAfterProfit = vault.balanceOf(dragonRouter);
 
         assertEq(data.profit1, 33333333333333333333, "Should report expected profit");
         assertEq(data.loss1, 0, "Should report no loss");
-        assertEq(data.dragonSharesAfterProfit, 50e18, "Dragon shares should be 50e18");
+        assertEq(data.dragonRouterSharesAfterProfit, 50e18, "DragonRouter shares should be 50e18");
 
-        vm.startPrank(donationAddress);
-        data.dragonAssets = vault.redeem(vault.balanceOf(donationAddress), donationAddress, donationAddress);
+        vm.startPrank(dragonRouter);
+        data.dragonRouterAssets = vault.redeem(vault.balanceOf(dragonRouter), dragonRouter, dragonRouter);
         vm.stopPrank();
 
-        assertEq(data.dragonAssets, 33333333333333333333, "Dragon should receive expected assets");
-        assertEq(vault.balanceOf(donationAddress), 0, "Dragon should have no shares after withdrawal");
+        assertEq(data.dragonRouterAssets, 33333333333333333333, "DragonRouter should receive expected assets");
+        assertEq(vault.balanceOf(dragonRouter), 0, "DragonRouter should have no shares after withdrawal");
 
         _clearMocks();
 
@@ -1044,7 +1048,7 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
 
         assertEq(data.profit2, 0, "Should report no profit");
         assertEq(data.loss2, 33333333333333333333, "Should report expected loss");
-        assertEq(vault.balanceOf(donationAddress), 0, "Still no dragon shares to burn");
+        assertEq(vault.balanceOf(dragonRouter), 0, "Still no dragonRouter shares to burn");
 
         _clearMocks();
 

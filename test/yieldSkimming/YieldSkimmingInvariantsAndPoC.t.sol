@@ -14,7 +14,7 @@ import { MockYieldSourceSkimming } from "test/mocks/core/tokenized-strategies/Mo
  *         exercise the yield-skimming strategy with randomized sequences of
  *         actions while keeping calls successful where intended.
  * @dev    This is intentionally simple: mint underlying to random actors,
- *         deposit/redeem, have keeper report, and occasionally try a dragon
+ *         deposit/redeem, have keeper report, and occasionally try a dragonRouter
  *         transfer (which should revert while insolvent).
  */
 contract YieldSkimmingFuzzHandler {
@@ -22,7 +22,7 @@ contract YieldSkimmingFuzzHandler {
     ERC20Mock public immutable asset;
     MockYieldSourceSkimming public immutable yieldSource;
     address public immutable keeper;
-    address public immutable dragon;
+    address public immutable dragonRouter;
 
     address[] public actors;
 
@@ -31,14 +31,14 @@ contract YieldSkimmingFuzzHandler {
         ERC20Mock _asset,
         MockYieldSourceSkimming _yieldSource,
         address _keeper,
-        address _dragon,
+        address _dragonRouter,
         address[] memory _actors
     ) {
         strategy = _strategy;
         asset = _asset;
         yieldSource = _yieldSource;
         keeper = _keeper;
-        dragon = _dragon;
+        dragonRouter = _dragonRouter;
         actors = _actors;
     }
 
@@ -88,9 +88,9 @@ contract YieldSkimmingFuzzHandler {
     }
 
     /**
-     * @notice Dragon attempts a transfer (should revert while insolvent)
+     * @notice DragonRouter attempts a transfer (should revert while insolvent)
      */
-    function dragonTransfer(uint256 amount, uint256 actorSeed) external {
+    function dragonRouterTransfer(uint256 amount, uint256 actorSeed) external {
         amount = (amount % 1e18) + 1;
         address to = _actor(actorSeed);
         if (to == address(0)) to = address(0xBEEF);
@@ -105,12 +105,12 @@ contract YieldSkimmingFuzzHandler {
  * @dev    This suite asserts the collapsed invariants:
  *         - Conversion:
  *             assetsOut(shares) = shares * min(totalAssets / S, 1 / currentRate)
- *         - Dragon gating and mint/burn bounds:
- *             no mint unless V > D; possible burn when V < D; dragon ops blocked when insolvent
+ *         - DragonRouter gating and mint/burn bounds:
+ *             no mint unless V > D; possible burn when V < D; dragonRouter ops blocked when insolvent
  *         Notation:
  *             V = totalAssets * currentRate (user-value units, 1e18 scale)
  *             S = totalShares
- *             D = userDebt + dragonDebt (value units)
+ *             D = userDebt + dragonRouterDebt (value units)
  */
 contract YieldSkimmingInvariantSuite is StdInvariant, Setup {
     YieldSkimmingFuzzHandler internal fuzzHandler;
@@ -125,14 +125,7 @@ contract YieldSkimmingInvariantSuite is StdInvariant, Setup {
         actors[1] = makeAddr("bob");
         actors[2] = makeAddr("carol");
 
-        fuzzHandler = new YieldSkimmingFuzzHandler(
-            strategy,
-            asset,
-            yieldSource,
-            keeper,
-            address(donationAddress),
-            actors
-        );
+        fuzzHandler = new YieldSkimmingFuzzHandler(strategy, asset, yieldSource, keeper, address(dragonRouter), actors);
 
         // Target the handler for invariant fuzzing
         targetContract(address(fuzzHandler));
@@ -142,7 +135,7 @@ contract YieldSkimmingInvariantSuite is StdInvariant, Setup {
         selectors[0] = fuzzHandler.deposit.selector;
         selectors[1] = fuzzHandler.redeemSome.selector;
         selectors[2] = fuzzHandler.report.selector;
-        selectors[3] = fuzzHandler.dragonTransfer.selector;
+        selectors[3] = fuzzHandler.dragonRouterTransfer.selector;
         targetSelector(FuzzSelector({ addr: address(fuzzHandler), selectors: selectors }));
     }
 
@@ -162,7 +155,7 @@ contract YieldSkimmingInvariantSuite is StdInvariant, Setup {
     }
 
     /**
-     * @notice Tracked obligations in value units (D = userDebt + dragonDebt).
+     * @notice Tracked obligations in value units (D = userDebt + dragonRouterDebt).
      */
     function _getTrackedObligationsValue() internal view returns (uint256) {
         IYieldSkimmingStrategy ys = IYieldSkimmingStrategy(address(strategy));
@@ -194,30 +187,30 @@ contract YieldSkimmingInvariantSuite is StdInvariant, Setup {
     }
 
     /**
-     * @notice Dragon gating and mint/burn bounds:
-     *         - If insolvent (V < D), dragon operations must revert
-     *         - After report, dragon shares must not increase unless V > D
+     * @notice DragonRouter gating and mint/burn bounds:
+     *         - If insolvent (V < D), dragonRouter operations must revert
+     *         - After report, dragonRouter shares must not increase unless V > D
      */
-    function invariant_dragon_and_mint_burn() public {
+    function invariant_dragonRouter_and_mint_burn() public {
         uint256 V = _getVaultValueInUserUnits();
         uint256 D = _getTrackedObligationsValue();
 
-        // If insolvent, dragon operations must revert; simulate a small transfer attempt
+        // If insolvent, dragonRouter operations must revert; simulate a small transfer attempt
         if (V < D) {
-            vm.startPrank(donationAddress);
+            vm.startPrank(dragonRouter);
             vm.expectRevert();
             strategy.transfer(address(0xBEEF), 1);
             vm.stopPrank();
         }
 
-        // After a report, dragon shares should not increase unless V > D.
-        uint256 dragonBefore = strategy.balanceOf(donationAddress);
+        // After a report, dragonRouter shares should not increase unless V > D.
+        uint256 dragonRouterBefore = strategy.balanceOf(dragonRouter);
         vm.prank(keeper);
         strategy.report();
-        uint256 dragonAfter = strategy.balanceOf(donationAddress);
+        uint256 dragonRouterAfter = strategy.balanceOf(dragonRouter);
         if (V <= D) {
             // allow equal if burn happened
-            assertLe(dragonAfter, dragonBefore, "no mint when not profitable");
+            assertLe(dragonRouterAfter, dragonRouterBefore, "no mint when not profitable");
         }
     }
 }
@@ -234,7 +227,7 @@ contract YieldSkimmingExploitPoC is Setup {
     function setUp() public override {
         super.setUp();
 
-        // Enable burning for this test suite so dragon shares can be burned during losses
+        // Enable burning for this test suite so dragonRouter shares can be burned during losses
         vm.prank(management);
         strategy.setEnableBurning(true);
     }
@@ -251,13 +244,13 @@ contract YieldSkimmingExploitPoC is Setup {
         MockStrategySkimming(address(strategy)).updateExchangeRate(15e17);
         vm.prank(keeper);
         strategy.report();
-        assertEq(strategy.balanceOf(donationAddress), 50e18, "dragon minted 50 shares");
+        assertEq(strategy.balanceOf(dragonRouter), 50e18, "dragonRouter minted 50 shares");
 
         // 3) Loss: rate -> 0.5
         MockStrategySkimming(address(strategy)).updateExchangeRate(5e17);
         vm.prank(keeper);
         strategy.report();
-        assertEq(strategy.balanceOf(donationAddress), 0, "dragon burned to 0");
+        assertEq(strategy.balanceOf(dragonRouter), 0, "dragonRouter burned to 0");
         assertEq(strategy.totalSupply(), 100e18, "supply back to 100");
 
         // 4) Withdraw half supply
@@ -277,7 +270,7 @@ contract YieldSkimmingExploitPoC is Setup {
         (uint256 profitNext, uint256 lossNext) = strategy.report();
         assertEq(profitNext, 0, "POST-FIX: no fabricated profit");
         assertEq(lossNext, userDebtPost, "POST-FIX: no loss");
-        assertEq(strategy.balanceOf(donationAddress), 0, "POST-FIX: no dragon mint");
+        assertEq(strategy.balanceOf(dragonRouter), 0, "POST-FIX: no dragonRouter mint");
     }
 
     // Test expected behavior after fix for withdraw() path
@@ -292,13 +285,13 @@ contract YieldSkimmingExploitPoC is Setup {
         MockStrategySkimming(address(strategy)).updateExchangeRate(15e17);
         vm.prank(keeper);
         strategy.report();
-        assertEq(strategy.balanceOf(donationAddress), 50e18, "dragon minted 50 shares");
+        assertEq(strategy.balanceOf(dragonRouter), 50e18, "dragonRouter minted 50 shares");
 
         // 3) Loss: rate -> 0.5
         MockStrategySkimming(address(strategy)).updateExchangeRate(5e17);
         vm.prank(keeper);
         strategy.report();
-        assertEq(strategy.balanceOf(donationAddress), 0, "dragon burned to 0");
+        assertEq(strategy.balanceOf(dragonRouter), 0, "dragonRouter burned to 0");
         assertEq(strategy.totalSupply(), 100e18, "supply back to 100");
 
         // 4) Withdraw half (50 assets burns 50 shares)
@@ -317,6 +310,6 @@ contract YieldSkimmingExploitPoC is Setup {
         (uint256 profitNext, uint256 lossNext) = strategy.report();
         assertEq(profitNext, 0, "POST-FIX: no fabricated profit via withdraw");
         assertEq(lossNext, userDebtPost, "POST-FIX: no loss");
-        assertEq(strategy.balanceOf(donationAddress), 0, "POST-FIX: no dragon mint");
+        assertEq(strategy.balanceOf(dragonRouter), 0, "POST-FIX: no dragonRouter mint");
     }
 }

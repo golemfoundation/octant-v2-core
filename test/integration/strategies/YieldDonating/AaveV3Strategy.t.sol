@@ -7,7 +7,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { AaveV3Strategy } from "src/strategies/yieldDonating/AaveV3Strategy.sol";
 import { AaveV3StrategyFactory } from "src/factories/AaveV3StrategyFactory.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
-import { IMockStrategy } from "test/mocks/zodiac-core/IMockStrategy.sol";
+import { IMockStrategy } from "test/mocks/core/tokenized-strategies/IMockStrategy.sol";
 import { BaseYieldDonatingIntegrationTest } from "./base/BaseYieldDonatingIntegrationTest.sol";
 import { AaveV3TestConfig } from "../config/AaveV3TestConfig.sol";
 
@@ -80,7 +80,7 @@ contract AaveV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             false, // enableBurning
             address(implementation)
         );
@@ -99,7 +99,7 @@ contract AaveV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         vm.label(management, "Management");
         vm.label(keeper, "Keeper");
         vm.label(emergencyAdmin, "Emergency Admin");
-        vm.label(donationAddress, "Donation Address");
+        vm.label(dragonRouter, "DragonRouter");
         vm.label(user, "Test User");
     }
 
@@ -138,7 +138,7 @@ contract AaveV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
 
         uint256 totalAssetsBefore = vault.totalAssets();
         uint256 userSharesBefore = vault.balanceOf(user);
-        uint256 donationBalanceBefore = ERC20(address(vault)).balanceOf(donationAddress);
+        uint256 dragonRouterBalanceBefore = ERC20(address(vault)).balanceOf(dragonRouter);
 
         // For Aave, simulate profit by mocking the aToken balanceOf
         vm.mockCall(
@@ -159,16 +159,16 @@ contract AaveV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         // User shares should remain the same (profit is donated)
         assertEq(vault.balanceOf(user), userSharesBefore, "User shares should not change");
 
-        // Donation address should have received the profit
-        uint256 donationBalanceAfter = ERC20(address(vault)).balanceOf(donationAddress);
-        assertGt(donationBalanceAfter, donationBalanceBefore, "Donation address should receive profit");
+        // DragonRouter should have received the profit
+        uint256 dragonRouterBalanceAfter = ERC20(address(vault)).balanceOf(dragonRouter);
+        assertGt(dragonRouterBalanceAfter, dragonRouterBalanceBefore, "DragonRouter should receive profit");
 
         // Total assets should increase
         assertGe(vault.totalAssets(), totalAssetsBefore, "Total assets should increase");
     }
 
-    /// @notice Fuzz test the harvesting functionality with profit donation
-    function testFuzzHarvestWithProfitDonationAave(uint256 depositAmount, uint256 profitAmount) public {
+    /// @notice Fuzz test the harvesting functionality with profit dragonRouter
+    function testFuzzHarvestWithProfitDragonRouterAave(uint256 depositAmount, uint256 profitAmount) public {
         depositAmount = bound(depositAmount, _minDeposit(), _maxDeposit());
         profitAmount = bound(profitAmount, 1e5, depositAmount / 10);
 
@@ -296,8 +296,8 @@ contract AaveV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         );
     }
 
-    /// @notice Test that _harvestAndReport includes idle funds and donations work correctly
-    function testHarvestAndReportIncludesIdleFundsWithDonationAave() public {
+    /// @notice Test that _harvestAndReport includes idle funds and dragonRouters work correctly
+    function testHarvestAndReportIncludesIdleFundsWithDragonRouterAave() public {
         uint256 depositAmount = 10000e6;
         uint256 aTokenProfit = 500e6;
         uint256 idleProfit = 500e6;
@@ -321,7 +321,7 @@ contract AaveV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
 
         airdrop(ERC20(_asset()), address(strategy), idleProfit);
 
-        uint256 donationBalanceBefore = ERC20(address(vault)).balanceOf(donationAddress);
+        uint256 dragonRouterBalanceBefore = ERC20(address(vault)).balanceOf(dragonRouter);
 
         vm.prank(keeper);
         (uint256 reportedProfit, uint256 loss) = IMockStrategy(address(strategy)).report();
@@ -331,12 +331,12 @@ contract AaveV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         assertEq(reportedProfit, totalProfit, "Reported profit should include both aToken and idle profits");
         assertEq(loss, 0, "Should have no loss");
 
-        uint256 donationBalanceAfter = ERC20(address(vault)).balanceOf(donationAddress);
-        assertGt(donationBalanceAfter, donationBalanceBefore, "Donation address should receive profit");
+        uint256 dragonRouterBalanceAfter = ERC20(address(vault)).balanceOf(dragonRouter);
+        assertGt(dragonRouterBalanceAfter, dragonRouterBalanceBefore, "DragonRouter should receive profit");
         assertEq(
-            donationBalanceAfter - donationBalanceBefore,
+            dragonRouterBalanceAfter - dragonRouterBalanceBefore,
             totalProfit,
-            "Donation should equal the total profit (aToken + idle)"
+            "DragonRouter should equal the total profit (aToken + idle)"
         );
 
         uint256 finalTotalAssets = IERC4626(address(vault)).totalAssets();
@@ -360,7 +360,7 @@ contract AaveV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            donationAddress,
+            dragonRouter,
             true,
             address(implementation)
         );
@@ -442,7 +442,7 @@ contract AaveV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         vm.roll(block.number + 1000);
         vm.warp(block.timestamp + 30 days);
 
-        uint256 donationSharesBefore = IERC4626(address(strategy)).balanceOf(donationAddress);
+        uint256 dragonRouterSharesBefore = IERC4626(address(strategy)).balanceOf(dragonRouter);
 
         vm.prank(keeper);
         (uint256 profit, uint256 loss) = IMockStrategy(address(strategy)).report();
@@ -451,8 +451,8 @@ contract AaveV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         assertEq(loss, 0, "Should have no loss");
 
         if (profit > 0) {
-            uint256 donationSharesAfter = IERC4626(address(strategy)).balanceOf(donationAddress);
-            assertGt(donationSharesAfter, donationSharesBefore, "Donation address should receive profit shares");
+            uint256 dragonRouterSharesAfter = IERC4626(address(strategy)).balanceOf(dragonRouter);
+            assertGt(dragonRouterSharesAfter, dragonRouterSharesBefore, "DragonRouter should receive profit shares");
         }
 
         vm.startPrank(user);

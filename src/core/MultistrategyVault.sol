@@ -10,7 +10,7 @@ import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { IMultistrategyVault } from "src/core/interfaces/IMultistrategyVault.sol";
 import { IDepositLimitModule } from "src/core/interfaces/IDepositLimitModule.sol";
 import { IWithdrawLimitModule } from "src/core/interfaces/IWithdrawLimitModule.sol";
-import { IERC4626Payable } from "src/zodiac-core/interfaces/IERC4626Payable.sol";
+import { IERC4626Payable } from "src/core/interfaces/IERC4626Payable.sol";
 import { IAccountant } from "src/interfaces/IAccountant.sol";
 import { IMultistrategyVaultFactory } from "src/factories/interfaces/IMultistrategyVaultFactory.sol";
 import { DebtManagementLib } from "src/core/libs/DebtManagementLib.sol";
