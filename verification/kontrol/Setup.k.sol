@@ -4,7 +4,6 @@ pragma solidity ^0.8.25;
 import { ProxyAdmin } from "@openzeppelin/contracts/proxy/transparent/ProxyAdmin.sol";
 import { TransparentUpgradeableProxy } from "@openzeppelin/contracts/proxy/transparent/TransparentUpgradeableProxy.sol";
 
-import { DragonRouter } from "src/zodiac-core/DragonRouter.sol";
 import { SplitChecker } from "src/zodiac-core/SplitChecker.sol";
 import { DragonTokenizedStrategy } from "src/zodiac-core/vaults/DragonTokenizedStrategy.sol";
 
@@ -23,7 +22,7 @@ import { KontrolTest } from "test/kontrol/KontrolTest.k.sol";
 contract Setup is BaseTest, KontrolTest {
     DragonTokenizedStrategy public dragonTokenizedStrategySingleton;
     /// @notice The deployed DragonRouter
-    DragonRouter public dragonRouter;
+    address public dragonRouter;
 
     YearnPolygonUsdcStrategy public polygonStrategy;
 
@@ -61,30 +60,7 @@ contract Setup is BaseTest, KontrolTest {
     }
 
     function deployDragonRouter() private {
-        // The deployed DragonRouter implementation
-        dragonRouter = new DragonRouter();
-
-        // setup empty strategies and assets
-        address[] memory strategies = new address[](0);
-        address[] memory assets = new address[](0);
-
-        // Deploy Spli Checker
-        SplitChecker splitChecker = deploySplitChecker();
-
-        bytes memory initData = abi.encode(
-            msg.sender, // owner
-            abi.encode(
-                strategies, // initial strategies array
-                assets, // initial assets array
-                msg.sender, // governance address
-                msg.sender, // regen governance address
-                address(splitChecker), // split checker address
-                msg.sender, // opex vault address
-                msg.sender // metapool address
-            )
-        );
-
-        dragonRouter.setUp(initData);
+        dragonRouter = makeAddr("DRAGON_ROUTER");
     }
 
     function strategySetup() private {

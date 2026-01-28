@@ -24,8 +24,8 @@ abstract contract BaseFactoryIntegrationTest is Test {
     /// @notice Emergency admin address
     address public emergencyAdmin;
 
-    /// @notice DragonRouter
-    address public dragonRouter;
+    /// @notice Donation address
+    address public donationAddress;
 
     /// @notice Mainnet fork ID
     uint256 public mainnetFork;
@@ -100,7 +100,7 @@ abstract contract BaseFactoryIntegrationTest is Test {
         management = address(0x1);
         keeper = address(0x2);
         emergencyAdmin = address(0x3);
-        dragonRouter = address(0x4);
+        donationAddress = address(0x4);
     }
 
     /// @notice Labels base addresses
@@ -108,7 +108,7 @@ abstract contract BaseFactoryIntegrationTest is Test {
         vm.label(management, "Management");
         vm.label(keeper, "Keeper");
         vm.label(emergencyAdmin, "Emergency Admin");
-        vm.label(dragonRouter, "DragonRouter");
+        vm.label(donationAddress, "Donation Address");
     }
 
     // ========== SHARED TEST IMPLEMENTATIONS ==========
@@ -126,11 +126,11 @@ abstract contract BaseFactoryIntegrationTest is Test {
             address deployerAddress,
             uint256 timestamp,
             string memory name,
-            address stratDragonRouterAddress
+            address stratDonationAddress
         ) = BaseStrategyFactory(_factory()).strategies(management, 0);
         assertEq(deployerAddress, management, "Deployer address incorrect");
         assertEq(name, vaultName, "Vault name incorrect");
-        assertEq(stratDragonRouterAddress, dragonRouter, "DragonRouter incorrect");
+        assertEq(stratDonationAddress, donationAddress, "Donation address incorrect");
         assertTrue(timestamp > 0, "Timestamp should be set");
 
         // Verify strategy asset and symbol

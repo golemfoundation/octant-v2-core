@@ -6,7 +6,7 @@ import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 contract MockERC20 is ERC20 {
     uint8 private _decimals;
 
-    constructor(uint8 decimals_) ERC20("DragonRouter Test Token", "DTT") {
+    constructor(uint8 decimals_) ERC20("Dragon Test Token", "DTT") {
         _decimals = decimals_;
     }
 

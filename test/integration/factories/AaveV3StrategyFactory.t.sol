@@ -64,7 +64,7 @@ contract AaveV3StrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                dragonRouter,
+                donationAddress,
                 false, // enableBurning
                 address(implementation)
             );
@@ -101,7 +101,7 @@ contract AaveV3StrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                dragonRouter,
+                donationAddress,
                 false, // enableBurning
                 address(implementation),
                 deployer
@@ -125,7 +125,7 @@ contract AaveV3StrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                dragonRouter,
+                donationAddress,
                 false, // enableBurning
                 address(implementation),
                 deployer

@@ -62,7 +62,7 @@ contract RocketPoolStrategyTest is BaseYieldSkimmingIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            dragonRouter,
+            donationAddress,
             true, // enableBurning
             address(implementation)
         );
@@ -80,7 +80,7 @@ contract RocketPoolStrategyTest is BaseYieldSkimmingIntegrationTest {
         vm.label(management, "Management");
         vm.label(keeper, "Keeper");
         vm.label(emergencyAdmin, "Emergency Admin");
-        vm.label(dragonRouter, "DragonRouter");
+        vm.label(donationAddress, "Donation Address");
         vm.label(user, "Test User");
     }
 
@@ -158,16 +158,16 @@ contract RocketPoolStrategyTest is BaseYieldSkimmingIntegrationTest {
         _testFuzzHarvestWithLoss(depositAmount, profitPercentage, lossPercentage);
     }
 
-    function testLossExceedingDragonRouterSharesRocket() public {
-        _testLossExceedingDragonRouterShares();
+    function testLossExceedingDonationSharesRocket() public {
+        _testLossExceedingDonationShares();
     }
 
     function testConsecutiveLossesRocket() public {
         _testConsecutiveLosses();
     }
 
-    function testLossWithZeroDragonRouterSharesRocket() public {
-        _testLossWithZeroDragonRouterShares();
+    function testLossWithZeroDonationSharesRocket() public {
+        _testLossWithZeroDonationShares();
     }
 
     function testFuzzConsecutiveLossesRocket(
@@ -179,8 +179,8 @@ contract RocketPoolStrategyTest is BaseYieldSkimmingIntegrationTest {
         _testFuzzConsecutiveLosses(depositAmount, profitPercentage, firstLossPercentage, secondLossPercentage);
     }
 
-    function test_profitThenLoss_dragonRouterSharesBurnCorrectly() public {
-        _test_profitThenLoss_dragonRouterSharesBurnCorrectly();
+    function test_profitThenLoss_dragonSharesBurnCorrectly() public {
+        _test_profitThenLoss_dragonSharesBurnCorrectly();
     }
 
     function test_dragonRouterWithdrawal_rateRecovery_userNoLoss() public {

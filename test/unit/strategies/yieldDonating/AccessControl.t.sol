@@ -254,16 +254,16 @@ contract AccessControlTest is Setup {
         assertEq(strategy.name(), newName);
     }
 
-    // ================== DragonRouter Cooldown Tests ==================
+    // ================== Dragon Router Cooldown Tests ==================
 
     function test_dragonRouter_initialState() public view {
-        assertEq(strategy.dragonRouter(), dragonRouter);
+        assertEq(strategy.dragonRouter(), donationAddress);
         assertEq(strategy.pendingDragonRouter(), address(0));
         assertEq(strategy.dragonRouterChangeTimestamp(), 0);
     }
 
     function test_setDragonRouter_initiatesCooldown(address _newRouter) public {
-        vm.assume(_newRouter != address(0) && _newRouter != dragonRouter);
+        vm.assume(_newRouter != address(0) && _newRouter != donationAddress);
 
         uint256 currentTime = block.timestamp;
         uint256 expectedEffectiveTime = currentTime + 14 days;
@@ -276,7 +276,7 @@ contract AccessControlTest is Setup {
 
         assertEq(strategy.pendingDragonRouter(), _newRouter);
         assertEq(strategy.dragonRouterChangeTimestamp(), currentTime);
-        assertEq(strategy.dragonRouter(), dragonRouter); // Should not change yet
+        assertEq(strategy.dragonRouter(), donationAddress); // Should not change yet
     }
 
     function test_setDragonRouter_accessControl(address _caller) public {
@@ -297,7 +297,7 @@ contract AccessControlTest is Setup {
     function test_setDragonRouter_sameRouter_reverts() public {
         vm.prank(management);
         vm.expectRevert("same dragon router");
-        strategy.setDragonRouter(dragonRouter);
+        strategy.setDragonRouter(donationAddress);
     }
 
     function test_setDragonRouter_canOverridePending() public {
@@ -411,7 +411,7 @@ contract AccessControlTest is Setup {
 
         assertEq(strategy.pendingDragonRouter(), address(0));
         assertEq(strategy.dragonRouterChangeTimestamp(), 0);
-        assertEq(strategy.dragonRouter(), dragonRouter); // Should remain unchanged
+        assertEq(strategy.dragonRouter(), donationAddress); // Should remain unchanged
     }
 
     function test_cancelDragonRouterChange_accessControl(address _caller) public {
@@ -445,7 +445,7 @@ contract AccessControlTest is Setup {
         strategy.cancelDragonRouterChange();
 
         assertEq(strategy.pendingDragonRouter(), address(0));
-        assertEq(strategy.dragonRouter(), dragonRouter);
+        assertEq(strategy.dragonRouter(), donationAddress);
     }
 
     function test_cancelDragonRouterChange_afterCooldownBeforeFinalization() public {
@@ -462,7 +462,7 @@ contract AccessControlTest is Setup {
         strategy.cancelDragonRouterChange();
 
         assertEq(strategy.pendingDragonRouter(), address(0));
-        assertEq(strategy.dragonRouter(), dragonRouter);
+        assertEq(strategy.dragonRouter(), donationAddress);
     }
 
     function testFuzz_userWithdrawDuringCooldown(uint256 _amount, uint256 _skipTime) public {
@@ -473,7 +473,7 @@ contract AccessControlTest is Setup {
         // Setup user with funds
         mintAndDepositIntoStrategy(strategy, user, _amount);
 
-        // Initiate dragonRouter change
+        // Initiate dragon router change
         vm.prank(management);
         strategy.setDragonRouter(newRouter);
 
@@ -496,7 +496,7 @@ contract AccessControlTest is Setup {
         // Setup some funds
         mintAndDepositIntoStrategy(strategy, user, amount);
 
-        // Initiate dragonRouter change
+        // Initiate dragon router change
         vm.prank(management);
         strategy.setDragonRouter(newRouter);
 
@@ -509,8 +509,8 @@ contract AccessControlTest is Setup {
 
         assertGt(profit, 0);
         assertEq(loss, 0);
-        // Should still be using original dragonRouter for minting shares
-        assertGt(strategy.balanceOf(dragonRouter), 0);
+        // Should still be using original dragon router for minting shares
+        assertGt(strategy.balanceOf(donationAddress), 0);
         assertEq(strategy.balanceOf(newRouter), 0);
     }
 
@@ -521,7 +521,7 @@ contract AccessControlTest is Setup {
         // Setup some funds
         mintAndDepositIntoStrategy(strategy, user, amount);
 
-        // Change and finalize dragonRouter
+        // Change and finalize dragon router
         vm.prank(management);
         strategy.setDragonRouter(newRouter);
         skip(14 days);
@@ -531,21 +531,21 @@ contract AccessControlTest is Setup {
         asset.mint(address(strategy), amount / 10);
 
         // Clear any existing balances
-        uint256 oldRouterBalance = strategy.balanceOf(dragonRouter);
+        uint256 oldRouterBalance = strategy.balanceOf(donationAddress);
         if (oldRouterBalance > 0) {
-            vm.prank(dragonRouter);
-            strategy.redeem(oldRouterBalance, dragonRouter, dragonRouter);
+            vm.prank(donationAddress);
+            strategy.redeem(oldRouterBalance, donationAddress, donationAddress);
         }
 
-        // Report should now use new dragonRouter
+        // Report should now use new dragon router
         vm.prank(keeper);
         (uint256 profit, uint256 loss) = strategy.report();
 
         assertGt(profit, 0);
         assertEq(loss, 0);
-        // Should be using new dragonRouter for minting shares
+        // Should be using new dragon router for minting shares
         assertGt(strategy.balanceOf(newRouter), 0);
-        assertEq(strategy.balanceOf(dragonRouter), 0);
+        assertEq(strategy.balanceOf(donationAddress), 0);
     }
 
     function test_multipleChangesInSequence() public {
@@ -604,7 +604,7 @@ contract AccessControlTest is Setup {
 
     function testFuzz_getterFunctions(address _pendingRouter, uint96 _timestamp) public {
         vm.assume(_pendingRouter != address(0));
-        vm.assume(_pendingRouter != dragonRouter);
+        vm.assume(_pendingRouter != donationAddress);
 
         vm.warp(_timestamp);
 
@@ -613,7 +613,7 @@ contract AccessControlTest is Setup {
 
         assertEq(strategy.pendingDragonRouter(), _pendingRouter);
         assertEq(strategy.dragonRouterChangeTimestamp(), _timestamp);
-        assertEq(strategy.dragonRouter(), dragonRouter);
+        assertEq(strategy.dragonRouter(), donationAddress);
     }
 
     function test_cooldownPeriodConstant() public pure {

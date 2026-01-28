@@ -25,8 +25,8 @@ abstract contract BaseIntegrationTest is Test {
     /// @notice Emergency admin address
     address public emergencyAdmin;
 
-    /// @notice DragonRouter address (receives profit shares)
-    address public dragonRouter;
+    /// @notice Donation/dragon router address
+    address public donationAddress;
 
     /// @notice Primary test user
     address public user;
@@ -80,7 +80,7 @@ abstract contract BaseIntegrationTest is Test {
         management = address(0x1);
         keeper = address(0x2);
         emergencyAdmin = address(0x3);
-        dragonRouter = address(0x4);
+        donationAddress = address(0x4);
         user = address(0x1234);
     }
 

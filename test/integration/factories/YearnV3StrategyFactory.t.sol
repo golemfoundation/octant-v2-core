@@ -64,7 +64,7 @@ contract YearnV3StrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                dragonRouter,
+                donationAddress,
                 false, // enableBurning
                 address(implementation)
             );
@@ -92,7 +92,7 @@ contract YearnV3StrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                dragonRouter,
+                donationAddress,
                 false, // enableBurning
                 address(implementation),
                 deployer

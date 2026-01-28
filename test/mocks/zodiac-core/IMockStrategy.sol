@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0
 pragma solidity >=0.8.18;
 
-import { ITokenizedStrategy } from "src/core/interfaces/ITokenizedStrategy.sol";
-import { IBaseStrategy } from "src/core/interfaces/IBaseStrategy.sol";
-
-/**
- * @title IMockStrategy
- * @notice Interface for mock strategies used in testing
- * @dev Extends ITokenizedStrategy with mock-specific test methods
- */
-interface IMockStrategy is ITokenizedStrategy, IBaseStrategy {
+import { IDragonTokenizedStrategy } from "src/zodiac-core/interfaces/IDragonTokenizedStrategy.sol";
+import { IBaseStrategy } from "src/zodiac-core/interfaces/IBaseStrategy.sol";
+import { ITokenizedStrategy } from "src/zodiac-core/interfaces/ITokenizedStrategy.sol";
+// Interface to use during testing that implements the 4626 standard
+// the implementation functions, the Strategies immutable functions
+// as well as the added functions for the Mock Strategy.
+interface IMockStrategy is IDragonTokenizedStrategy, IBaseStrategy {
     function setTrigger(bool _trigger) external;
 
     function onlyLetManagers() external;
@@ -17,6 +15,8 @@ interface IMockStrategy is ITokenizedStrategy, IBaseStrategy {
     function onlyLetKeepersIn() external;
 
     function onlyLetEmergencyAdminsIn() external;
+
+    function safeDeposit(uint256 assets, address receiver, uint256 minSharesOut) external;
 
     function yieldSource() external view returns (address);
 

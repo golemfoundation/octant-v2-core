@@ -62,7 +62,7 @@ contract LidoStrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                dragonRouter,
+                donationAddress,
                 false, // enableBurning
                 address(implementation)
             );
@@ -97,7 +97,7 @@ contract LidoStrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                dragonRouter,
+                donationAddress,
                 false, // enableBurning
                 address(implementation),
                 deployer
@@ -121,7 +121,7 @@ contract LidoStrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                dragonRouter,
+                donationAddress,
                 false, // enableBurning
                 address(implementation),
                 deployer

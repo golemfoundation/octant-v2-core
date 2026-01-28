@@ -7,12 +7,12 @@ This directory contains proof-of-concept demonstrations for security findings fr
 ### 🔴 Critical Vulnerabilities (Exploitable)
 Tests that demonstrate actual security vulnerabilities requiring immediate patches.
 
-#### `LIN001_TimestampStalenessExploit.t.sol` (REMOVED)
+#### `LIN001_TimestampStalenessExploit.t.sol`
 - **Finding**: LinearAllowance timestamp staleness exploitation
 - **Mechanism**: Conditional timestamp updates enable retroactive allowance calculations
-- **Location**: Removed with zodiac-core module deletion
+- **Location**: `src/zodiac-core/modules/LinearAllowanceSingletonForGnosisSafe.sol:231`
 - **Severity**: High - Enables systematic fund drainage
-- **Status**: Module and test removed; no longer applicable
+- **Impact**: Direct financial loss through timestamp manipulation
 
 #### `REG006_GovernanceExploit.t.sol`
 - **Finding**: MaxBumpTip governance extraction vulnerability

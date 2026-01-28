@@ -6,7 +6,7 @@ import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { SparkStrategy } from "src/strategies/yieldDonating/SparkStrategy.sol";
 import { SparkStrategyFactory } from "src/factories/SparkStrategyFactory.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
-import { IMockStrategy } from "test/mocks/core/tokenized-strategies/IMockStrategy.sol";
+import { IMockStrategy } from "test/mocks/zodiac-core/IMockStrategy.sol";
 import { MockERC20 } from "test/mocks/MockERC20.sol";
 import { BaseYieldDonatingIntegrationTest } from "./base/BaseYieldDonatingIntegrationTest.sol";
 import { SparkTestConfig } from "../config/SparkTestConfig.sol";
@@ -105,7 +105,7 @@ contract SparkDonatingStrategyTest is BaseYieldDonatingIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            dragonRouter,
+            donationAddress,
             false, // enableBurning
             address(implementation)
         );
@@ -123,7 +123,7 @@ contract SparkDonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         vm.label(management, "Management");
         vm.label(keeper, "Keeper");
         vm.label(emergencyAdmin, "Emergency Admin");
-        vm.label(dragonRouter, "DragonRouter");
+        vm.label(donationAddress, "Donation Address");
         vm.label(user, "Test User");
         vm.label(unauthorizedUser, "Unauthorized User");
     }
@@ -152,7 +152,7 @@ contract SparkDonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         _testFuzzWithdraw(depositAmount, withdrawFraction);
     }
 
-    function testFuzzHarvestWithProfitDragonRouterSpark(uint256 depositAmount, uint256 profitAmount) public {
+    function testFuzzHarvestWithProfitDonationSpark(uint256 depositAmount, uint256 profitAmount) public {
         depositAmount = bound(depositAmount, _minDeposit(), _maxDeposit());
         profitAmount = bound(profitAmount, 1e5, depositAmount);
 
@@ -167,7 +167,7 @@ contract SparkDonatingStrategyTest is BaseYieldDonatingIntegrationTest {
 
         uint256 totalAssetsBefore = IERC4626(address(vault)).totalAssets();
         uint256 userSharesBefore = IERC4626(address(vault)).balanceOf(user);
-        uint256 dragonRouterBalanceBefore = ERC20(address(vault)).balanceOf(dragonRouter);
+        uint256 donationBalanceBefore = ERC20(address(vault)).balanceOf(donationAddress);
 
         // Mock profit by mocking Spark vault return value
         uint256 balanceOfSparkVault = IERC4626(_compounderVault()).balanceOf(address(strategy));
@@ -192,9 +192,9 @@ contract SparkDonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         // User shares should remain the same (no dilution)
         assertEq(IERC4626(address(vault)).balanceOf(user), userSharesBefore, "User shares should not change");
 
-        // DragonRouter should have received the profit
-        uint256 dragonRouterBalanceAfter = ERC20(address(vault)).balanceOf(dragonRouter);
-        assertGt(dragonRouterBalanceAfter, dragonRouterBalanceBefore, "DragonRouter should receive profit");
+        // Donation address should have received the profit
+        uint256 donationBalanceAfter = ERC20(address(vault)).balanceOf(donationAddress);
+        assertGt(donationBalanceAfter, donationBalanceBefore, "Donation address should receive profit");
 
         // Total assets should increase by the profit amount
         assertGt(IERC4626(address(vault)).totalAssets(), totalAssetsBefore, "Total assets should increase");
@@ -298,16 +298,16 @@ contract SparkDonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         airdropToken.mint(address(strategy), airdropAmount);
 
         assertEq(airdropToken.balanceOf(address(strategy)), airdropAmount, "Strategy should have airdrop tokens");
-        assertEq(airdropToken.balanceOf(dragonRouter), 0, "DragonRouter should start with 0");
+        assertEq(airdropToken.balanceOf(donationAddress), 0, "Donation address should start with 0");
 
         vm.startPrank(keeper);
         vm.expectEmit(true, false, true, true);
-        emit SparkStrategy.TokenSwept(address(airdropToken), airdropAmount, dragonRouter);
+        emit SparkStrategy.TokenSwept(address(airdropToken), airdropAmount, donationAddress);
         strategy.sweepAirdrop(address(airdropToken));
         vm.stopPrank();
 
         assertEq(airdropToken.balanceOf(address(strategy)), 0, "Strategy should have no airdrop tokens");
-        assertEq(airdropToken.balanceOf(dragonRouter), airdropAmount, "DragonRouter should receive tokens");
+        assertEq(airdropToken.balanceOf(donationAddress), airdropAmount, "Donation address should receive tokens");
     }
 
     /// @notice Test successful airdrop sweep by management
@@ -318,12 +318,12 @@ contract SparkDonatingStrategyTest is BaseYieldDonatingIntegrationTest {
 
         vm.startPrank(management);
         vm.expectEmit(true, false, true, true);
-        emit SparkStrategy.TokenSwept(address(anotherToken), airdropAmount, dragonRouter);
+        emit SparkStrategy.TokenSwept(address(anotherToken), airdropAmount, donationAddress);
         strategy.sweepAirdrop(address(anotherToken));
         vm.stopPrank();
 
         assertEq(anotherToken.balanceOf(address(strategy)), 0, "Strategy should have no airdrop tokens");
-        assertEq(anotherToken.balanceOf(dragonRouter), airdropAmount, "DragonRouter should receive tokens");
+        assertEq(anotherToken.balanceOf(donationAddress), airdropAmount, "Donation address should receive tokens");
     }
 
     /// @notice Test that unauthorized users cannot sweep airdrops
@@ -382,8 +382,8 @@ contract SparkDonatingStrategyTest is BaseYieldDonatingIntegrationTest {
 
         assertEq(airdropToken.balanceOf(address(strategy)), 0, "First token should be swept");
         assertEq(anotherToken.balanceOf(address(strategy)), 0, "Second token should be swept");
-        assertEq(airdropToken.balanceOf(dragonRouter), airdropAmount1, "DragonRouter should have first token");
-        assertEq(anotherToken.balanceOf(dragonRouter), airdropAmount2, "DragonRouter should have second token");
+        assertEq(airdropToken.balanceOf(donationAddress), airdropAmount1, "Donation address should have first token");
+        assertEq(anotherToken.balanceOf(donationAddress), airdropAmount2, "Donation address should have second token");
     }
 
     /// @notice Test that emergency admin cannot sweep (only keeper and management)
@@ -487,7 +487,7 @@ contract SparkDonatingStrategyTest is BaseYieldDonatingIntegrationTest {
             management,
             keeper,
             emergencyAdmin,
-            dragonRouter,
+            donationAddress,
             true,
             address(implementation)
         );

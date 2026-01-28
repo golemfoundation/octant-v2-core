@@ -17,7 +17,7 @@ contract MockStrategy is BaseStrategy {
         address _management,
         address _keeper,
         address _emergencyAdmin,
-        address _dragonRouter,
+        address _donationAddress,
         address _tokenizedStrategyAddress
     )
         BaseStrategy(
@@ -27,7 +27,7 @@ contract MockStrategy is BaseStrategy {
             _management,
             _keeper,
             _emergencyAdmin,
-            _dragonRouter,
+            _donationAddress,
             false,
             _tokenizedStrategyAddress
         )

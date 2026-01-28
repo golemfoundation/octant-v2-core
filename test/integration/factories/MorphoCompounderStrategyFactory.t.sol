@@ -62,7 +62,7 @@ contract MorphoCompounderStrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                dragonRouter,
+                donationAddress,
                 false, // enableBurning
                 address(implementation)
             );
@@ -98,7 +98,7 @@ contract MorphoCompounderStrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                dragonRouter,
+                donationAddress,
                 false, // enableBurning
                 address(implementation),
                 deployer
@@ -122,7 +122,7 @@ contract MorphoCompounderStrategyFactoryTest is BaseFactoryIntegrationTest {
                 mgmt,
                 keeper,
                 emergencyAdmin,
-                dragonRouter,
+                donationAddress,
                 false, // enableBurning
                 address(implementation),
                 deployer
