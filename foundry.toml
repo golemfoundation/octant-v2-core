@@ -36,8 +36,9 @@ optimizer = true
 [profile.kprove]
 src = 'src'
 out = 'out'
-test = 'proof/kontrol'
+test = 'verification/kontrol'
 ast = true
+deny = "never"
 
 [rpc_endpoints]
 mainnet = "${TEST_RPC_URL}"

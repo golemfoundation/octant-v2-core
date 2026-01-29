@@ -4,8 +4,8 @@ regen                      = true
 rekompile                  = true
 verbose                    = false
 debug                      = false
-require                    = 'test/kontrol/octant-lemmas.k'
-module-import              = 'YearnPolygonUsdcStrategyTest:OCTANT-LEMMAS'
+require                    = 'verification/kontrol/octant-lemmas.k'
+module-import              = ['YearnPolygonUsdcStrategyKontrolTest:OCTANT-LEMMAS', 'YDStrategyTest:OCTANT-LEMMAS']
 auxiliary-lemmas           = true
 
 [prove.default]
@@ -40,28 +40,43 @@ break-on-cheatcodes        = false
 auto_abstract              = true
 run-constructor            = false
 match-test                 = [
-        "YearnPolygonUsdcStrategyTest.testDeposit(uint256,address)",
-        "YearnPolygonUsdcStrategyTest.testDepositWithLockup(uint256,address,uint256)",
-        "YearnPolygonUsdcStrategyTest.testMint(uint256,address)",
-        "YearnPolygonUsdcStrategyTest.testMintWithLockup(uint256,address,uint256)",
-        "YearnPolygonUsdcStrategyTest.testWithdraw(uint256,address,address,uint256)",
-        #"YearnPolygonUsdcStrategyTest.testWithdrawWithLossReverts(uint256,address,address,uint256)",
-        "YearnPolygonUsdcStrategyTest.testWithdrawRevert(uint256,address,address,uint256)",
-        "YearnPolygonUsdcStrategyTest.testRedeem(uint256,address,address,uint256)",
-        "YearnPolygonUsdcStrategyTest.testRedeemRevert(uint256,address,address,uint256)",
-        #"YearnPolygonUsdcStrategyTest.testMaxRedeemAllwaysReverts(uint256,address,address,uint256)",
-        "YearnPolygonUsdcStrategyTest.testInitiateRageQuit()",
-        "YearnPolygonUsdcStrategyTest.testReport()",
-        "YearnPolygonUsdcStrategyTest.testReportWithLoss()",
-        "YearnPolygonUsdcStrategyTest.testTend()",
-        "YearnPolygonUsdcStrategyTest.testSetPendingManagement(address)",
-        #"YearnPolygonUsdcStrategyTest.testSetPendingManagementRevert(address,address)",
-        #"YearnPolygonUsdcStrategyTest.testAcceptManagement(address)",
-        #"YearnPolygonUsdcStrategyTest.testAcceptManagementRevert(address,address)",
-        "YearnPolygonUsdcStrategyTest.testSetKeeper(address)",
-        #"YearnPolygonUsdcStrategyTest.testSetKeeperRevert(address,address)",
-        "YearnPolygonUsdcStrategyTest.testSetEmergencyAdmin(address)",
-        #"YearnPolygonUsdcStrategyTest.testSetEmergencyAdminRevert(address,address)",
+        # ============================================
+        # YearnPolygonUsdcStrategy proofs (existing)
+        # ============================================
+        "YearnPolygonUsdcStrategyKontrolTest.testDeposit(uint256,address)",
+        "YearnPolygonUsdcStrategyKontrolTest.testDepositWithLockup(uint256,address,uint256)",
+        "YearnPolygonUsdcStrategyKontrolTest.testMint(uint256,address)",
+        "YearnPolygonUsdcStrategyKontrolTest.testMintWithLockup(uint256,address,uint256)",
+        "YearnPolygonUsdcStrategyKontrolTest.testWithdraw(uint256,address,address,uint256)",
+        #"YearnPolygonUsdcStrategyKontrolTest.testWithdrawWithLossReverts(uint256,address,address,uint256)",
+        "YearnPolygonUsdcStrategyKontrolTest.testWithdrawRevert(uint256,address,address,uint256)",
+        "YearnPolygonUsdcStrategyKontrolTest.testRedeem(uint256,address,address,uint256)",
+        "YearnPolygonUsdcStrategyKontrolTest.testRedeemRevert(uint256,address,address,uint256)",
+        #"YearnPolygonUsdcStrategyKontrolTest.testMaxRedeemAllwaysReverts(uint256,address,address,uint256)",
+        "YearnPolygonUsdcStrategyKontrolTest.testInitiateRageQuit()",
+        "YearnPolygonUsdcStrategyKontrolTest.testReport()",
+        "YearnPolygonUsdcStrategyKontrolTest.testReportWithLoss()",
+        "YearnPolygonUsdcStrategyKontrolTest.testTend()",
+        "YearnPolygonUsdcStrategyKontrolTest.testSetPendingManagement(address)",
+        #"YearnPolygonUsdcStrategyKontrolTest.testSetPendingManagementRevert(address,address)",
+        #"YearnPolygonUsdcStrategyKontrolTest.testAcceptManagement(address)",
+        #"YearnPolygonUsdcStrategyKontrolTest.testAcceptManagementRevert(address,address)",
+        "YearnPolygonUsdcStrategyKontrolTest.testSetKeeper(address)",
+        #"YearnPolygonUsdcStrategyKontrolTest.testSetKeeperRevert(address,address)",
+        "YearnPolygonUsdcStrategyKontrolTest.testSetEmergencyAdmin(address)",
+        #"YearnPolygonUsdcStrategyKontrolTest.testSetEmergencyAdminRevert(address,address)",
+        # ============================================
+        # YieldDonating strategy proofs (new)
+        # ============================================
+        "YDStrategyTest.testReportProfit()",
+        "YDStrategyTest.testReportLossWithBurning()",
+        "YDStrategyTest.testReportLossInsufficientDragon()",
+        "YDStrategyTest.testReportNoChange()",
+        "YDStrategyTest.testReportLossNoBurning()",
+        "YDStrategyTest.testTend()",
+        "YDStrategyTest.testReportOnlyKeeper()",
+        "YDStrategyTest.testReportByManagement()",
+        "YDStrategyTest.testReportNotEmergencyAdmin()",
     ]
 
 [show.default]
