@@ -97,13 +97,7 @@ contract YDSetup is KontrolTest {
 
         // Symbolic dragon router balance
         uint256 dragonBalance = freshUInt256Bounded();
-        _storeMappingUInt256(
-            address(strategy),
-            YD_BALANCES_SLOT,
-            uint256(uint160(_dragonRouter)),
-            0,
-            dragonBalance
-        );
+        _storeMappingUInt256(address(strategy), YD_BALANCES_SLOT, uint256(uint160(_dragonRouter)), 0, dragonBalance);
 
         // Warp to a later timestamp
         currentTimestamp = freshUInt256Bounded();

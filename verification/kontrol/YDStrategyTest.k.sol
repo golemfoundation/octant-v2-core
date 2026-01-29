@@ -53,10 +53,7 @@ contract YDStrategyTest is YDSetup {
 
     /// @notice PPS does not decrease: totalAssets_new * totalSupply_old >= totalAssets_old * totalSupply_new
     function ppsNonDecreasingInvariant(Mode mode) internal view {
-        _establish(
-            mode,
-            postState.totalAssets * preState.totalSupply >= preState.totalAssets * postState.totalSupply
-        );
+        _establish(mode, postState.totalAssets * preState.totalSupply >= preState.totalAssets * postState.totalSupply);
     }
 
     /// @notice totalAssets updated to the expected value
