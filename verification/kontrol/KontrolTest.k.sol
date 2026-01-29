@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
 import "forge-std/Vm.sol";
@@ -41,8 +42,8 @@ contract KontrolTest is Test, KontrolCheats {
         return fresh;
     }
 
-    function freshUInt256Bounded(string memory varName) internal view returns (uint256) {
-        uint256 fresh = kevm.freshUInt(32, varName);
+    function freshUInt256Bounded(string memory /* varName */) internal view returns (uint256) {
+        uint256 fresh = freshUInt256();
         vm.assume(fresh < ETH_UPPER_BOUND);
         return fresh;
     }

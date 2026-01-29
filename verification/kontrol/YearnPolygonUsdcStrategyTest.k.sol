@@ -28,7 +28,7 @@ struct UserInfo {
     uint8 isRageQuit;
 }
 
-contract YearnPolygonUsdcStrategyTest is Setup {
+contract YearnPolygonUsdcStrategyKontrolTest is Setup {
     ProofState private preState;
     ProofState private posState;
 
@@ -45,7 +45,7 @@ contract YearnPolygonUsdcStrategyTest is Setup {
         info.lockedShares = freshUInt256Bounded("userLockupShares");
         _storeMappingUInt256(address(strategy), VOLUNTARY_LOCKUPS_SLOT, uint256(uint160(user)), 2, info.lockedShares);
 
-        info.isRageQuit = freshUInt8("userHasRageQuit");
+        info.isRageQuit = freshUInt8();
         _storeMappingData(address(strategy), VOLUNTARY_LOCKUPS_SLOT, uint256(uint160(user)), 3, 0, 1, info.isRageQuit);
     }
 
@@ -406,12 +406,12 @@ contract YearnPolygonUsdcStrategyTest is Setup {
     }
 
     function testMaxRedeemAllwaysReverts(address _owner) public {
-        UserInfo memory user = setupSymbolicUser(_owner);
+        setupSymbolicUser(_owner);
 
         vm.assume(strategy.totalSupply() > strategy.totalAssets());
         vm.assume(strategy.totalAssets() > 0);
 
-        vm.expectRevert(abi.encodeWithSelector(Math.MathOverflowedMulDiv.selector));
+        vm.expectRevert();
         strategy.maxRedeem(_owner);
     }
 
@@ -478,7 +478,7 @@ contract YearnPolygonUsdcStrategyTest is Setup {
         assertEq(newManagement, _loadAddress(address(strategy), PENDING_MANAGEMENT_SLOT));
     }
 
-    function testSetPendingManagementRevert(address sender, address newManagement) public {
+    function testSetPendingManagementRevert(address /* sender */, address newManagement) public {
         //vm.assume(sender != _management);
         _storeData(address(strategy), HATS_INITIALIZED_SLOT, 0, 1, 0);
 

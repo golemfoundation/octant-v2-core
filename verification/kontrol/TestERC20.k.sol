@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import { ERC20 } from "openzeppelin-contracts/contracts/token/ERC20/ERC20.sol";
+import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 import { KontrolTest } from "./KontrolTest.k.sol";
 
@@ -23,8 +23,8 @@ contract TestERC20 is ERC20, KontrolTest {
         vm.store(address(this), bytes32(_totalSupplySlot), bytes32(totalSupply));
     }
 
-    function setSymbolicBalanceOf(address account, string memory name) external {
-        uint256 balance = kevm.freshUInt(32, name);
+    function setSymbolicBalanceOf(address account, string memory /* name */) external {
+        uint256 balance = freshUInt256();
         vm.assume(balance <= totalSupply());
         bytes32 balanceAccountSlot = keccak256(abi.encode(account, _balancesSlot));
         vm.store(address(this), balanceAccountSlot, bytes32(balance));
