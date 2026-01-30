@@ -11,7 +11,7 @@ import { ModuleProxyFactory } from "src/zodiac-core/ModuleProxyFactory.sol";
 import { SplitChecker } from "src/zodiac-core/SplitChecker.sol";
 
 import { DeploySafe } from "script/deploy/DeploySafe.sol";
-import { DeployDragonRouter } from "script/deploy/DeployDragonRouter.sol";
+import { DeploySplitChecker } from "script/deploy/DeploySplitChecker.sol";
 import { DeployModuleProxyFactory } from "script/deploy/DeployModuleProxyFactory.sol";
 import { DeployDragonTokenizedStrategy } from "script/deploy/DeployDragonTokenizedStrategy.sol";
 import { DeployMockStrategy } from "script/deploy/DeployMockStrategy.sol";
@@ -34,7 +34,7 @@ contract DeployProtocol is Script {
     DeploySafe public deploySafe;
     DeployModuleProxyFactory public deployModuleProxyFactory;
     DeployDragonTokenizedStrategy public deployDragonTokenizedStrategy;
-    DeployDragonRouter public deployDragonRouter;
+    DeploySplitChecker public deploySplitChecker;
     DeployHatsProtocol public deployHatsProtocol;
     DeployMockStrategy public deployMockStrategy;
     ModuleProxyFactory public moduleProxyFactory;
@@ -56,7 +56,7 @@ contract DeployProtocol is Script {
         deploySafe = new DeploySafe();
         deployModuleProxyFactory = new DeployModuleProxyFactory(msg.sender, msg.sender, msg.sender);
         deployDragonTokenizedStrategy = new DeployDragonTokenizedStrategy();
-        deployDragonRouter = new DeployDragonRouter();
+        deploySplitChecker = new DeploySplitChecker();
         deployHatsProtocol = new DeployHatsProtocol();
         deployMockStrategy = new DeployMockStrategy(msg.sender, msg.sender, msg.sender);
     }
@@ -125,9 +125,9 @@ contract DeployProtocol is Script {
 
         vm.stopBroadcast();
 
-        // 5. Deploy Dragon Router
-        deployDragonRouter.deploy();
-        dragonRouterAddress = address(deployDragonRouter.dragonRouterProxy());
+        // 5. Deploy SplitChecker and read pre-deployed Dragon Router address
+        deploySplitChecker.deploy();
+        dragonRouterAddress = vm.envAddress("DRAGON_ROUTER_ADDRESS");
         if (dragonRouterAddress == address(0)) revert DeploymentFailed();
 
         // 6. Deploy Mock Strategy

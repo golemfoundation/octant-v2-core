@@ -9,10 +9,9 @@ import "@gnosis.pm/safe-contracts/contracts/proxies/SafeProxyFactory.sol";
 
 import { YearnPolygonUsdcStrategy } from "src/zodiac-core/modules/YearnPolygonUsdcStrategy.sol";
 import { DragonTokenizedStrategy } from "src/zodiac-core/vaults/DragonTokenizedStrategy.sol";
-import { DeployDragonRouter } from "./DeployDragonRouter.s.sol";
 import { ModuleProxyFactory } from "src/zodiac-core/ModuleProxyFactory.sol";
 
-contract DeployYearnPolygonUsdcStrategy is DeployDragonRouter {
+contract DeployYearnPolygonUsdcStrategy is Script {
     address[] public owners;
     uint256 public threshold;
     address public safeSingleton;
@@ -24,16 +23,41 @@ contract DeployYearnPolygonUsdcStrategy is DeployDragonRouter {
     address management;
     address keeper;
     address dragonRouter;
+    address splitCheckerImplementation;
+    address metapool;
+    address dragonRouterImplementation;
     SafeProxy proxy;
     bool isSafeDeployed;
 
     /// @notice change this according to the strategy
     uint256 maxReportDelay = 7 days;
 
-    function run() public override {
+    function run() public {
         vm.startBroadcast();
 
-        dragonRouter = deployDragonRouter();
+        try vm.prompt("Enter DragonRouter proxy address") returns (string memory res) {
+            dragonRouter = vm.parseAddress(res);
+        } catch (bytes memory) {
+            revert("Invalid DragonRouter proxy address");
+        }
+
+        try vm.prompt("Enter DragonRouter implementation address") returns (string memory res) {
+            dragonRouterImplementation = vm.parseAddress(res);
+        } catch (bytes memory) {
+            revert("Invalid DragonRouter implementation address");
+        }
+
+        try vm.prompt("Enter SplitChecker implementation address") returns (string memory res) {
+            splitCheckerImplementation = vm.parseAddress(res);
+        } catch (bytes memory) {
+            revert("Invalid SplitChecker implementation address");
+        }
+
+        try vm.prompt("Enter Metapool address") returns (string memory res) {
+            metapool = vm.parseAddress(res);
+        } catch (bytes memory) {
+            revert("Invalid Metapool address");
+        }
 
         try
             vm.prompt("Is the module factory already deployed? (if yes, provide the address) / (if no, provide 'no')")
@@ -43,9 +67,9 @@ contract DeployYearnPolygonUsdcStrategy is DeployDragonRouter {
                     new ModuleProxyFactory(
                         msg.sender,
                         msg.sender,
-                        address(splitCheckerImplementation),
+                        splitCheckerImplementation,
                         metapool,
-                        address(dragonRouterImplementation)
+                        dragonRouterImplementation
                     )
                 );
                 console.log("Module Factory deployed at:", moduleFactory);

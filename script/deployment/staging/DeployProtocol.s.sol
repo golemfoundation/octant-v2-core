@@ -4,7 +4,7 @@ pragma solidity ^0.8.25;
 import "forge-std/Script.sol";
 import { console2 } from "forge-std/console2.sol";
 
-import { DeployDragonRouter } from "script/deploy/DeployDragonRouter.sol";
+import { DeploySplitChecker } from "script/deploy/DeploySplitChecker.sol";
 import { DeployDragonTokenizedStrategy } from "script/deploy/DeployDragonTokenizedStrategy.sol";
 import { DeployHatsProtocol } from "script/deploy/DeployHatsProtocol.sol";
 import { DeployLinearAllowanceSingletonForGnosisSafe } from "script/deploy/DeployLinearAllowanceSingletonForGnosisSafe.sol";
@@ -28,7 +28,7 @@ contract DeployProtocol is Script {
     DeployModuleProxyFactory public deployModuleProxyFactory;
     DeployLinearAllowanceSingletonForGnosisSafe public deployLinearAllowanceSingletonForGnosisSafe;
     DeployDragonTokenizedStrategy public deployDragonTokenizedStrategy;
-    DeployDragonRouter public deployDragonRouter;
+    DeploySplitChecker public deploySplitChecker;
     DeployMockStrategy public deployMockStrategy;
     DeployHatsProtocol public deployHatsProtocol;
     DeployPaymentSplitterFactory public deployPaymentSplitterFactory;
@@ -76,7 +76,7 @@ contract DeployProtocol is Script {
         deployModuleProxyFactory = new DeployModuleProxyFactory(msg.sender, msg.sender, msg.sender);
         deployLinearAllowanceSingletonForGnosisSafe = new DeployLinearAllowanceSingletonForGnosisSafe();
         deployDragonTokenizedStrategy = new DeployDragonTokenizedStrategy();
-        deployDragonRouter = new DeployDragonRouter();
+        deploySplitChecker = new DeploySplitChecker();
         deployMockStrategy = new DeployMockStrategy(msg.sender, msg.sender, msg.sender);
         deployHatsProtocol = new DeployHatsProtocol();
         deployPaymentSplitterFactory = new DeployPaymentSplitterFactory();
@@ -147,15 +147,17 @@ contract DeployProtocol is Script {
             if (dragonTokenizedStrategyAddress == address(0)) revert DeploymentFailed();
         }
 
-        // Deploy Dragon Router
-        if (dragonRouterAddress == address(0) || splitCheckerAddress == address(0)) {
-            if (dragonRouterAddress != address(0) || splitCheckerAddress != address(0)) {
-                revert DeploymentFailed();
-            }
-            deployDragonRouter.deploy();
-            dragonRouterAddress = address(deployDragonRouter.dragonRouterProxy());
+        // Deploy SplitChecker
+        if (splitCheckerAddress == address(0)) {
+            deploySplitChecker.deploy();
+            splitCheckerAddress = address(deploySplitChecker.splitCheckerProxy());
+            if (splitCheckerAddress == address(0)) revert DeploymentFailed();
+        }
+
+        // Dragon Router address is pre-deployed, read from DeployedAddresses
+        if (dragonRouterAddress == address(0)) {
+            dragonRouterAddress = vm.envAddress("DRAGON_ROUTER_ADDRESS");
             if (dragonRouterAddress == address(0)) revert DeploymentFailed();
-            splitCheckerAddress = address(deployDragonRouter.splitCheckerProxy());
         }
 
         // Deploy Mock Strategy
