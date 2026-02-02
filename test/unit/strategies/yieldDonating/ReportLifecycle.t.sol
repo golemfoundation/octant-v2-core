@@ -357,7 +357,11 @@ contract ReportLifecycleTest is Setup {
         // Dragon balance should decrease (or be fully burned)
         assertLe(strategy.balanceOf(donationAddress), dragonBalBefore, "dragon balance should not increase");
         if (dragonBalBefore > 0) {
-            assertLt(strategy.balanceOf(donationAddress), dragonBalBefore, "dragon shares should decrease when burning enabled");
+            assertLt(
+                strategy.balanceOf(donationAddress),
+                dragonBalBefore,
+                "dragon shares should decrease when burning enabled"
+            );
         }
     }
 }
