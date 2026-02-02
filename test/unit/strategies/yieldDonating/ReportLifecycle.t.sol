@@ -76,7 +76,7 @@ contract ReportLifecycleTest is Setup {
         uint256 profit = _amount / 10;
         asset.mint(address(yieldSource), profit);
 
-        vm.expectEmit(true, true, false, false, address(strategy));
+        vm.expectEmit(false, false, false, true, address(strategy));
         emit TokenizedStrategy.Reported(profit, 0);
 
         vm.prank(keeper);

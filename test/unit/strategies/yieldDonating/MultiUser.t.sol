@@ -124,6 +124,9 @@ contract MultiUserTest is Setup {
     // ==================== Loss With Burning: Both Users Affected Equally ====================
 
     function test_twoUsers_lossWithBurning_equallyAffected() public {
+        vm.prank(management);
+        YieldDonatingTokenizedStrategy(address(strategy)).setEnableBurning(true);
+
         uint256 amount = 50e18;
 
         mintAndDepositIntoStrategy(strategy, user, amount);
