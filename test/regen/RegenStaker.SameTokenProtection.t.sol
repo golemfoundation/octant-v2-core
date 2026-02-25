@@ -4,10 +4,15 @@ pragma solidity ^0.8.23;
 import { AccessMode } from "src/constants.sol";
 import { Test } from "forge-std/Test.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { RegenStaker } from "src/regen/RegenStaker.sol";
 import { RegenStakerBase } from "src/regen/RegenStakerBase.sol";
 import { RegenEarningPowerCalculator } from "src/regen/RegenEarningPowerCalculator.sol";
+import { RegenStakerWithoutDelegateSurrogateVotes } from "src/regen/RegenStakerWithoutDelegateSurrogateVotes.sol";
+import { ISwapRouter } from "src/utils/vendor/uniswap/ISwapRouter.sol";
+import { Staker } from "staker/Staker.sol";
 import { MockERC20Staking } from "test/mocks/MockERC20Staking.sol";
+import { MockEarningPowerCalculator } from "test/mocks/MockEarningPowerCalculator.sol";
 import { IAddressSet } from "src/utils/IAddressSet.sol";
 import { AddressSet } from "src/utils/AddressSet.sol";
 
@@ -145,5 +150,226 @@ contract RegenStakerSameTokenProtectionTest is Test {
         rewardToken.transfer(address(differentTokenStaker), REWARD_AMOUNT);
         differentTokenStaker.notifyRewardAmount(REWARD_AMOUNT);
         vm.stopPrank();
+    }
+}
+
+// ---- Moved from MockAdvanceRewardsSwapRouter.sol ----
+interface IMintableToken {
+    function mint(address to, uint256 amount) external;
+}
+
+/// @notice Minimal Uniswap V3 router mock for advance rewards tests
+contract MockAdvanceRewardsSwapRouter is ISwapRouter {
+    using SafeERC20 for IERC20;
+
+    error MockInsufficientOutput(uint256 actualOut, uint256 minOut);
+
+    uint256 public outputBps = 10_000;
+
+    function setOutputBps(uint256 _outputBps) external {
+        outputBps = _outputBps;
+    }
+
+    function exactInputSingle(
+        ExactInputSingleParams calldata params
+    ) external payable override returns (uint256 amountOut) {
+        IERC20(params.tokenIn).safeTransferFrom(msg.sender, address(this), params.amountIn);
+        amountOut = (params.amountIn * outputBps) / 10_000;
+        if (amountOut < params.amountOutMinimum) {
+            revert MockInsufficientOutput(amountOut, params.amountOutMinimum);
+        }
+        IMintableToken(params.tokenOut).mint(params.recipient, amountOut);
+    }
+
+    function exactInput(ExactInputParams calldata) external payable override returns (uint256) {
+        revert("unsupported");
+    }
+
+    function exactOutputSingle(ExactOutputSingleParams calldata) external payable override returns (uint256) {
+        revert("unsupported");
+    }
+
+    function exactOutput(ExactOutputParams calldata) external payable override returns (uint256) {
+        revert("unsupported");
+    }
+
+    function uniswapV3SwapCallback(int256, int256, bytes calldata) external pure override {
+        revert("unsupported");
+    }
+}
+
+// ---- Moved from RegenStakerAdvanceRewardSwap.t.sol ----
+contract RegenStakerAdvanceRewardSwapTest is Test {
+    RegenStaker public regenStaker;
+    MockERC20Staking public stakeToken;
+    MockERC20Staking public rewardToken;
+    MockEarningPowerCalculator public earningPowerCalculator;
+    AddressSet public allocationAllowset;
+    MockAdvanceRewardsSwapRouter public swapRouter;
+
+    address public admin = makeAddr("admin");
+    address public alice = makeAddr("alice");
+    address public delegatee = makeAddr("delegatee");
+    address public claimer = makeAddr("claimer");
+
+    uint256 public constant STAKE_AMOUNT = 200e18;
+    uint256 public constant ADVANCE_AMOUNT = 10e18;
+    uint128 public constant REWARD_DURATION = 30 days;
+
+    function setUp() public {
+        stakeToken = new MockERC20Staking(18);
+        rewardToken = new MockERC20Staking(18);
+        earningPowerCalculator = new MockEarningPowerCalculator();
+        swapRouter = new MockAdvanceRewardsSwapRouter();
+
+        vm.startPrank(admin);
+        allocationAllowset = new AddressSet();
+        vm.stopPrank();
+
+        vm.prank(admin);
+        regenStaker = new RegenStaker(
+            IERC20(address(rewardToken)),
+            stakeToken,
+            earningPowerCalculator,
+            0,
+            admin,
+            REWARD_DURATION,
+            1e18,
+            IAddressSet(address(0)),
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            IAddressSet(address(allocationAllowset))
+        );
+
+        stakeToken.mint(alice, STAKE_AMOUNT);
+    }
+
+    function test_stakeWithAdvanceReward_swapsAndPaysOut_whenDifferentToken() public {
+        vm.prank(admin);
+        regenStaker.setAdvanceSwapConfig(address(swapRouter), 3000);
+
+        vm.startPrank(alice);
+        stakeToken.approve(address(regenStaker), STAKE_AMOUNT);
+        Staker.DepositIdentifier depositId = regenStaker.stakeWithAdvanceReward(
+            STAKE_AMOUNT,
+            delegatee,
+            claimer,
+            ADVANCE_AMOUNT,
+            ADVANCE_AMOUNT
+        );
+        vm.stopPrank();
+
+        (uint96 balance, address ownerAddr, , address delegateeAddr, address claimerAddr, , ) = regenStaker.deposits(
+            depositId
+        );
+        assertEq(balance, STAKE_AMOUNT - ADVANCE_AMOUNT, "net stake balance mismatch");
+        assertEq(ownerAddr, alice, "owner mismatch");
+        assertEq(delegateeAddr, delegatee, "delegatee mismatch");
+        assertEq(claimerAddr, claimer, "claimer mismatch");
+        assertEq(rewardToken.balanceOf(alice), ADVANCE_AMOUNT, "reward payout mismatch");
+        assertEq(stakeToken.balanceOf(address(swapRouter)), ADVANCE_AMOUNT, "router should receive surrendered stake");
+        assertEq(stakeToken.allowance(address(regenStaker), address(swapRouter)), 0, "router allowance should clear");
+
+        uint64 lockEnd = regenStaker.advanceRewardLockEnd(depositId);
+        assertEq(lockEnd, block.timestamp + (ADVANCE_AMOUNT * 3000 days) / STAKE_AMOUNT, "lock end mismatch");
+    }
+
+    function test_stakeWithAdvanceReward_revertsWhenRouterNotSet_forDifferentToken() public {
+        vm.startPrank(alice);
+        stakeToken.approve(address(regenStaker), STAKE_AMOUNT);
+        vm.expectRevert(abi.encodeWithSelector(Staker.Staker__InvalidAddress.selector));
+        regenStaker.stakeWithAdvanceReward(STAKE_AMOUNT, delegatee, claimer, ADVANCE_AMOUNT, ADVANCE_AMOUNT);
+        vm.stopPrank();
+    }
+
+    function test_stakeWithAdvanceReward_revertsWhenSwapOutputBelowMinOut() public {
+        vm.prank(admin);
+        regenStaker.setAdvanceSwapConfig(address(swapRouter), 3000);
+        swapRouter.setOutputBps(9000);
+
+        vm.startPrank(alice);
+        stakeToken.approve(address(regenStaker), STAKE_AMOUNT);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MockAdvanceRewardsSwapRouter.MockInsufficientOutput.selector,
+                (ADVANCE_AMOUNT * 9000) / 10_000,
+                ADVANCE_AMOUNT
+            )
+        );
+        regenStaker.stakeWithAdvanceReward(STAKE_AMOUNT, delegatee, claimer, ADVANCE_AMOUNT, ADVANCE_AMOUNT);
+        vm.stopPrank();
+    }
+}
+
+contract RegenStakerWithoutDelegateAdvanceRewardSwapTest is Test {
+    RegenStakerWithoutDelegateSurrogateVotes public regenStaker;
+    MockERC20Staking public stakeToken;
+    MockERC20Staking public rewardToken;
+    MockEarningPowerCalculator public earningPowerCalculator;
+    AddressSet public allocationAllowset;
+    MockAdvanceRewardsSwapRouter public swapRouter;
+
+    address public admin = makeAddr("admin-no-delegation");
+    address public alice = makeAddr("alice-no-delegation");
+    address public delegatee = makeAddr("delegatee-no-delegation");
+
+    uint256 public constant STAKE_AMOUNT = 200e18;
+    uint256 public constant ADVANCE_AMOUNT = 10e18;
+    uint128 public constant REWARD_DURATION = 30 days;
+
+    function setUp() public {
+        stakeToken = new MockERC20Staking(18);
+        rewardToken = new MockERC20Staking(18);
+        earningPowerCalculator = new MockEarningPowerCalculator();
+        swapRouter = new MockAdvanceRewardsSwapRouter();
+
+        vm.startPrank(admin);
+        allocationAllowset = new AddressSet();
+        vm.stopPrank();
+
+        vm.prank(admin);
+        regenStaker = new RegenStakerWithoutDelegateSurrogateVotes(
+            IERC20(address(rewardToken)),
+            IERC20(address(stakeToken)),
+            earningPowerCalculator,
+            0,
+            admin,
+            REWARD_DURATION,
+            1e18,
+            IAddressSet(address(0)),
+            IAddressSet(address(0)),
+            AccessMode.NONE,
+            IAddressSet(address(allocationAllowset))
+        );
+
+        vm.prank(admin);
+        regenStaker.setAdvanceSwapConfig(address(swapRouter), 3000);
+        stakeToken.mint(alice, STAKE_AMOUNT);
+    }
+
+    function test_stakeWithAdvanceReward_noDelegationVariant_usesSameExchangeSemantics() public {
+        vm.startPrank(alice);
+        stakeToken.approve(address(regenStaker), STAKE_AMOUNT);
+        Staker.DepositIdentifier depositId = regenStaker.stakeWithAdvanceReward(
+            STAKE_AMOUNT,
+            delegatee,
+            alice,
+            ADVANCE_AMOUNT,
+            ADVANCE_AMOUNT
+        );
+        vm.stopPrank();
+
+        (uint96 balance, address ownerAddr, , address delegateeAddr, address claimerAddr, , ) = regenStaker.deposits(
+            depositId
+        );
+        assertEq(balance, STAKE_AMOUNT - ADVANCE_AMOUNT, "net stake balance mismatch");
+        assertEq(ownerAddr, alice, "owner mismatch");
+        assertEq(delegateeAddr, delegatee, "delegatee mismatch");
+        assertEq(claimerAddr, alice, "claimer mismatch");
+        assertEq(rewardToken.balanceOf(alice), ADVANCE_AMOUNT, "reward payout mismatch");
+        assertEq(stakeToken.balanceOf(address(swapRouter)), ADVANCE_AMOUNT, "router should receive surrendered stake");
+
+        uint64 lockEnd = regenStaker.advanceRewardLockEnd(depositId);
+        assertEq(lockEnd, block.timestamp + (ADVANCE_AMOUNT * 3000 days) / STAKE_AMOUNT, "lock end mismatch");
     }
 }
