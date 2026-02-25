@@ -21,6 +21,7 @@ import { IAddressSet } from "src/utils/IAddressSet.sol";
 import { IEarningPowerCalculator } from "staker/interfaces/IEarningPowerCalculator.sol";
 import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
 import { OctantQFMechanism } from "src/mechanisms/mechanism/OctantQFMechanism.sol";
+import { ISwapRouter } from "src/utils/vendor/uniswap/ISwapRouter.sol";
 import { AccessMode } from "src/constants.sol";
 import { NotInAllowset } from "src/errors.sol";
 
@@ -142,6 +143,9 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @param expected Address of REWARD_TOKEN
     /// @param actual Address of token expected by allocation mechanism
     error AssetMismatch(address expected, address actual);
+    /// @param depositId Deposit that is locked
+    /// @param lockEnd Timestamp when the lock expires
+    error CommitmentLockActive(DepositIdentifier depositId, uint64 lockEnd);
 
     // === State Variables ===
     /// @notice Shared configuration state instance
@@ -169,6 +173,15 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
 
     /// @notice Cached metadata for the most recent reward schedule.
     RewardSchedule public latestRewardSchedule;
+
+    /// @notice Per-deposit advance reward lock expiry (0 = no active lock)
+    mapping(DepositIdentifier => uint64) public advanceRewardLockEnd;
+
+    /// @notice Uniswap V3 router used for advance reward swaps when stake/reward tokens differ
+    address internal advanceSwapRouter;
+
+    /// @notice Uniswap V3 pool fee used for advance reward swaps when stake/reward tokens differ
+    uint24 internal advanceSwapFee;
 
     // === Events ===
     /// @notice Emitted when the staker allowset is updated
@@ -519,6 +532,16 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         sharedState.minimumStakeAmount = _minimumStakeAmount;
     }
 
+    /// @notice Sets Uniswap V3 swap config for advance reward exchange when stake/reward tokens differ
+    /// @dev Admin-only configuration used by `stakeWithAdvanceReward`
+    /// @param _router Uniswap V3 swap router address
+    /// @param _fee Uniswap V3 pool fee for STAKE_TOKEN/REWARD_TOKEN pool
+    function setAdvanceSwapConfig(address _router, uint24 _fee) external {
+        _revertIfNotAdmin();
+        advanceSwapRouter = _router;
+        advanceSwapFee = _fee;
+    }
+
     /// @notice Sets the maximum bump tip with governance protection
     /// @dev TIMING RESTRICTION: During active reward period only decreases are allowed; increases must wait until after rewardEndTime.
     /// @dev SECURITY: Prevents malicious admin from extracting unclaimed rewards via tip manipulation.
@@ -698,6 +721,62 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         return amountContributedToAllocationMechanism;
     }
 
+    /// @notice Stakes net amount and immediately exchanges surrendered stake for upfront rewards.
+    /// @dev Advance amount is capped at 5% of total stake intent (`_amount / 20`).
+    /// @dev If stake/reward tokens are equal, payout is 1:1 and no swap is executed.
+    /// @dev If tokens differ, uses Uniswap V3 `exactInputSingle` with caller-provided `minRewardOut`.
+    /// @param _amount Amount of stake token to stake
+    /// @param _delegatee Address to receive voting power delegation
+    /// @param _claimer Address authorized to claim rewards for the new deposit
+    /// @param _advanceStakeAmount Amount of stake token surrendered for immediate exchange
+    /// @param _minRewardOut Minimum acceptable reward token output from exchange
+    /// @return _depositId Deposit identifier for the created deposit
+    function stakeWithAdvanceReward(
+        uint256 _amount,
+        address _delegatee,
+        address _claimer,
+        uint256 _advanceStakeAmount,
+        uint256 _minRewardOut
+    ) public returns (DepositIdentifier _depositId) {
+        require(_advanceStakeAmount > 0, ZeroOperation());
+        uint256 maxAllowed = _amount / 20;
+        if (_advanceStakeAmount > maxAllowed) {
+            revert CantAfford(_advanceStakeAmount, maxAllowed);
+        }
+
+        uint256 netStake = _amount - _advanceStakeAmount;
+        _depositId = _stake(msg.sender, netStake, _delegatee, _claimer);
+
+        _stakeTokenSafeTransferFrom(msg.sender, address(this), _advanceStakeAmount);
+
+        uint256 rewardOut = _advanceStakeAmount;
+        if (address(STAKE_TOKEN) != address(REWARD_TOKEN)) {
+            address router = advanceSwapRouter;
+            if (router == address(0)) revert Staker__InvalidAddress();
+            SafeERC20.forceApprove(STAKE_TOKEN, router, _advanceStakeAmount);
+            rewardOut = ISwapRouter(router).exactInputSingle(
+                ISwapRouter.ExactInputSingleParams({
+                    tokenIn: address(STAKE_TOKEN),
+                    tokenOut: address(REWARD_TOKEN),
+                    fee: advanceSwapFee,
+                    recipient: address(this),
+                    deadline: block.timestamp,
+                    amountIn: _advanceStakeAmount,
+                    amountOutMinimum: _minRewardOut,
+                    sqrtPriceLimitX96: 0
+                })
+            );
+            SafeERC20.forceApprove(STAKE_TOKEN, router, 0);
+        } else if (rewardOut < _minRewardOut) {
+            revert CantAfford(_minRewardOut, rewardOut);
+        }
+
+        SafeERC20.safeTransfer(REWARD_TOKEN, msg.sender, rewardOut);
+
+        uint64 lockEnd = uint64(block.timestamp + (_advanceStakeAmount * 3000 days) / _amount);
+        advanceRewardLockEnd[_depositId] = lockEnd;
+    }
+
     /// @notice Compounds rewards by claiming them and immediately restaking them into the same deposit
     /// @dev REQUIREMENT: Only works when REWARD_TOKEN == STAKE_TOKEN, otherwise reverts.
     /// @dev EARNING POWER: Compounding updates earning power based on new total balance.
@@ -874,6 +953,12 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         DepositIdentifier _depositId,
         uint256 _amount
     ) internal virtual override nonReentrant {
+        // Enforce advance rewards commitment lock
+        uint64 lockEnd = advanceRewardLockEnd[_depositId];
+        if (lockEnd > block.timestamp) revert CommitmentLockActive(_depositId, lockEnd);
+        // Lock expired: clear stale lock metadata
+        if (lockEnd != 0) delete advanceRewardLockEnd[_depositId];
+
         require(_amount > 0, ZeroOperation());
         super._withdraw(deposit, _depositId, _amount);
         _revertIfMinimumStakeAmountNotMet(_depositId);
