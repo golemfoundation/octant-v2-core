@@ -110,6 +110,13 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @notice Maximum allowed reward duration to prevent excessively long reward periods.
     uint256 public constant MAX_REWARD_DURATION = 3000 days;
 
+    /// @notice Commitment lock duration added for each 1% of surrendered stake.
+    /// @dev Policy intent: 1% surrendered stake -> 30 days lock.
+    uint256 internal constant ADVANCE_LOCK_DURATION_PER_PERCENT = 30 days;
+
+    /// @notice Percentage denominator used in advance-reward lock scaling math.
+    uint256 internal constant ADVANCE_LOCK_PERCENT_DENOMINATOR = 100;
+
     // === Custom Errors ===
     /// @param user Address that failed allowset check
     error StakerNotAllowed(address user);
@@ -748,8 +755,13 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         _depositId = _stake(msg.sender, netStake, _delegatee, _claimer);
 
         // Commitment lock scales linearly with surrendered stake ratio: advance / total stake.
-        // With the 5% cap, maximum lock is 5% of 3000 days = 150 days.
-        uint256 commitmentDuration = (_advanceStakeAmount * MAX_REWARD_DURATION) / _amount;
+        // Policy: 1% surrendered stake corresponds to 30 days lock.
+        // With the 5% cap, maximum lock is 150 days.
+        // Use ceil division so any positive advance yields at least a 1-second lock.
+        uint256 scaledDuration = _advanceStakeAmount *
+            ADVANCE_LOCK_DURATION_PER_PERCENT *
+            ADVANCE_LOCK_PERCENT_DENOMINATOR;
+        uint256 commitmentDuration = ((scaledDuration - 1) / _amount) + 1;
         uint64 lockEnd = uint64(block.timestamp + commitmentDuration);
         advanceRewardLockEnd[_depositId] = lockEnd;
 

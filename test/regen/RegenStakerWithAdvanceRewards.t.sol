@@ -194,6 +194,30 @@ contract RegenStakerWithAdvanceRewardsTest is Test {
         assertEq(claimerAddr, claimer, "explicit claimer mismatch");
     }
 
+    function test_stakeWithAdvanceReward_usesCeilDivisionForTinyAdvanceLock() public {
+        uint256 smallStakeAmount = 20e18;
+        uint256 tinyAdvance = 1;
+        uint256 lockDurationPerPercent = 30 days;
+        token.mint(owner, smallStakeAmount);
+
+        uint256 expectedDuration = ((tinyAdvance * lockDurationPerPercent * 100) - 1) / smallStakeAmount + 1;
+        assertEq(expectedDuration, 1, "expected tiny advance lock duration should be 1 second");
+
+        vm.startPrank(owner);
+        token.approve(address(regenStaker), smallStakeAmount);
+        Staker.DepositIdentifier tinyDepositId = regenStaker.stakeWithAdvanceReward(
+            smallStakeAmount,
+            delegatee,
+            owner,
+            tinyAdvance,
+            tinyAdvance
+        );
+        vm.stopPrank();
+
+        uint64 lockEnd = regenStaker.advanceRewardLockEnd(tinyDepositId);
+        assertEq(lockEnd, block.timestamp + expectedDuration, "lock end should use ceil division");
+    }
+
     function test_stakeWithAdvanceReward_revertsInvalidAdvanceAmount() public {
         address bob = makeAddr("bob3");
         uint256 bobStakeAmount = 120e18;
