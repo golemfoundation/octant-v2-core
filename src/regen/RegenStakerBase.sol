@@ -739,15 +739,18 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         uint256 _minRewardOut
     ) public returns (DepositIdentifier _depositId) {
         require(_advanceStakeAmount > 0, ZeroOperation());
-        uint256 maxAllowed = _amount / 20;
-        if (_advanceStakeAmount > maxAllowed) {
-            revert CantAfford(_advanceStakeAmount, maxAllowed);
+        uint256 maxAdvanceStakeAmount = _amount / 20;
+        if (_advanceStakeAmount > maxAdvanceStakeAmount) {
+            revert CantAfford(_advanceStakeAmount, maxAdvanceStakeAmount);
         }
 
         uint256 netStake = _amount - _advanceStakeAmount;
         _depositId = _stake(msg.sender, netStake, _delegatee, _claimer);
 
-        uint64 lockEnd = uint64(block.timestamp + (_advanceStakeAmount * 3000 days) / _amount);
+        // Commitment lock scales linearly with surrendered stake ratio: advance / total stake.
+        // With the 5% cap, maximum lock is 5% of 3000 days = 150 days.
+        uint256 commitmentDuration = (_advanceStakeAmount * MAX_REWARD_DURATION) / _amount;
+        uint64 lockEnd = uint64(block.timestamp + commitmentDuration);
         advanceRewardLockEnd[_depositId] = lockEnd;
 
         _stakeTokenSafeTransferFrom(msg.sender, address(this), _advanceStakeAmount);
