@@ -747,6 +747,9 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         uint256 netStake = _amount - _advanceStakeAmount;
         _depositId = _stake(msg.sender, netStake, _delegatee, _claimer);
 
+        uint64 lockEnd = uint64(block.timestamp + (_advanceStakeAmount * 3000 days) / _amount);
+        advanceRewardLockEnd[_depositId] = lockEnd;
+
         _stakeTokenSafeTransferFrom(msg.sender, address(this), _advanceStakeAmount);
 
         uint256 rewardOut = _advanceStakeAmount;
@@ -772,9 +775,6 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         }
 
         SafeERC20.safeTransfer(REWARD_TOKEN, msg.sender, rewardOut);
-
-        uint64 lockEnd = uint64(block.timestamp + (_advanceStakeAmount * 3000 days) / _amount);
-        advanceRewardLockEnd[_depositId] = lockEnd;
     }
 
     /// @notice Compounds rewards by claiming them and immediately restaking them into the same deposit
