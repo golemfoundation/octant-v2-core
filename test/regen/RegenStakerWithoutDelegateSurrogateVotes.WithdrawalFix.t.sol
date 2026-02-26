@@ -5,6 +5,7 @@ import { AccessMode } from "src/constants.sol";
 import { Test } from "forge-std/Test.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { RegenStakerWithoutDelegateSurrogateVotes } from "src/regen/RegenStakerWithoutDelegateSurrogateVotes.sol";
 import { RegenStakerBase } from "src/regen/RegenStakerBase.sol";
 import { RegenEarningPowerCalculator } from "src/regen/RegenEarningPowerCalculator.sol";
@@ -479,7 +480,7 @@ contract RegenStakerAdvanceRewardReentrancyTest is Test {
         );
     }
 
-    function test_stakeWithAdvanceReward_reentrantWithdrawBlockedByPreSetLock() public {
+    function test_stakeWithAdvanceReward_reentrantWithdrawBlockedByReentrancyGuard() public {
         AdvanceRewardReentrantAttacker attacker = new AdvanceRewardReentrantAttacker(staker, token);
 
         uint256 amount = 100e18;
@@ -492,9 +493,11 @@ contract RegenStakerAdvanceRewardReentrancyTest is Test {
 
         assertTrue(attacker.reentryAttempted(), "reentry should have been attempted");
         assertFalse(attacker.reentrySucceeded(), "reentrant withdraw must fail");
+        // stakeWithAdvanceReward now holds the nonReentrant lock for its full execution, so the
+        // reentrant withdraw attempt hits the reentrancy guard before the commitment lock check.
         assertEq(
             _selector(attacker.reentryRevertData()),
-            RegenStakerBase.CommitmentLockActive.selector,
+            ReentrancyGuard.ReentrancyGuardReentrantCall.selector,
             "wrong revert selector"
         );
 
