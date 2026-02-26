@@ -738,10 +738,9 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @dev Advance amount is capped at 5% of total stake intent (`_amount / 20`).
     /// @dev If stake/reward tokens are equal, payout is 1:1 and no swap is executed.
     /// @dev If tokens differ, uses Uniswap V3 `exactInputSingle` with caller-provided `minRewardOut`.
-    /// @dev BOOKKEEPING: In the same-token path, advance payouts are tracked via totalClaimedRewards
-    ///      to keep _validateAndGetRequiredBalance accurate. Without this, outstanding reward obligations
-    ///      would be overcounted, potentially allowing notifyRewardAmount to accept amounts the contract
-    ///      cannot actually cover.
+    /// @dev BOOKKEEPING: In the same-token path the payout is self-funded: the user transfers
+    ///      _advanceStakeAmount to the contract and the contract transfers the same amount back.
+    ///      Net effect on the reward token balance is zero, so totalClaimedRewards is NOT updated.
     /// @param _amount Amount of stake token to stake
     /// @param _delegatee Address to receive voting power delegation
     /// @param _claimer Address authorized to claim rewards for the new deposit
@@ -795,13 +794,8 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
                 })
             );
             SafeERC20.forceApprove(STAKE_TOKEN, router, 0);
-        } else {
-            if (rewardOut < _minRewardOut) {
-                revert CantAfford(_minRewardOut, rewardOut);
-            }
-            // Same-token path: payout comes from the contract's reward reserves. Track this as consumed
-            // rewards so _validateAndGetRequiredBalance remains accurate.
-            totalClaimedRewards += rewardOut;
+        } else if (rewardOut < _minRewardOut) {
+            revert CantAfford(_minRewardOut, rewardOut);
         }
 
         SafeERC20.safeTransfer(REWARD_TOKEN, msg.sender, rewardOut);
