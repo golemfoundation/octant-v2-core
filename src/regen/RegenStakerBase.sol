@@ -741,6 +741,8 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @dev BOOKKEEPING: In the same-token path the payout is self-funded: the user transfers
     ///      _advanceStakeAmount to the contract and the contract transfers the same amount back.
     ///      Net effect on the reward token balance is zero, so totalClaimedRewards is NOT updated.
+    /// @dev `super._stake` is called directly (bypassing the `nonReentrant`/`whenNotPaused` override)
+    ///      because those guards are already held by `stakeWithAdvanceReward` itself.
     /// @param _amount Amount of stake token to stake
     /// @param _delegatee Address to receive voting power delegation
     /// @param _claimer Address authorized to claim rewards for the new deposit
@@ -761,7 +763,10 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         }
 
         uint256 netStake = _amount - _advanceStakeAmount;
-        _depositId = _stakeWithoutModifiers(msg.sender, netStake, _delegatee, _claimer);
+        require(netStake > 0, ZeroOperation());
+        _checkStakerAccess(msg.sender);
+        _depositId = super._stake(msg.sender, netStake, _delegatee, _claimer);
+        _revertIfMinimumStakeAmountNotMet(_depositId);
 
         // Commitment lock scales linearly with surrendered stake ratio: advance / total stake.
         // Policy: 1% surrendered stake corresponds to 30 days lock.
@@ -946,26 +951,6 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         _setEarningPowerCalculator(_newEarningPowerCalculator);
     }
 
-    /// @notice Core stake logic with no modifiers. Callers are responsible for providing
-    ///         `whenNotPaused` and `nonReentrant` guards. Used by both `_stake` and
-    ///         `stakeWithAdvanceReward` to avoid nested reentrancy-guard acquisition.
-    /// @param _depositor Address making the deposit
-    /// @param _amount Amount to stake
-    /// @param _delegatee Address to receive voting power delegation
-    /// @param _claimer Address authorized to claim rewards
-    /// @return _depositId Deposit identifier for the created deposit
-    function _stakeWithoutModifiers(
-        address _depositor,
-        uint256 _amount,
-        address _delegatee,
-        address _claimer
-    ) internal virtual returns (DepositIdentifier _depositId) {
-        require(_amount > 0, ZeroOperation());
-        _checkStakerAccess(_depositor);
-        _depositId = super._stake(_depositor, _amount, _delegatee, _claimer);
-        _revertIfMinimumStakeAmountNotMet(_depositId);
-    }
-
     /// @notice Prevents staking 0, staking below the minimum, staking when paused, and unauthorized staking.
     /// @dev Uses reentrancy guard
     /// @param _depositor Address making the deposit
@@ -979,7 +964,10 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         address _delegatee,
         address _claimer
     ) internal virtual override whenNotPaused nonReentrant returns (DepositIdentifier _depositId) {
-        return _stakeWithoutModifiers(_depositor, _amount, _delegatee, _claimer);
+        require(_amount > 0, ZeroOperation());
+        _checkStakerAccess(_depositor);
+        _depositId = super._stake(_depositor, _amount, _delegatee, _claimer);
+        _revertIfMinimumStakeAmountNotMet(_depositId);
     }
 
     /// @notice Prevents withdrawing 0; prevents withdrawals that drop balance below minimum.
