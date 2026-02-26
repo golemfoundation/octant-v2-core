@@ -245,6 +245,11 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @param newMinimumStakeAmount New minimum stake required in stake token base units
     event MinimumStakeAmountSet(uint256 newMinimumStakeAmount);
 
+    /// @notice Emitted when advance swap configuration is updated
+    /// @param router Uniswap V3 swap router address
+    /// @param fee Uniswap V3 pool fee tier
+    event AdvanceSwapConfigSet(address indexed router, uint24 fee);
+
     // === Getters ===
     /// @notice Gets the current reward duration
     /// @return Duration for reward distribution in seconds
@@ -545,6 +550,7 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @param _fee Uniswap V3 pool fee for STAKE_TOKEN/REWARD_TOKEN pool
     function setAdvanceSwapConfig(address _router, uint24 _fee) external {
         _revertIfNotAdmin();
+        emit AdvanceSwapConfigSet(_router, _fee);
         advanceSwapRouter = _router;
         advanceSwapFee = _fee;
     }
@@ -732,6 +738,10 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @dev Advance amount is capped at 5% of total stake intent (`_amount / 20`).
     /// @dev If stake/reward tokens are equal, payout is 1:1 and no swap is executed.
     /// @dev If tokens differ, uses Uniswap V3 `exactInputSingle` with caller-provided `minRewardOut`.
+    /// @dev BOOKKEEPING: In the same-token path, advance payouts are tracked via totalClaimedRewards
+    ///      to keep _validateAndGetRequiredBalance accurate. Without this, outstanding reward obligations
+    ///      would be overcounted, potentially allowing notifyRewardAmount to accept amounts the contract
+    ///      cannot actually cover.
     /// @param _amount Amount of stake token to stake
     /// @param _delegatee Address to receive voting power delegation
     /// @param _claimer Address authorized to claim rewards for the new deposit
@@ -744,7 +754,7 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         address _claimer,
         uint256 _advanceStakeAmount,
         uint256 _minRewardOut
-    ) public returns (DepositIdentifier _depositId) {
+    ) public whenNotPaused nonReentrant returns (DepositIdentifier _depositId) {
         require(_advanceStakeAmount > 0, ZeroOperation());
         uint256 maxAdvanceStakeAmount = _amount / 20;
         if (_advanceStakeAmount > maxAdvanceStakeAmount) {
@@ -752,7 +762,7 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         }
 
         uint256 netStake = _amount - _advanceStakeAmount;
-        _depositId = _stake(msg.sender, netStake, _delegatee, _claimer);
+        _depositId = _stakeWithoutModifiers(msg.sender, netStake, _delegatee, _claimer);
 
         // Commitment lock scales linearly with surrendered stake ratio: advance / total stake.
         // Policy: 1% surrendered stake corresponds to 30 days lock.
@@ -785,8 +795,13 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
                 })
             );
             SafeERC20.forceApprove(STAKE_TOKEN, router, 0);
-        } else if (rewardOut < _minRewardOut) {
-            revert CantAfford(_minRewardOut, rewardOut);
+        } else {
+            if (rewardOut < _minRewardOut) {
+                revert CantAfford(_minRewardOut, rewardOut);
+            }
+            // Same-token path: payout comes from the contract's reward reserves. Track this as consumed
+            // rewards so _validateAndGetRequiredBalance remains accurate.
+            totalClaimedRewards += rewardOut;
         }
 
         SafeERC20.safeTransfer(REWARD_TOKEN, msg.sender, rewardOut);
@@ -937,6 +952,26 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         _setEarningPowerCalculator(_newEarningPowerCalculator);
     }
 
+    /// @notice Core stake logic with no modifiers. Callers are responsible for providing
+    ///         `whenNotPaused` and `nonReentrant` guards. Used by both `_stake` and
+    ///         `stakeWithAdvanceReward` to avoid nested reentrancy-guard acquisition.
+    /// @param _depositor Address making the deposit
+    /// @param _amount Amount to stake
+    /// @param _delegatee Address to receive voting power delegation
+    /// @param _claimer Address authorized to claim rewards
+    /// @return _depositId Deposit identifier for the created deposit
+    function _stakeWithoutModifiers(
+        address _depositor,
+        uint256 _amount,
+        address _delegatee,
+        address _claimer
+    ) internal virtual returns (DepositIdentifier _depositId) {
+        require(_amount > 0, ZeroOperation());
+        _checkStakerAccess(_depositor);
+        _depositId = super._stake(_depositor, _amount, _delegatee, _claimer);
+        _revertIfMinimumStakeAmountNotMet(_depositId);
+    }
+
     /// @notice Prevents staking 0, staking below the minimum, staking when paused, and unauthorized staking.
     /// @dev Uses reentrancy guard
     /// @param _depositor Address making the deposit
@@ -950,10 +985,7 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         address _delegatee,
         address _claimer
     ) internal virtual override whenNotPaused nonReentrant returns (DepositIdentifier _depositId) {
-        require(_amount > 0, ZeroOperation());
-        _checkStakerAccess(_depositor);
-        _depositId = super._stake(_depositor, _amount, _delegatee, _claimer);
-        _revertIfMinimumStakeAmountNotMet(_depositId);
+        return _stakeWithoutModifiers(_depositor, _amount, _delegatee, _claimer);
     }
 
     /// @notice Prevents withdrawing 0; prevents withdrawals that drop balance below minimum.
