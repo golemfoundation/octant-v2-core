@@ -266,7 +266,9 @@ contract RegenStakerAdvanceRewardSwapTest is Test {
         assertEq(ownerAddr, alice, "owner mismatch");
         assertEq(delegateeAddr, delegatee, "delegatee mismatch");
         assertEq(claimerAddr, claimer, "claimer mismatch");
-        assertEq(rewardToken.balanceOf(alice), ADVANCE_AMOUNT, "reward payout mismatch");
+        assertEq(rewardToken.balanceOf(alice), 0, "advance should stay in contract, not go to user");
+        assertEq(regenStaker.unclaimedReward(depositId), ADVANCE_AMOUNT, "advance should be credited as unclaimed");
+        assertEq(regenStaker.advanceDebt(depositId), ADVANCE_AMOUNT, "advance debt should match credit");
         assertEq(stakeToken.balanceOf(address(swapRouter)), ADVANCE_AMOUNT, "router should receive surrendered stake");
         assertEq(stakeToken.allowance(address(regenStaker), address(swapRouter)), 0, "router allowance should clear");
 
@@ -366,7 +368,9 @@ contract RegenStakerWithoutDelegateAdvanceRewardSwapTest is Test {
         assertEq(ownerAddr, alice, "owner mismatch");
         assertEq(delegateeAddr, delegatee, "delegatee mismatch");
         assertEq(claimerAddr, alice, "claimer mismatch");
-        assertEq(rewardToken.balanceOf(alice), ADVANCE_AMOUNT, "reward payout mismatch");
+        assertEq(rewardToken.balanceOf(alice), 0, "advance should stay in contract, not go to user");
+        assertEq(regenStaker.unclaimedReward(depositId), ADVANCE_AMOUNT, "advance should be credited as unclaimed");
+        assertEq(regenStaker.advanceDebt(depositId), ADVANCE_AMOUNT, "advance debt should match credit");
         assertEq(stakeToken.balanceOf(address(swapRouter)), ADVANCE_AMOUNT, "router should receive surrendered stake");
 
         uint64 lockEnd = regenStaker.advanceRewardLockEnd(depositId);

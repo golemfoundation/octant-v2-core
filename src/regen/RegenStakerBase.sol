@@ -190,6 +190,9 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @notice Uniswap V3 pool fee used for advance reward swaps when stake/reward tokens differ
     uint24 internal advanceSwapFee;
 
+    /// @notice Per-deposit advance reward debt (repaid from future claims)
+    mapping(DepositIdentifier => uint256) public advanceDebt;
+
     // === Events ===
     /// @notice Emitted when the staker allowset is updated
     /// @param allowset Address of new allowset contract controlling staker access
@@ -249,6 +252,24 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
     /// @param router Uniswap V3 swap router address
     /// @param fee Uniswap V3 pool fee tier
     event AdvanceSwapConfigSet(address indexed router, uint24 fee);
+
+    /// @notice Emitted when advance rewards are credited as unclaimed (enabling immediate contribute)
+    /// @param depositId Deposit receiving the credit
+    /// @param creditAmount Amount credited to unclaimed rewards
+    /// @param debtAmount Debt recorded against future claims
+    /// @param lockEnd Timestamp when the commitment lock expires
+    event AdvanceRewardCredited(
+        DepositIdentifier indexed depositId,
+        uint256 creditAmount,
+        uint256 debtAmount,
+        uint64 lockEnd
+    );
+
+    /// @notice Emitted when advance debt is repaid from unclaimed rewards during claim/compound
+    /// @param depositId Deposit whose debt was reduced
+    /// @param repaid Amount of debt repaid
+    /// @param remaining Remaining debt after repayment
+    event AdvanceDebtRepaid(DepositIdentifier indexed depositId, uint256 repaid, uint256 remaining);
 
     // === Getters ===
     /// @notice Gets the current reward duration
@@ -734,13 +755,13 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         return amountContributedToAllocationMechanism;
     }
 
-    /// @notice Stakes net amount and immediately exchanges surrendered stake for upfront rewards.
+    /// @notice Stakes net amount and credits surrendered stake as advance rewards (loan against future claims).
     /// @dev Advance amount is capped at 5% of total stake intent (`_amount / 20`).
-    /// @dev If stake/reward tokens are equal, payout is 1:1 and no swap is executed.
+    /// @dev If stake/reward tokens are equal, credit is 1:1 and no swap is executed.
     /// @dev If tokens differ, uses Uniswap V3 `exactInputSingle` with caller-provided `minRewardOut`.
-    /// @dev BOOKKEEPING: In the same-token path the payout is self-funded: the user transfers
-    ///      _advanceStakeAmount to the contract and the contract transfers the same amount back.
-    ///      Net effect on the reward token balance is zero, so totalClaimedRewards is NOT updated.
+    /// @dev CREDIT-AS-UNCLAIMED: Instead of transferring advance tokens to the user, they are credited
+    ///      to `scaledUnclaimedRewardCheckpoint` enabling immediate `contribute()`. A matching
+    ///      `advanceDebt` is recorded and repaid from future `claimReward()`/`compoundRewards()` calls.
     /// @dev `super._stake` is called directly (bypassing the `nonReentrant`/`whenNotPaused` override)
     ///      because those guards are already held by `stakeWithAdvanceReward` itself.
     /// @param _amount Amount of stake token to stake
@@ -803,7 +824,12 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
             revert CantAfford(_minRewardOut, rewardOut);
         }
 
-        SafeERC20.safeTransfer(REWARD_TOKEN, msg.sender, rewardOut);
+        // Credit advance as unclaimed rewards (enables immediate contribute())
+        deposits[_depositId].scaledUnclaimedRewardCheckpoint = rewardOut * SCALE_FACTOR;
+        advanceDebt[_depositId] = rewardOut;
+        totalRewards += rewardOut;
+
+        emit AdvanceRewardCredited(_depositId, rewardOut, rewardOut, lockEnd);
     }
 
     /// @notice Compounds rewards by claiming them and immediately restaking them into the same deposit
@@ -838,6 +864,8 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
 
         _checkpointGlobalReward();
         _checkpointReward(deposit);
+
+        _deductAdvanceDebt(_depositId, deposit);
 
         uint256 unclaimedAmount = deposit.scaledUnclaimedRewardCheckpoint / SCALE_FACTOR;
         if (unclaimedAmount == 0) {
@@ -908,6 +936,22 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
             if (sharedState.stakerBlockset.contains(user)) {
                 revert StakerBlocked(user);
             }
+        }
+    }
+
+    /// @notice Deducts advance debt from unclaimed rewards before claim/compound
+    /// @dev Silently consumes debt from checkpoint without updating totalClaimedRewards.
+    ///      Tokens backing the debt are already in the contract (from the advance), so no transfer needed.
+    /// @param _depositId Deposit identifier
+    /// @param deposit Deposit storage reference
+    function _deductAdvanceDebt(DepositIdentifier _depositId, Deposit storage deposit) internal {
+        uint256 debt = advanceDebt[_depositId];
+        if (debt > 0) {
+            uint256 unclaimed = deposit.scaledUnclaimedRewardCheckpoint / SCALE_FACTOR;
+            uint256 repayment = debt < unclaimed ? debt : unclaimed;
+            deposit.scaledUnclaimedRewardCheckpoint -= repayment * SCALE_FACTOR;
+            advanceDebt[_depositId] = debt - repayment;
+            emit AdvanceDebtRepaid(_depositId, repayment, debt - repayment);
         }
     }
 
@@ -1031,6 +1075,12 @@ abstract contract RegenStakerBase is Staker, Pausable, ReentrancyGuard, EIP712, 
         Deposit storage deposit,
         address _claimer
     ) internal virtual override whenNotPaused nonReentrant returns (uint256) {
+        // Checkpoint first (idempotent — super calls again with no effect)
+        _checkpointGlobalReward();
+        _checkpointReward(deposit);
+
+        _deductAdvanceDebt(_depositId, deposit);
+
         uint256 _claimedAmount = super._claimReward(_depositId, deposit, _claimer);
         totalClaimedRewards += _claimedAmount;
         return _claimedAmount;

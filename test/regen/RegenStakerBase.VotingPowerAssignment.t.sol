@@ -461,7 +461,9 @@ contract RegenStakerWithAdvanceRewardsTest is Test {
 
         uint64 lockEnd = regenStaker.advanceRewardLockEnd(bobDepositId);
         assertEq(lockEnd, block.timestamp + 5 * 30 days, "lock end mismatch");
-        assertEq(token.balanceOf(bob), advanceAmount, "owner should receive immediate reward payout");
+        assertEq(token.balanceOf(bob), 0, "advance should stay in contract, not go to user");
+        assertEq(regenStaker.unclaimedReward(bobDepositId), advanceAmount, "advance should be credited as unclaimed");
+        assertEq(regenStaker.advanceDebt(bobDepositId), advanceAmount, "advance debt should match credit");
     }
 
     function test_stakeWithAdvanceReward_withExplicitClaimer() public {
@@ -676,5 +678,224 @@ contract RegenStakerWithAdvanceRewardsTest is Test {
         vm.prank(owner);
         uint256 contributed = regenStaker.contribute(depositId, address(allocationMechanism), 0, deadline, v, r, s);
         assertEq(contributed, 0, "zero amount should still be a valid signup path");
+    }
+
+    // =========================================================
+    // Advance debt tests
+    // =========================================================
+
+    function test_advanceDebt_deductedFromClaimReward() public {
+        // Stake with advance to create a deposit with debt
+        address bob = makeAddr("bob-debt-claim");
+        uint256 stakeAmount = 200e18;
+        uint256 advanceAmount = (stakeAmount * 5) / 100; // 10e18
+
+        token.mint(bob, stakeAmount);
+        vm.startPrank(bob);
+        token.approve(address(regenStaker), stakeAmount);
+        Staker.DepositIdentifier bobDepositId = regenStaker.stakeWithAdvanceReward(
+            stakeAmount,
+            delegatee,
+            bob,
+            advanceAmount,
+            advanceAmount
+        );
+        vm.stopPrank();
+
+        assertEq(regenStaker.advanceDebt(bobDepositId), advanceAmount, "debt should be set");
+
+        // Warp to accrue rewards > debt
+        vm.warp(block.timestamp + REWARD_DURATION / 2);
+
+        uint256 unclaimedBefore = regenStaker.unclaimedReward(bobDepositId);
+        require(unclaimedBefore > advanceAmount, "must accrue more than debt for this test");
+
+        uint256 bobBalBefore = token.balanceOf(bob);
+
+        vm.prank(bob);
+        uint256 claimed = regenStaker.claimReward(bobDepositId);
+
+        // Payout should be reduced by the full debt amount
+        // unclaimed includes advance credit + accrued rewards; debt is deducted first
+        // So: payout = unclaimedBefore - advanceAmount
+        assertEq(claimed, unclaimedBefore - advanceAmount, "payout should be reduced by debt");
+        assertEq(token.balanceOf(bob) - bobBalBefore, claimed, "balance should increase by claimed amount");
+        assertEq(regenStaker.advanceDebt(bobDepositId), 0, "debt should be fully repaid");
+    }
+
+    function test_advanceDebt_deductedFromCompoundRewards() public {
+        // Stake with advance to create a deposit with debt
+        address bob = makeAddr("bob-debt-compound");
+        uint256 stakeAmount = 200e18;
+        uint256 advanceAmount = (stakeAmount * 5) / 100; // 10e18
+
+        token.mint(bob, stakeAmount);
+        vm.startPrank(bob);
+        token.approve(address(regenStaker), stakeAmount);
+        Staker.DepositIdentifier bobDepositId = regenStaker.stakeWithAdvanceReward(
+            stakeAmount,
+            delegatee,
+            bob,
+            advanceAmount,
+            advanceAmount
+        );
+        vm.stopPrank();
+
+        // Warp to accrue rewards > debt
+        vm.warp(block.timestamp + REWARD_DURATION / 2);
+
+        uint256 unclaimedBefore = regenStaker.unclaimedReward(bobDepositId);
+        require(unclaimedBefore > advanceAmount, "must accrue more than debt for this test");
+
+        (uint96 balBefore, , , , , , ) = regenStaker.deposits(bobDepositId);
+
+        vm.prank(bob);
+        uint256 compounded = regenStaker.compoundRewards(bobDepositId);
+
+        // Compound amount should be reduced by the full debt
+        assertEq(compounded, unclaimedBefore - advanceAmount, "compounded should be reduced by debt");
+        (uint96 balAfter, , , , , , ) = regenStaker.deposits(bobDepositId);
+        assertEq(balAfter, balBefore + compounded, "balance should increase by compounded amount");
+        assertEq(regenStaker.advanceDebt(bobDepositId), 0, "debt should be fully repaid");
+    }
+
+    function test_advanceDebt_notDeductedFromContribute() public {
+        // Stake with advance to create deposit with debt + credit
+        address bob;
+        uint256 bobPk;
+        (bob, bobPk) = makeAddrAndKey("bob-debt-contribute");
+        uint256 stakeAmount = 200e18;
+        uint256 advanceAmount = (stakeAmount * 5) / 100; // 10e18
+
+        token.mint(bob, stakeAmount);
+        vm.startPrank(bob);
+        token.approve(address(regenStaker), stakeAmount);
+        Staker.DepositIdentifier bobDepositId = regenStaker.stakeWithAdvanceReward(
+            stakeAmount,
+            delegatee,
+            bob,
+            advanceAmount,
+            advanceAmount
+        );
+        vm.stopPrank();
+
+        // Contribute the full advance credit immediately (the whole point of the design)
+        (uint256 deadline, uint8 v, bytes32 r, bytes32 s) = _contributeSignatureFor(bob, bobPk, advanceAmount);
+
+        uint256 mechanismBalBefore = token.balanceOf(address(allocationMechanism));
+
+        vm.prank(bob);
+        uint256 contributed = regenStaker.contribute(
+            bobDepositId,
+            address(allocationMechanism),
+            advanceAmount,
+            deadline,
+            v,
+            r,
+            s
+        );
+
+        assertEq(contributed, advanceAmount, "full advance should be contributable");
+        assertEq(
+            token.balanceOf(address(allocationMechanism)) - mechanismBalBefore,
+            advanceAmount,
+            "mechanism should receive full advance"
+        );
+        // Debt persists — it is NOT affected by contribute
+        assertEq(regenStaker.advanceDebt(bobDepositId), advanceAmount, "debt should persist after contribute");
+    }
+
+    function test_advanceDebt_repaidGradually() public {
+        // Stake with advance
+        address bob = makeAddr("bob-gradual");
+        uint256 stakeAmount = 200e18;
+        uint256 advanceAmount = (stakeAmount * 5) / 100; // 10e18
+
+        token.mint(bob, stakeAmount);
+        vm.startPrank(bob);
+        token.approve(address(regenStaker), stakeAmount);
+        Staker.DepositIdentifier bobDepositId = regenStaker.stakeWithAdvanceReward(
+            stakeAmount,
+            delegatee,
+            bob,
+            advanceAmount,
+            advanceAmount
+        );
+        vm.stopPrank();
+
+        // Warp a small amount — accrue less than debt
+        vm.warp(block.timestamp + REWARD_DURATION / 20);
+
+        uint256 unclaimedBefore = regenStaker.unclaimedReward(bobDepositId);
+        // unclaimed includes advance credit + small accrued rewards
+        // If total unclaimed < debt, all would be consumed. But unclaimed includes the advance credit itself.
+        // After advance: checkpoint = advanceAmount. Then some rewards accrue on top.
+        // debt = advanceAmount. So unclaimed = advanceAmount + accrued.
+        // After debt deduction: checkpoint -= advanceAmount → remaining = accrued.
+        // The first claim should fully repay debt and give accrued rewards as payout.
+        require(unclaimedBefore > advanceAmount, "advance credit + accrued should exceed debt");
+
+        vm.prank(bob);
+        uint256 claimed1 = regenStaker.claimReward(bobDepositId);
+
+        assertEq(claimed1, unclaimedBefore - advanceAmount, "first claim should pay out earned minus debt");
+        assertEq(regenStaker.advanceDebt(bobDepositId), 0, "debt should be fully repaid after first claim");
+
+        // Second claim — no debt, normal operation
+        vm.warp(block.timestamp + REWARD_DURATION / 10);
+        uint256 unclaimed2 = regenStaker.unclaimedReward(bobDepositId);
+
+        vm.prank(bob);
+        uint256 claimed2 = regenStaker.claimReward(bobDepositId);
+
+        assertEq(claimed2, unclaimed2, "second claim should not have debt deduction");
+    }
+
+    function test_advanceDebt_fullCycleContributeThenClaim() public {
+        // Full cycle: stake with advance → contribute advance → earn rewards → claim (reduced by debt)
+        address bob;
+        uint256 bobPk;
+        (bob, bobPk) = makeAddrAndKey("bob-full-cycle");
+        uint256 stakeAmount = 200e18;
+        uint256 advanceAmount = (stakeAmount * 5) / 100; // 10e18
+
+        token.mint(bob, stakeAmount);
+        vm.startPrank(bob);
+        token.approve(address(regenStaker), stakeAmount);
+        Staker.DepositIdentifier bobDepositId = regenStaker.stakeWithAdvanceReward(
+            stakeAmount,
+            delegatee,
+            bob,
+            advanceAmount,
+            advanceAmount
+        );
+        vm.stopPrank();
+
+        // Step 1: Contribute the full advance credit immediately
+        {
+            (uint256 deadline, uint8 v, bytes32 r, bytes32 s) = _contributeSignatureFor(bob, bobPk, advanceAmount);
+            vm.prank(bob);
+            regenStaker.contribute(bobDepositId, address(allocationMechanism), advanceAmount, deadline, v, r, s);
+        }
+
+        // Verify: unclaimed is now 0 (contributed), debt is still full
+        assertEq(regenStaker.unclaimedReward(bobDepositId), 0, "unclaimed should be zero after contributing all");
+        assertEq(regenStaker.advanceDebt(bobDepositId), advanceAmount, "debt should persist after contribute");
+
+        // Step 2: Earn rewards
+        vm.warp(block.timestamp + REWARD_DURATION / 2);
+
+        uint256 unclaimed = regenStaker.unclaimedReward(bobDepositId);
+        require(unclaimed > advanceAmount, "should have earned more than debt");
+
+        // Step 3: Claim — debt should be deducted
+        uint256 bobBalBefore = token.balanceOf(bob);
+
+        vm.prank(bob);
+        uint256 claimed = regenStaker.claimReward(bobDepositId);
+
+        assertEq(claimed, unclaimed - advanceAmount, "payout should be earned minus debt");
+        assertEq(token.balanceOf(bob) - bobBalBefore, claimed, "balance should reflect reduced payout");
+        assertEq(regenStaker.advanceDebt(bobDepositId), 0, "debt should be fully repaid");
     }
 }

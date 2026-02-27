@@ -505,7 +505,9 @@ contract RegenStakerAdvanceRewardReentrancyTest is Test {
         (uint96 balance, , , , , , ) = staker.deposits(depositId);
         assertEq(balance, amount - advance, "deposit should remain locked and staked");
         assertGt(staker.advanceRewardLockEnd(depositId), block.timestamp, "commitment lock should be active");
-        assertEq(token.balanceOf(address(attacker)), advance, "attacker should only keep advance payout");
+        assertEq(token.balanceOf(address(attacker)), 0, "advance stays in contract, attacker gets nothing");
+        assertEq(staker.unclaimedReward(depositId), advance, "advance should be credited as unclaimed");
+        assertEq(staker.advanceDebt(depositId), advance, "advance debt should match credit");
     }
 
     function _selector(bytes memory data) internal pure returns (bytes4 sel) {
