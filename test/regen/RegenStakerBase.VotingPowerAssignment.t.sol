@@ -5,7 +5,6 @@ import { AccessMode } from "src/constants.sol";
 import { Test } from "forge-std/Test.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { RegenStaker } from "src/regen/RegenStaker.sol";
-import { RegenStakerBase } from "src/regen/RegenStakerBase.sol";
 import { Staker } from "staker/Staker.sol";
 import { MockERC20Staking } from "test/mocks/MockERC20Staking.sol";
 import { MockEarningPowerCalculator } from "test/mocks/MockEarningPowerCalculator.sol";
