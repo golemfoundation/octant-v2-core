@@ -272,6 +272,58 @@ jobs:
           echo ""
           echo "All coverage metrics meet the ${THRESHOLD}% threshold."
 
+  gas-profiling:
+    name: Gas Profiling
+    runs-on: general
+    continue-on-error: true
+    container:
+      image: ${{ vars.GCP_DOCKER_IMAGE_REGISTRY }}/node-extended:f4f41461
+      credentials:
+        username: _json_key_base64
+        password: ${{ secrets.GCP_DOCKER_IMAGES_REGISTRY_SERVICE_ACCOUNT }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Init env
+        run: forge soldeer install
+
+      - name: Generate Gas Snapshot
+        run: forge snapshot --match-path 'test/gas/**' --snap .gas-snapshot-new
+
+      - name: Compare Gas Usage
+        id: gas-diff
+        run: |
+          if [ -f .gas-snapshot ]; then
+            forge snapshot --diff .gas-snapshot --match-path 'test/gas/**' > gas-diff.txt 2>&1 || true
+            # Extract summary line
+            SUMMARY=$(tail -3 gas-diff.txt | head -1)
+            echo "summary=$SUMMARY" >> $GITHUB_OUTPUT
+            echo "has_baseline=true" >> $GITHUB_OUTPUT
+          else
+            echo "No baseline .gas-snapshot committed. Run 'make gas' and commit .gas-snapshot." > gas-diff.txt
+            echo "has_baseline=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Build Gas Report
+        run: |
+          echo "## Gas Profiling Report" > gas-report.md
+          echo "" >> gas-report.md
+          if [ -f .gas-snapshot ]; then
+            echo '```' >> gas-report.md
+            cat gas-diff.txt >> gas-report.md
+            echo '```' >> gas-report.md
+          else
+            echo "No baseline \`.gas-snapshot\` committed. Run \`make gas\` and commit the file." >> gas-report.md
+          fi
+          cat gas-report.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Post Gas Report Comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: gas-report
+          path: gas-report.md
+
   kontrol-proofs:
     name: Kontrol Formal Verification
     runs-on: general
