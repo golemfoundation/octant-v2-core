@@ -17,6 +17,8 @@ contract QuadraticVotingGasAnalysisTest is Test {
     event GasMeasurement(string operation, uint256 gasUsed);
     event GasComparison(string comparison, uint256 gasA, uint256 gasB, uint256 difference, uint256 percentSavings);
 
+    uint256 constant W = 65536; // weight multiplier so weight^2 >= 2^32 (shift=32 quantization)
+
     AllocationMechanismFactory factory;
     QuadraticVotingMechanism mechanism;
     ERC20Mock token;
@@ -97,7 +99,7 @@ contract QuadraticVotingGasAnalysisTest is Test {
         console.log("Testing Alice vote on project 1 (COLD STORAGE - first vote on project):");
         uint256 gasStart1 = gasleft();
         vm.prank(alice);
-        _tokenized().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 20, recipient1); // 400 voting power cost
+        _tokenized().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1); // (20*W)^2 voting power cost
         uint256 gasCold1 = gasStart1 - gasleft();
         console.log("Alice COLD vote gas:", gasCold1);
         emit GasMeasurement("Alice_ColdStorage_Vote", gasCold1);
@@ -106,7 +108,7 @@ contract QuadraticVotingGasAnalysisTest is Test {
         console.log("Testing Bob vote on project 2 (COLD STORAGE - first vote on project):");
         uint256 gasStart2 = gasleft();
         vm.prank(bob);
-        _tokenized().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 15, recipient2); // 225 voting power cost
+        _tokenized().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 15 * W, recipient2); // (15*W)^2 voting power cost
         uint256 gasCold2 = gasStart2 - gasleft();
         console.log("Bob COLD vote gas:", gasCold2);
         emit GasMeasurement("Bob_ColdStorage_Vote", gasCold2);
@@ -115,7 +117,7 @@ contract QuadraticVotingGasAnalysisTest is Test {
         console.log("Testing Charlie vote on project 3 (COLD STORAGE - first vote on project):");
         uint256 gasStart3 = gasleft();
         vm.prank(charlie);
-        _tokenized().castVote(pid3, TokenizedAllocationMechanism.VoteType.For, 10, recipient3); // 100 voting power cost
+        _tokenized().castVote(pid3, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient3); // (10*W)^2 voting power cost
         uint256 gasCold3 = gasStart3 - gasleft();
         console.log("Charlie COLD vote gas:", gasCold3);
         emit GasMeasurement("Charlie_ColdStorage_Vote", gasCold3);
@@ -173,13 +175,13 @@ contract QuadraticVotingGasAnalysisTest is Test {
 
         // First create some votes to "warm up" the storage
         vm.prank(alice2);
-        _tokenized().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 5, recipient1); // Initial vote to warm storage
+        _tokenized().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 5 * W, recipient1); // Initial vote to warm storage
 
         vm.prank(bob2);
-        _tokenized().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 5, recipient2); // Initial vote to warm storage
+        _tokenized().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 5 * W, recipient2); // Initial vote to warm storage
 
         vm.prank(charlie2);
-        _tokenized().castVote(pid3, TokenizedAllocationMechanism.VoteType.For, 5, recipient3); // Initial vote to warm storage
+        _tokenized().castVote(pid3, TokenizedAllocationMechanism.VoteType.For, 5 * W, recipient3); // Initial vote to warm storage
 
         console.log("\n--- WARM STORAGE OPERATIONS ---");
 
@@ -188,7 +190,7 @@ contract QuadraticVotingGasAnalysisTest is Test {
         console.log("Testing Bob2 vote on project 3 (WARM STORAGE - project already has votes):");
         uint256 gasStartWarm1 = gasleft();
         vm.prank(bob2);
-        _tokenized().castVote(pid3, TokenizedAllocationMechanism.VoteType.For, 10, recipient3); // 100 voting power cost
+        _tokenized().castVote(pid3, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient3); // (10*W)^2 voting power cost
         uint256 gasWarm1 = gasStartWarm1 - gasleft();
         console.log("Bob2 WARM vote gas:", gasWarm1);
         emit GasMeasurement("Bob2_WarmStorage_Vote", gasWarm1);
@@ -197,7 +199,7 @@ contract QuadraticVotingGasAnalysisTest is Test {
         console.log("Testing Charlie2 vote on project 1 (WARM STORAGE - project already has votes):");
         uint256 gasStartWarm2 = gasleft();
         vm.prank(charlie2);
-        _tokenized().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 8, recipient1); // 64 voting power cost
+        _tokenized().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 8 * W, recipient1); // (8*W)^2 voting power cost
         uint256 gasWarm2 = gasStartWarm2 - gasleft();
         console.log("Charlie2 WARM vote gas:", gasWarm2);
         emit GasMeasurement("Charlie2_WarmStorage_Vote", gasWarm2);
@@ -206,7 +208,7 @@ contract QuadraticVotingGasAnalysisTest is Test {
         console.log("Testing David2 vote on project 2 (WARM STORAGE - project already has votes):");
         uint256 gasStartWarm3 = gasleft();
         vm.prank(david2);
-        _tokenized().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 12, recipient2); // 144 voting power cost
+        _tokenized().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 12 * W, recipient2); // (12*W)^2 voting power cost
         uint256 gasWarm3 = gasStartWarm3 - gasleft();
         console.log("David2 WARM vote gas:", gasWarm3);
         emit GasMeasurement("David2_WarmStorage_Vote", gasWarm3);
@@ -248,7 +250,7 @@ contract QuadraticVotingGasAnalysisTest is Test {
         console.log("Alice voting on project (COLD - first vote on project):");
         uint256 gasStartFirst = gasleft();
         vm.prank(alice);
-        _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipient1); // 100 voting power cost
+        _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient1); // (10*W)^2 voting power cost
         uint256 gasFirst = gasStartFirst - gasleft();
         console.log("Alice FIRST vote gas:", gasFirst);
         emit GasMeasurement("Alice_FirstVote_OnProject", gasFirst);
@@ -257,7 +259,7 @@ contract QuadraticVotingGasAnalysisTest is Test {
         console.log("Bob voting on same project (WARM - project has existing votes):");
         uint256 gasStartSecond = gasleft();
         vm.prank(bob);
-        _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 15, recipient1); // 225 voting power cost
+        _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 15 * W, recipient1); // (15*W)^2 voting power cost
         uint256 gasSecond = gasStartSecond - gasleft();
         console.log("Bob SECOND vote gas:", gasSecond);
         emit GasMeasurement("Bob_SecondVote_OnProject", gasSecond);
@@ -266,7 +268,7 @@ contract QuadraticVotingGasAnalysisTest is Test {
         console.log("Charlie voting on same project (WARM - project has existing votes from 2 users):");
         uint256 gasStartThird = gasleft();
         vm.prank(charlie);
-        _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1); // 400 voting power cost
+        _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1); // (20*W)^2 voting power cost
         uint256 gasThird = gasStartThird - gasleft();
         console.log("Charlie THIRD vote gas:", gasThird);
         emit GasMeasurement("Charlie_ThirdVote_OnProject", gasThird);
@@ -311,28 +313,28 @@ contract QuadraticVotingGasAnalysisTest is Test {
 
         console.log("Testing different vote weights on new projects...");
 
-        // Small weight vote (weight=5, cost=25)
+        // Small weight vote (weight=5*W, cost=25*W^2)
         uint256 gasStartSmall = gasleft();
         vm.prank(alice);
-        _tokenized().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 5, recipient1);
+        _tokenized().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 5 * W, recipient1);
         uint256 gasSmallWeight = gasStartSmall - gasleft();
-        console.log("Small weight vote (5, cost=25):", gasSmallWeight, "gas");
+        console.log("Small weight vote (5*W):", gasSmallWeight, "gas");
         emit GasMeasurement("Small_Weight_Vote", gasSmallWeight);
 
-        // Medium weight vote (weight=20, cost=400)
+        // Medium weight vote (weight=20*W, cost=400*W^2)
         uint256 gasStartMedium = gasleft();
         vm.prank(alice);
-        _tokenized().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 20, recipient2);
+        _tokenized().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient2);
         uint256 gasMediumWeight = gasStartMedium - gasleft();
-        console.log("Medium weight vote (20, cost=400):", gasMediumWeight, "gas");
+        console.log("Medium weight vote (20*W):", gasMediumWeight, "gas");
         emit GasMeasurement("Medium_Weight_Vote", gasMediumWeight);
 
-        // Large weight vote (weight=31, cost=961)
+        // Large weight vote (weight=31*W, cost=961*W^2)
         uint256 gasStartLarge = gasleft();
         vm.prank(alice);
-        _tokenized().castVote(pid3, TokenizedAllocationMechanism.VoteType.For, 31, recipient3);
+        _tokenized().castVote(pid3, TokenizedAllocationMechanism.VoteType.For, 31 * W, recipient3);
         uint256 gasLargeWeight = gasStartLarge - gasleft();
-        console.log("Large weight vote (31, cost=961):", gasLargeWeight, "gas");
+        console.log("Large weight vote (31*W):", gasLargeWeight, "gas");
         emit GasMeasurement("Large_Weight_Vote", gasLargeWeight);
 
         console.log("\n--- WEIGHT IMPACT ANALYSIS ---");
@@ -421,7 +423,7 @@ contract QuadraticVotingGasAnalysisTest is Test {
         for (uint256 i = 0; i < 5; i++) {
             uint256 gasStart = gasleft();
             vm.prank(alice);
-            _tokenized().castVote(pids[i], TokenizedAllocationMechanism.VoteType.For, 10, recipients[i]);
+            _tokenized().castVote(pids[i], TokenizedAllocationMechanism.VoteType.For, 10 * W, recipients[i]);
             gasUsed[i] = gasStart - gasleft();
             console.log("Vote %d (project %d): %d gas", i + 1, pids[i], gasUsed[i]);
             emit GasMeasurement(string(abi.encodePacked("Sequential_Vote_", vm.toString(i + 1))), gasUsed[i]);

@@ -5,7 +5,7 @@ rekompile                  = true
 verbose                    = false
 debug                      = false
 require                    = 'verification/kontrol/octant-lemmas.k'
-module-import              = ['YDStrategyTest:OCTANT-LEMMAS', 'YSStrategyTest:OCTANT-LEMMAS']
+module-import              = ['YDStrategyTest:OCTANT-LEMMAS', 'YSStrategyTest:OCTANT-LEMMAS', 'ProperQFQuantTest:OCTANT-LEMMAS']
 auxiliary-lemmas           = true
 
 [prove.default]
@@ -17,7 +17,7 @@ max-depth                  = 100000
 max-iterations             = 10000
 reinit                     = false
 cse                        = false
-workers                    = 1
+workers                    = 4
 max-frontier-parallel      = 6
 maintenance-rate           = 128
 assume-defined             = false
@@ -76,6 +76,21 @@ match-test                 = [
         "YSStrategyTest.testTransferUserToDragon(address,uint256)",
         "YSStrategyTest.testConversionSolventYS(uint256)",
         "YSStrategyTest.testConversionFallbackInsolventYS(uint256)",
+        # ============================================
+        # ProperQF quantization invariant proofs (12)
+        # ============================================
+        "ProperQFQuantTest.testAlignmentInvariant(uint256)",
+        "ProperQFQuantTest.testLosslessRoundTrip(uint256)",
+        "ProperQFQuantTest.testLosslessRoundTripBoundaries()",
+        "ProperQFQuantTest.testDeltaCancellation(uint256,uint256)",
+        "ProperQFQuantTest.testSquaringBoundary(uint256)",
+        "ProperQFQuantTest.testMinWeightCalibration()",
+        "ProperQFQuantTest.testHeadroomSufficiency()",
+        "ProperQFQuantTest.testProductionSchemeConsistency(uint256)",
+        "ProperQFQuantTest.testProdMinVoteWeightMatchesHarness()",
+        "ProperQFQuantTest.testPackedSlotIndependence(uint256,uint256)",
+        "ProperQFQuantTest.testProcessVoteLinearSumExact(uint256)",
+        "ProperQFQuantTest.testLiveCapsHeadroom()",
     ]
 
 [show.default]

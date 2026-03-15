@@ -15,6 +15,8 @@ contract QuadraticVotingSimpleTimelockTest is Test {
     ERC20Mock token;
     QuadraticVotingMechanism mechanism;
 
+    uint256 constant W = 65536;
+
     address alice = address(0x1);
     address charlie = address(0x3);
 
@@ -61,7 +63,7 @@ contract QuadraticVotingSimpleTimelockTest is Test {
 
         vm.warp(votingStartTime + 1);
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 25, charlie); // Cost: 25^2 = 625
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 25 * W, charlie); // Cost: (25*W)^2 survives shift-32 quantization
 
         // Debug: Check what quadratic funding this generates
         (uint256 sumContributions, , uint256 quadraticFunding, uint256 linearFunding) = mechanism.getProposalFunding(
@@ -136,7 +138,7 @@ contract QuadraticVotingSimpleTimelockTest is Test {
         // Vote on proposal during active period
         vm.warp(votingStartTime + 1);
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, charlie); // Cost: 20^2 = 400
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, charlie); // Cost: (20*W)^2 survives shift-32 quantization
 
         // Verify proposal has non-zero funding before cancellation
         (uint256 sumContributions, uint256 sumSquareRoots, uint256 quadraticFunding, uint256 linearFunding) = mechanism
@@ -187,7 +189,7 @@ contract QuadraticVotingSimpleTimelockTest is Test {
         // Vote and finalize
         vm.warp(votingStartTime + 1);
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, charlie); // High vote to meet quorum
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30 * W, charlie); // (30*W)^2 survives shift-32 quantization
 
         vm.warp(votingEndTime + 1);
         (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));

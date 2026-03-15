@@ -55,6 +55,7 @@ contract MechanismBranchCoverageTest is Test {
     uint256 constant QUORUM = 10;
     uint256 constant TIMELOCK_DELAY = 1 days;
     uint256 constant GRACE_PERIOD = 7 days;
+    uint256 constant W = 65536;
 
     function _tam() internal view returns (TokenizedAllocationMechanism) {
         return TokenizedAllocationMechanism(address(mechanism));
@@ -74,7 +75,7 @@ contract MechanismBranchCoverageTest is Test {
             symbol: "BCT",
             votingDelay: VOTING_DELAY,
             votingPeriod: VOTING_PERIOD,
-            quorumShares: QUORUM,
+            quorumShares: QUORUM * W * W,
             timelockDelay: TIMELOCK_DELAY,
             gracePeriod: GRACE_PERIOD,
             owner: address(0)
@@ -247,12 +248,12 @@ contract MechanismBranchCoverageTest is Test {
 
         // First vote succeeds
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient1);
 
         // Second vote reverts
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(QuadraticVotingMechanism.AlreadyVoted.selector, alice, pid));
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient1);
     }
 
     // ===== QuadraticVotingMechanism: InsufficientVotingPowerForQuadraticCost =====
@@ -268,7 +269,7 @@ contract MechanismBranchCoverageTest is Test {
         // Weight^2 = 200^2 = 40000 > 100 voting power
         vm.prank(alice);
         vm.expectRevert(QuadraticVotingMechanism.InsufficientVotingPowerForQuadraticCost.selector);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 200, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 200 * W, recipient1);
     }
 
     // ===== QuadraticVotingMechanism: ZeroAddressCannotPropose =====
@@ -290,7 +291,7 @@ contract MechanismBranchCoverageTest is Test {
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -314,13 +315,13 @@ contract MechanismBranchCoverageTest is Test {
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
         vm.prank(alice);
-        _tam().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
         vm.prank(bob);
-        _tam().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
         vm.prank(alice);
-        _tam().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 20, recipient2);
+        _tam().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient2);
         vm.prank(bob);
-        _tam().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 20, recipient2);
+        _tam().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient2);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -347,7 +348,7 @@ contract MechanismBranchCoverageTest is Test {
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -370,7 +371,7 @@ contract MechanismBranchCoverageTest is Test {
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -391,7 +392,7 @@ contract MechanismBranchCoverageTest is Test {
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -411,7 +412,7 @@ contract MechanismBranchCoverageTest is Test {
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -439,7 +440,7 @@ contract MechanismBranchCoverageTest is Test {
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -538,7 +539,7 @@ contract MechanismBranchCoverageTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(TokenizedAllocationMechanism.InvalidProposal.selector, 999));
-        _tam().castVote(999, TokenizedAllocationMechanism.VoteType.For, 10, recipient1);
+        _tam().castVote(999, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient1);
     }
 
     function test_castVote_zeroWeight_reverts() public {
@@ -566,7 +567,7 @@ contract MechanismBranchCoverageTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(TokenizedAllocationMechanism.RecipientMismatch.selector, pid, charlie, recipient1)
         );
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, charlie);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, charlie);
     }
 
     function test_castVote_canceledProposal_reverts() public {
@@ -582,7 +583,7 @@ contract MechanismBranchCoverageTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(TokenizedAllocationMechanism.ProposalCanceledError.selector, pid));
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient1);
     }
 
     // ===== TokenizedAllocationMechanism: cancelProposal branches =====
@@ -639,7 +640,7 @@ contract MechanismBranchCoverageTest is Test {
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         // Cancel before finalize
         vm.prank(alice);
@@ -663,7 +664,7 @@ contract MechanismBranchCoverageTest is Test {
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -697,7 +698,7 @@ contract MechanismBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
         _tam().queueProposal(pid);
@@ -743,7 +744,7 @@ contract MechanismBranchCoverageTest is Test {
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -767,6 +768,7 @@ contract OctantQFBlocksetTest is Test {
     address keeper = makeAddr("keeper");
 
     uint256 constant DEPOSIT = 10_000e18;
+    uint256 constant W = 65536;
 
     function tam() internal view returns (TokenizedAllocationMechanism) {
         return TokenizedAllocationMechanism(address(mechanism));
@@ -906,7 +908,7 @@ contract OctantQFBlocksetTest is Test {
 
         vm.warp(block.timestamp + 2);
         vm.prank(alice);
-        tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, makeAddr("recipient"));
+        tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, makeAddr("recipient"));
 
         vm.warp(block.timestamp + 101);
         vm.prank(owner);
@@ -1034,13 +1036,14 @@ contract ProperQFBranchCoverageTest is Test {
 
     // _processVote: valid vote (success path - contributes to branch coverage of all checks passing)
     function test_processVote_validVote_succeeds() public {
-        // contribution = 10000, sqrt(10000) = 100, voteWeight = 100
-        qf.exposed_processVote(1, 10000, 100);
+        // contribution = 10000e18, sqrt(10000e18) = 100e9, voteWeight = 100e9
+        qf.exposed_processVote(1, 10000e18, 100e9);
 
-        // Verify it was recorded
+        // Verify it was recorded (sumContributions is lossy due to quantization)
+        uint256 step = uint256(1) << 32;
         ProperQF.Project memory project = qf.projects(1);
-        assertEq(project.sumContributions, 10000);
-        assertEq(project.sumSquareRoots, 100);
+        assertApproxEqAbs(project.sumContributions, 10000e18, step);
+        assertEq(project.sumSquareRoots, 100e9);
     }
 
     // _calculateOptimalAlpha: quadraticSum == linearSum exactly (edge case)
@@ -1098,7 +1101,7 @@ contract ProperQFBranchCoverageTest is Test {
 
     // totalFunding getter
     function test_totalFunding_afterVotes() public {
-        qf.exposed_processVote(1, 10000, 100);
+        qf.exposed_processVote(1, 10000e18, 100e9);
         assertTrue(qf.totalFunding() > 0);
     }
 }
@@ -1128,6 +1131,7 @@ contract TAMDeepBranchCoverageTest is Test {
     uint256 constant QUORUM = 10;
     uint256 constant TIMELOCK_DELAY = 1 days;
     uint256 constant GRACE_PERIOD = 7 days;
+    uint256 constant W = 65536;
 
     function _tam() internal view returns (TokenizedAllocationMechanism) {
         return TokenizedAllocationMechanism(address(mechanism));
@@ -1148,7 +1152,7 @@ contract TAMDeepBranchCoverageTest is Test {
             symbol: "DBT",
             votingDelay: VOTING_DELAY,
             votingPeriod: VOTING_PERIOD,
-            quorumShares: QUORUM,
+            quorumShares: QUORUM * W * W,
             timelockDelay: TIMELOCK_DELAY,
             gracePeriod: GRACE_PERIOD,
             owner: address(0)
@@ -1215,7 +1219,7 @@ contract TAMDeepBranchCoverageTest is Test {
         vm.warp(_tam().votingStartTime());
 
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient1);
 
         // Should succeed
         assertTrue(_tam().votingPower(alice) < DEPOSIT, "Voting power should decrease");
@@ -1232,7 +1236,7 @@ contract TAMDeepBranchCoverageTest is Test {
         vm.warp(_tam().votingEndTime());
 
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient1);
 
         // Should succeed since the check is block.timestamp > votingEnd
         assertTrue(_tam().votingPower(alice) < DEPOSIT, "Voting power should decrease");
@@ -1250,7 +1254,7 @@ contract TAMDeepBranchCoverageTest is Test {
 
         vm.prank(alice);
         vm.expectRevert();
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient1);
     }
 
     // ===== _executeCastVote: after voting end reverts =====
@@ -1265,7 +1269,7 @@ contract TAMDeepBranchCoverageTest is Test {
 
         vm.prank(alice);
         vm.expectRevert();
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient1);
     }
 
     // ===== _executeCastVote: weight too large =====
@@ -1321,7 +1325,7 @@ contract TAMDeepBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient1);
 
         // Warp past voting end but don't finalize
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
@@ -1339,7 +1343,7 @@ contract TAMDeepBranchCoverageTest is Test {
         // Vote with very small weight so quorum isn't met
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 1, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 1 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -1377,9 +1381,9 @@ contract TAMDeepBranchCoverageTest is Test {
 
         // Vote on both proposals meeting quorum
         vm.prank(alice);
-        _tam().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
         vm.prank(bob);
-        _tam().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 20, recipient2);
+        _tam().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient2);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -1403,7 +1407,7 @@ contract TAMDeepBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -1459,7 +1463,7 @@ contract TAMDeepBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -1490,7 +1494,7 @@ contract TAMDeepBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -1513,7 +1517,7 @@ contract TAMDeepBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -1546,7 +1550,7 @@ contract TAMDeepBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -1578,7 +1582,7 @@ contract TAMDeepBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -1610,7 +1614,7 @@ contract TAMDeepBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -1633,7 +1637,7 @@ contract TAMDeepBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -1708,7 +1712,7 @@ contract TAMDeepBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 1, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 1 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -1725,7 +1729,7 @@ contract TAMDeepBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -1764,7 +1768,7 @@ contract TAMDeepBranchCoverageTest is Test {
         assertTrue(_tam().startBlock() > 0);
         assertEq(_tam().votingDelay(), VOTING_DELAY);
         assertEq(_tam().votingPeriod(), VOTING_PERIOD);
-        assertEq(_tam().quorumShares(), QUORUM);
+        assertEq(_tam().quorumShares(), QUORUM * W * W);
         assertEq(_tam().timelockDelay(), TIMELOCK_DELAY);
         assertEq(_tam().gracePeriod(), GRACE_PERIOD);
         assertEq(_tam().globalRedemptionStart(), 0);
@@ -1791,7 +1795,7 @@ contract TAMDeepBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -1812,7 +1816,7 @@ contract TAMDeepBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -1990,6 +1994,7 @@ contract QVMBranchCoverageTest is Test {
     uint256 constant QUORUM = 10;
     uint256 constant TIMELOCK_DELAY = 1 days;
     uint256 constant GRACE_PERIOD = 7 days;
+    uint256 constant W = 65536;
 
     function _tam() internal view returns (TokenizedAllocationMechanism) {
         return TokenizedAllocationMechanism(address(mechanism));
@@ -2009,7 +2014,7 @@ contract QVMBranchCoverageTest is Test {
             symbol: "QVB",
             votingDelay: VOTING_DELAY,
             votingPeriod: VOTING_PERIOD,
-            quorumShares: QUORUM,
+            quorumShares: QUORUM * W * W,
             timelockDelay: TIMELOCK_DELAY,
             gracePeriod: GRACE_PERIOD,
             owner: address(0)
@@ -2060,7 +2065,7 @@ contract QVMBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         // Call calculateOptimalAlpha through the mechanism
         (, uint256 den) = mechanism.calculateOptimalAlpha(50_000e18, DEPOSIT);
@@ -2082,7 +2087,7 @@ contract QVMBranchCoverageTest is Test {
 
         vm.prank(alice);
         vm.expectRevert(abi.encodeWithSelector(TokenizedAllocationMechanism.InvalidProposal.selector, 0));
-        _tam().castVote(0, TokenizedAllocationMechanism.VoteType.For, 10, recipient1);
+        _tam().castVote(0, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient1);
     }
 
     // ===== getProposalFunding: canceled proposal returns zeros =====
@@ -2094,7 +2099,7 @@ contract QVMBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient1);
 
         // Cancel the proposal
         vm.prank(alice);
@@ -2116,7 +2121,7 @@ contract QVMBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         (uint256 sumC, uint256 sumSq, uint256 qf, uint256 lf) = mechanism.getProposalFunding(pid);
         assertTrue(sumC > 0, "Should have contributions");
@@ -2175,6 +2180,7 @@ contract BaseAllocationMechanismBranchTest is Test {
     uint256 constant QUORUM = 10;
     uint256 constant TIMELOCK_DELAY = 1 days;
     uint256 constant GRACE_PERIOD = 7 days;
+    uint256 constant W = 65536;
 
     function _tam() internal view returns (TokenizedAllocationMechanism) {
         return TokenizedAllocationMechanism(address(mechanism));
@@ -2194,7 +2200,7 @@ contract BaseAllocationMechanismBranchTest is Test {
             symbol: "BBT",
             votingDelay: VOTING_DELAY,
             votingPeriod: VOTING_PERIOD,
-            quorumShares: QUORUM,
+            quorumShares: QUORUM * W * W,
             timelockDelay: TIMELOCK_DELAY,
             gracePeriod: GRACE_PERIOD,
             owner: address(0)
@@ -2285,7 +2291,7 @@ contract BaseAllocationMechanismBranchTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -2304,7 +2310,7 @@ contract BaseAllocationMechanismBranchTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -2325,7 +2331,7 @@ contract BaseAllocationMechanismBranchTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -2344,7 +2350,7 @@ contract BaseAllocationMechanismBranchTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -2365,7 +2371,7 @@ contract BaseAllocationMechanismBranchTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -2446,6 +2452,7 @@ contract TAMDeepBranchCoverage2 is Test {
     uint256 constant QUORUM = 10;
     uint256 constant TIMELOCK_DELAY = 1 days;
     uint256 constant GRACE_PERIOD = 7 days;
+    uint256 constant W = 65536;
 
     function _tam() internal view returns (TokenizedAllocationMechanism) {
         return TokenizedAllocationMechanism(address(mechanism));
@@ -2467,7 +2474,7 @@ contract TAMDeepBranchCoverage2 is Test {
             symbol: "DBT2",
             votingDelay: VOTING_DELAY,
             votingPeriod: VOTING_PERIOD,
-            quorumShares: QUORUM,
+            quorumShares: QUORUM * W * W,
             timelockDelay: TIMELOCK_DELAY,
             gracePeriod: GRACE_PERIOD,
             owner: address(0)
@@ -2714,7 +2721,7 @@ contract TAMDeepBranchCoverage2 is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -2736,7 +2743,7 @@ contract TAMDeepBranchCoverage2 is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -2763,7 +2770,7 @@ contract TAMDeepBranchCoverage2 is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -2785,7 +2792,7 @@ contract TAMDeepBranchCoverage2 is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -2814,7 +2821,7 @@ contract TAMDeepBranchCoverage2 is Test {
 
         vm.prank(alice);
         vm.expectRevert(TokenizedAllocationMechanism.PausedError.selector);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient1);
     }
 
     // ===== whenNotPaused: propose while paused =====
@@ -2865,7 +2872,7 @@ contract TAMDeepBranchCoverage2 is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -2893,6 +2900,8 @@ contract QVMNormalizeBranchTest is Test {
     AllocationMechanismFactory factory;
 
     address alice = makeAddr("alice");
+
+    uint256 constant W = 65536;
 
     function setUp() public {
         factory = new AllocationMechanismFactory();
@@ -2931,7 +2940,7 @@ contract QVMNormalizeBranchTest is Test {
 
         uint256 pid = tam.propose(makeAddr("r1"), "Test");
         vm.warp(block.timestamp + 101);
-        tam.castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, makeAddr("r1"));
+        tam.castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, makeAddr("r1"));
         vm.stopPrank();
 
         QuadraticVotingMechanism(payable(mech)).calculateOptimalAlpha(50_000e18, 1000e18);
@@ -2954,7 +2963,7 @@ contract QVMNormalizeBranchTest is Test {
 
         uint256 pid = tam.propose(makeAddr("r1"), "Test");
         vm.warp(block.timestamp + 101);
-        tam.castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, makeAddr("r1"));
+        tam.castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, makeAddr("r1"));
         vm.stopPrank();
 
         QuadraticVotingMechanism(payable(mech)).calculateOptimalAlpha(50_000 * 10 ** 6, 1000 * 10 ** 6);
@@ -2977,7 +2986,7 @@ contract QVMNormalizeBranchTest is Test {
 
         uint256 pid = tam.propose(makeAddr("r1"), "Test");
         vm.warp(block.timestamp + 101);
-        tam.castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, makeAddr("r1"));
+        tam.castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, makeAddr("r1"));
         vm.stopPrank();
 
         QuadraticVotingMechanism(payable(mech)).calculateOptimalAlpha(50_000 * 10 ** 21, 1000 * 10 ** 21);
@@ -3013,35 +3022,40 @@ contract ProperQFDeepBranchTest is Test {
 
     // ===== _processVote: exact boundary - voteWeight^2 == contribution (success) =====
     function test_processVote_exactSqrt_succeeds() public {
-        qf.exposed_processVote(1, 100, 10);
+        // 100e18 = (10e9)^2
+        qf.exposed_processVote(1, 100e18, 10e9);
 
+        uint256 step = uint256(1) << 32;
         ProperQF.Project memory project = qf.projects(1);
-        assertEq(project.sumContributions, 100);
-        assertEq(project.sumSquareRoots, 10);
+        assertApproxEqAbs(project.sumContributions, 100e18, step);
+        assertEq(project.sumSquareRoots, 10e9);
     }
 
     // ===== _processVote: voteWeight at lower tolerance boundary =====
     function test_processVote_voteWeightAtLowerTolerance() public {
-        qf.exposed_processVote(1, 10000, 90);
+        // sqrt(10000e18) = 100e9, tolerance = 100e9/10 = 10e9, lower = 90e9
+        qf.exposed_processVote(1, 10000e18, 90e9);
 
         ProperQF.Project memory project = qf.projects(1);
-        assertEq(project.sumSquareRoots, 90);
+        assertEq(project.sumSquareRoots, 90e9);
     }
 
     // ===== _processVote: voteWeight below lower tolerance =====
     function test_processVote_voteWeightBelowLowerTolerance_reverts() public {
         vm.expectRevert(ProperQF.VoteWeightOutsideTolerance.selector);
-        qf.exposed_processVote(1, 10000, 89);
+        qf.exposed_processVote(1, 10000e18, 89e9);
     }
 
     // ===== _processVote: multiple votes on same project =====
     function test_processVote_multipleVotesSameProject() public {
-        qf.exposed_processVote(1, 10000, 100);
-        qf.exposed_processVote(1, 40000, 200);
+        qf.exposed_processVote(1, 10000e18, 100e9);
+        qf.exposed_processVote(1, 40000e18, 200e9);
 
+        uint256 step = uint256(1) << 32;
         ProperQF.Project memory project = qf.projects(1);
-        assertEq(project.sumContributions, 50000);
-        assertEq(project.sumSquareRoots, 300);
+        // 2 votes: tolerance = 2 * STEP
+        assertApproxEqAbs(project.sumContributions, 50000e18, 2 * step);
+        assertEq(project.sumSquareRoots, 300e9);
     }
 }
 
@@ -3093,6 +3107,7 @@ contract TAMSignatureBranchCoverageTest is Test {
     uint256 constant DEPOSIT = 10_000e18;
     uint256 constant VOTING_DELAY = 100;
     uint256 constant VOTING_PERIOD = 1000;
+    uint256 constant W = 65536;
 
     function _tam() internal view returns (TokenizedAllocationMechanism) {
         return TokenizedAllocationMechanism(address(mechanism));
@@ -3181,7 +3196,7 @@ contract TAMSignatureBranchCoverageTest is Test {
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
         // User signs vote
-        uint256 weight = 20;
+        uint256 weight = 20 * W;
         uint256 deadline = block.timestamp + 1000;
         uint256 nonce = _tam().nonces(user);
 
@@ -3359,7 +3374,7 @@ contract ProperQFUnderflowBranchTest is Test {
         qf.exposed_setAlpha(50, 100);
 
         // Process a vote - this internally calls _calculateWeightedTotalFunding
-        qf.exposed_processVote(1, 10000, 100);
+        qf.exposed_processVote(1, 10000e18, 100e9);
 
         // totalFunding should be updated
         uint256 totalFunding = qf.totalFunding();
@@ -3380,6 +3395,7 @@ contract TAMConvertZeroAssetsBranchTest is Test {
     uint256 constant DEPOSIT = 10_000e18;
     uint256 constant VOTING_DELAY = 100;
     uint256 constant VOTING_PERIOD = 1000;
+    uint256 constant W = 65536;
 
     function _tam() internal view returns (TokenizedAllocationMechanism) {
         return TokenizedAllocationMechanism(address(mechanism));
@@ -3416,7 +3432,7 @@ contract TAMConvertZeroAssetsBranchTest is Test {
         uint256 pid = _tam().propose(recipient1, "Test");
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
         _tam().queueProposal(pid);
@@ -3433,7 +3449,7 @@ contract TAMConvertZeroAssetsBranchTest is Test {
         uint256 pid = _tam().propose(recipient1, "Test");
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
         _tam().queueProposal(pid);
@@ -3467,6 +3483,7 @@ contract TAMQueueAfterRedemptionTest is Test {
     uint256 constant DEPOSIT = 10_000e18;
     uint256 constant VOTING_DELAY = 100;
     uint256 constant VOTING_PERIOD = 1000;
+    uint256 constant W = 65536;
 
     function _tam() internal view returns (TokenizedAllocationMechanism) {
         return TokenizedAllocationMechanism(address(mechanism));
@@ -3506,8 +3523,8 @@ contract TAMQueueAfterRedemptionTest is Test {
         uint256 pid2 = _tam().propose(recipient2, "Proposal 2");
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
-        _tam().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 10, recipient1);
-        _tam().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 10, recipient2);
+        _tam().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient1);
+        _tam().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient2);
         vm.stopPrank();
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
@@ -3529,7 +3546,7 @@ contract TAMQueueAfterRedemptionTest is Test {
 
         uint256 pid = _tam().propose(recipient1, "Test");
         vm.warp(block.timestamp + VOTING_DELAY + 1);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         // Cancel the proposal
         _tam().cancelProposal(pid);
@@ -3557,6 +3574,7 @@ contract TAMErc20BranchCoverageTest is Test {
     uint256 constant DEPOSIT = 10_000e18;
     uint256 constant VOTING_DELAY = 100;
     uint256 constant VOTING_PERIOD = 1000;
+    uint256 constant W = 65536;
 
     function _tam() internal view returns (TokenizedAllocationMechanism) {
         return TokenizedAllocationMechanism(address(mechanism));
@@ -3594,7 +3612,7 @@ contract TAMErc20BranchCoverageTest is Test {
         _tam().signup(DEPOSIT);
         uint256 pid = _tam().propose(recipient1, "Test");
         vm.warp(block.timestamp + VOTING_DELAY + 1);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
         vm.stopPrank();
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
@@ -3625,7 +3643,7 @@ contract TAMErc20BranchCoverageTest is Test {
         _tam().signup(DEPOSIT);
         uint256 pid = _tam().propose(recipient1, "Test");
         vm.warp(block.timestamp + VOTING_DELAY + 1);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
         vm.stopPrank();
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
@@ -3651,7 +3669,7 @@ contract TAMErc20BranchCoverageTest is Test {
         _tam().signup(DEPOSIT);
         uint256 pid = _tam().propose(recipient1, "Test");
         vm.warp(block.timestamp + VOTING_DELAY + 1);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
         vm.stopPrank();
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
@@ -3672,7 +3690,7 @@ contract TAMErc20BranchCoverageTest is Test {
         _tam().signup(DEPOSIT);
         uint256 pid = _tam().propose(recipient1, "Test");
         vm.warp(block.timestamp + VOTING_DELAY + 1);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
         vm.stopPrank();
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
@@ -3710,6 +3728,7 @@ contract TAMCastVoteBranchCoverageTest is Test {
     uint256 constant DEPOSIT = 10_000e18;
     uint256 constant VOTING_DELAY = 100;
     uint256 constant VOTING_PERIOD = 1000;
+    uint256 constant W = 65536;
 
     function _tam() internal view returns (TokenizedAllocationMechanism) {
         return TokenizedAllocationMechanism(address(mechanism));
@@ -3750,7 +3769,7 @@ contract TAMCastVoteBranchCoverageTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(TokenizedAllocationMechanism.RecipientMismatch.selector, pid, recipient2, recipient1)
         );
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipient2);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient2);
         vm.stopPrank();
     }
 
@@ -3794,7 +3813,7 @@ contract TAMCastVoteBranchCoverageTest is Test {
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
         vm.expectRevert(abi.encodeWithSelector(TokenizedAllocationMechanism.ProposalCanceledError.selector, pid));
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient1);
         vm.stopPrank();
     }
 
@@ -3811,7 +3830,7 @@ contract TAMCastVoteBranchCoverageTest is Test {
 
         vm.prank(alice);
         vm.expectRevert();
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient1);
     }
 
     // ===== castVote: before voting starts =====
@@ -3823,7 +3842,7 @@ contract TAMCastVoteBranchCoverageTest is Test {
 
         // Don't warp - still in delay period
         vm.expectRevert();
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, recipient1);
         vm.stopPrank();
     }
 }
@@ -3909,29 +3928,32 @@ contract ProperQFStorageUnderflowTest is Test {
     // ===== ProperQF line 156: QuadraticSumUnderflow =====
     // When totalQuadraticSum < oldQuadraticFunding (project.sumSquareRoots^2)
     function test_processVoteUnchecked_quadraticSumUnderflow_reverts() public {
+        uint256 step = uint256(1) << 32;
         // Set up a project with sumSquareRoots = 10, so oldQuadraticFunding = 100
-        qf.setProject(1, 100, 10);
+        // sumContributions must be step-aligned for exact round-trip
+        qf.setProject(1, 100 * step, 10);
         // Set totalQuadraticSum to a value less than 100
         qf.setTotalQuadraticSum(50);
-        qf.setTotalLinearSum(200);
+        qf.setTotalLinearSum(200 * step);
 
         // Now calling _processVoteUnchecked should trigger QuadraticSumUnderflow
         // because totalQuadraticSum (50) < oldQuadraticFunding (10*10 = 100)
         vm.expectRevert(ProperQF.QuadraticSumUnderflow.selector);
-        qf.exposed_processVoteUnchecked(1, 400, 20);
+        qf.exposed_processVoteUnchecked(1, 400 * step, 20);
     }
 
     // ===== ProperQF line 157: LinearSumUnderflow =====
     // When totalLinearSum < project.sumContributions
     function test_processVoteUnchecked_linearSumUnderflow_reverts() public {
-        // Set up a project with sumContributions = 500, sumSquareRoots = 10
-        qf.setProject(1, 500, 10);
+        uint256 step = uint256(1) << 32;
+        // Set up a project with sumContributions = 500*STEP, sumSquareRoots = 10
+        qf.setProject(1, 500 * step, 10);
         // Set totalQuadraticSum correctly (>= 10^2 = 100) but totalLinearSum too low
         qf.setTotalQuadraticSum(200);
-        qf.setTotalLinearSum(100); // 100 < 500 = project.sumContributions
+        qf.setTotalLinearSum(100 * step); // 100*STEP < 500*STEP = project.sumContributions
 
         vm.expectRevert(ProperQF.LinearSumUnderflow.selector);
-        qf.exposed_processVoteUnchecked(1, 400, 20);
+        qf.exposed_processVoteUnchecked(1, 400 * step, 20);
     }
 
     // ===== ProperQF: alphaNumerator() view function coverage =====
@@ -4080,6 +4102,7 @@ contract TAMPhase4BranchCoverageTest is Test {
     uint256 constant VOTING_PERIOD = 1000;
     uint256 constant TIMELOCK_DELAY = 1 days;
     uint256 constant GRACE_PERIOD = 7 days;
+    uint256 constant W = 65536;
 
     function _tam() internal view returns (TokenizedAllocationMechanism) {
         return TokenizedAllocationMechanism(address(mechanism));
@@ -4145,7 +4168,7 @@ contract TAMPhase4BranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 100, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 100 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -4166,7 +4189,7 @@ contract TAMPhase4BranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 100, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 100 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -4194,7 +4217,7 @@ contract TAMPhase4BranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 100, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 100 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -4241,6 +4264,7 @@ contract TAMReentrancyAndEdgeCaseTest is Test {
     uint256 constant VOTING_PERIOD = 1000;
     uint256 constant TIMELOCK_DELAY = 1 days;
     uint256 constant GRACE_PERIOD = 7 days;
+    uint256 constant W = 65536;
 
     function _tam() internal view returns (TokenizedAllocationMechanism) {
         return TokenizedAllocationMechanism(address(mechanism));
@@ -4284,7 +4308,7 @@ contract TAMReentrancyAndEdgeCaseTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -4387,6 +4411,7 @@ contract TAMPowerIncreasedTest is Test {
     uint256 constant DEPOSIT = 10_000e18;
     uint256 constant VOTING_DELAY = 100;
     uint256 constant VOTING_PERIOD = 1000;
+    uint256 constant W = 65536;
 
     function _tam() internal view returns (TokenizedAllocationMechanism) {
         return TokenizedAllocationMechanism(address(mechanism));
@@ -4432,7 +4457,7 @@ contract TAMPowerIncreasedTest is Test {
                 DEPOSIT + 1 // newPower (oldPower + 1)
             )
         );
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 100, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 100 * W, recipient1);
     }
 }
 
@@ -4449,6 +4474,7 @@ contract TAMConvertZeroAssetsWithSupplyTest is Test {
     uint256 constant DEPOSIT = 10_000e18;
     uint256 constant VOTING_DELAY = 100;
     uint256 constant VOTING_PERIOD = 1000;
+    uint256 constant W = 65536;
 
     function _tam() internal view returns (TokenizedAllocationMechanism) {
         return TokenizedAllocationMechanism(address(mechanism));
@@ -4493,9 +4519,9 @@ contract TAMConvertZeroAssetsWithSupplyTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 50, recipient1);
+        _tam().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 50 * W, recipient1);
         vm.prank(alice);
-        _tam().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 50, recipient2);
+        _tam().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 50 * W, recipient2);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -4536,6 +4562,7 @@ contract QVMRecipientZeroTest is Test {
     uint256 constant DEPOSIT = 10_000e18;
     uint256 constant VOTING_DELAY = 100;
     uint256 constant VOTING_PERIOD = 1000;
+    uint256 constant W = 65536;
 
     /// @dev Computes the storage slot for proposals[pid].recipient in the TAM storage layout
     /// AllocationStorage is at slot = uint256(keccak256("tokenized.allocation.storage")) - 1
@@ -4578,7 +4605,7 @@ contract QVMRecipientZeroTest is Test {
         tam.signup(DEPOSIT);
         uint256 pid = tam.propose(recipient1, "Test");
         vm.warp(block.timestamp + VOTING_DELAY + 1);
-        tam.castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        tam.castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
         vm.stopPrank();
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
@@ -4618,7 +4645,7 @@ contract QVMRecipientZeroTest is Test {
         tam.signup(DEPOSIT);
         uint256 pid = tam.propose(recipient1, "Test");
         vm.warp(block.timestamp + VOTING_DELAY + 1);
-        tam.castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        tam.castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
         vm.stopPrank();
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
@@ -4658,6 +4685,7 @@ contract FinalBranchCoverageTest is Test {
     uint256 constant VOTING_PERIOD = 1000;
     uint256 constant TIMELOCK_DELAY = 1 days;
     uint256 constant GRACE_PERIOD = 7 days;
+    uint256 constant W = 65536;
 
     function _tam() internal view returns (TokenizedAllocationMechanism) {
         return TokenizedAllocationMechanism(address(mechanism));
@@ -4699,7 +4727,7 @@ contract FinalBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -4734,7 +4762,7 @@ contract FinalBranchCoverageTest is Test {
 
         vm.warp(block.timestamp + VOTING_DELAY + 1);
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1);
 
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
         _tam().finalizeVoteTally();
@@ -4833,9 +4861,9 @@ contract QVMHighDecimalsBranchTest is Test {
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
         // With QVM _getVotingPowerHook: deposit(1e20) / 10^(20-18) = 1e18 voting power
-        // sqrt(1e18) = 1e9
+        // sqrt(1e18) ≈ 1e9, aligned to MIN_VOTE_WEIGHT: 15258 * 65536 = 999948288
         vm.prank(alice);
-        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 1e9, recipient1);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 15258 * 65536, recipient1);
 
         // If we got here without revert, the scale-down path worked
         assertTrue(true);

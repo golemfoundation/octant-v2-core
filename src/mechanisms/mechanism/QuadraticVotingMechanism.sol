@@ -19,10 +19,10 @@ import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/I
  *      - Prevents whale dominance (expensive to cast many votes)
  *      - Benefits: Small contributors have proportionally more impact
  *
- *      VOTE COST EXAMPLES:
- *      - 10 votes costs 100 voting power (10²)
- *      - 20 votes costs 400 voting power (20²)
- *      - 100 votes costs 10,000 voting power (100²)
+ *      VOTE COST EXAMPLES (voting power is in 18-decimal-normalized space):
+ *      - weight 65536 costs ~4.3e9 voting power (65536²) : minimum vote
+ *      - weight 1e9    costs 1e18 voting power (1e9²)     : ~1 token
+ *      - weight 1e12   costs 1e24 voting power (1e12²)    : ~1M tokens
  *
  *      ONE-TIME VOTING:
  *      ⚠️  Users can only vote ONCE per proposal
@@ -46,8 +46,18 @@ contract QuadraticVotingMechanism is BaseAllocationMechanism, ProperQF {
     error ZeroAddressCannotPropose();
     error OnlyForVotesSupported();
     error InsufficientVotingPowerForQuadraticCost();
+    error WeightBelowMinimum(uint256 weight, uint256 minimum);
+    error WeightNotAligned(uint256 weight, uint256 alignment);
 
     error AlreadyVoted(address voter, uint256 pid);
+
+    /// @notice Minimum vote weight, derived from sumContributions quantization.
+    /// @dev contribution = weight^2 must be >= CONTRIBUTIONS_SCHEME.stepSize() = 2^32,
+    ///      therefore weight >= 2^16 = 65536. Since voting power is normalized to 18 decimals
+    ///      (see _getVotingPowerHook), this costs ~4.3 nanotoken regardless of the asset.
+    ///      IMPORTANT: this constant is duplicated in verification/kontrol/ProperQFProofHarness.k.sol
+    ///      (both PROD_MIN_VOTE_WEIGHT and MIN_VOTE_WEIGHT). Update both if changing this value.
+    uint256 public constant MIN_VOTE_WEIGHT = 1 << 16;
 
     // ============================================
     // STATE VARIABLES
@@ -71,7 +81,7 @@ contract QuadraticVotingMechanism is BaseAllocationMechanism, ProperQF {
         AllocationConfig memory _config,
         uint256 _alphaNumerator,
         uint256 _alphaDenominator
-    ) BaseAllocationMechanism(_implementation, _config) {
+    ) BaseAllocationMechanism(_implementation, _config) ProperQF(18) {
         _setAlpha(_alphaNumerator, _alphaDenominator);
     }
 
@@ -174,23 +184,28 @@ contract QuadraticVotingMechanism is BaseAllocationMechanism, ProperQF {
 
     /**
      * @notice Hook to process vote with quadratic cost and single-vote enforcement
-     * @dev Implements quadratic voting: to cast W votes, you pay W² voting power
-     *      Each voter can only vote ONCE per proposal (no adjustments)
+     * @dev Implements quadratic voting: to cast W votes, you pay W² voting power.
+     *      Each voter can only vote ONCE per proposal (no adjustments).
+     *
+     *      CONSTRAINTS:
+     *      weight >= MIN_VOTE_WEIGHT (65536 = 2^16)
+     *      weight % MIN_VOTE_WEIGHT == 0 (alignment for lossless quantization)
      *
      *      QUADRATIC COST FORMULA:
-     *      cost = weight × weight
+     *      cost = weight * weight
      *
-     *      EXAMPLES:
-     *      - Cast 10 votes → costs 100 voting power
-     *      - Cast 50 votes → costs 2,500 voting power
-     *      - Cast 100 votes → costs 10,000 voting power
+     *      EXAMPLES (voting power is in 18-decimal-normalized space):
+     *      - weight 65536   costs ~4.3e9 voting power  (65536^2)  : minimum vote
+     *      - weight 1e9     costs 1e18 voting power    (1e9^2)    : ~1 token
+     *      - weight 1e12    costs 1e24 voting power    (1e12^2)   : ~1M tokens
      *
      *      This makes whale attacks expensive while giving smaller voters
      *      proportionally more influence per token.
      * @param pid Proposal ID to vote on
      * @param voter Address casting the vote
      * @param choice Vote type (must be VoteType.For)
-     * @param weight Number of votes to cast (dimensionless)
+     * @param weight Vote weight (dimensionless, 18-decimal-normalized, must be >= MIN_VOTE_WEIGHT
+     *        and aligned to MIN_VOTE_WEIGHT)
      * @param oldPower Voter's current voting power (in 18 decimals)
      * @return newPower Remaining voting power after quadratic cost deduction (in 18 decimals)
      * @custom:security Single-vote enforcement prevents manipulation via vote adjustments
@@ -204,6 +219,8 @@ contract QuadraticVotingMechanism is BaseAllocationMechanism, ProperQF {
         uint256 oldPower
     ) internal virtual override returns (uint256) {
         if (choice != TokenizedAllocationMechanism.VoteType.For) revert OnlyForVotesSupported();
+        if (weight < MIN_VOTE_WEIGHT) revert WeightBelowMinimum(weight, MIN_VOTE_WEIGHT);
+        if (weight % MIN_VOTE_WEIGHT != 0) revert WeightNotAligned(weight, MIN_VOTE_WEIGHT);
 
         // Check if voter has already voted on this proposal
         if (hasVoted[pid][voter]) revert AlreadyVoted(voter, pid);

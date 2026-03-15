@@ -268,14 +268,12 @@ contract OctantQFMechanismTest is Test {
         // Wait for voting delay
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
-        // All users vote with substantial weight
-        // Each has 10,000e18 voting power, so they can vote with weight 60e9
-        // Cost per vote = (60e9)^2 = 3,600e18
-        // Total quadratic funding = (60e9 * 3)^2 = (180e9)^2 = 32,400e18
-        // This exceeds quorum of 10,000e18
+        // All users vote with substantial weight (aligned to MIN_VOTE_WEIGHT=65536)
+        // Each has 10,000e18 voting power; weight = 915527 * 65536 ≈ 60e9
+        uint256 voteWeight = 915527 * 65536;
         for (uint i = 0; i < users.length; i++) {
             vm.prank(users[i]);
-            tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 60e9, alice);
+            tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, voteWeight, alice);
         }
 
         // Wait for voting period

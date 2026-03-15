@@ -25,21 +25,21 @@ import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 /// - Matching pool added dynamically = totalQuadraticSum for exact 1:1 shares:assets ratio
 ///
 /// VOTING PATTERN:
-/// - ALL 3 users vote on BOTH proposals with weight 20 each
-/// - Vote cost: 20² = 400 voting power per vote
-/// - Total voting power consumed: 400 × 2 votes × 3 users = 2400
-/// - Remaining voting power per user: 1000 - 800 = 200
+/// - ALL 3 users vote on BOTH proposals with weight 20*W each (W=65536=2^16)
+/// - Vote cost: (20*W)² = 400*W² voting power per vote
+/// - Total voting power consumed: 400*W² × 2 votes × 3 users = 2400*W²
+/// - Remaining voting power per user: 1000e18 - 800*W²
 ///
 /// QUADRATIC FUNDING CALCULATION:
-/// Each proposal receives: 3 users × weight 20 = total weight 60
-/// Total quadratic sum per proposal: (60)² = 3600
-/// Alpha = 1, so funding = 1 × 3600 + 0 × contributions = 3600 shares per proposal
-/// Matching pool added = (totalQuadraticSum - totalLinearSum) = (7200 - 2400) = 4800 ether
+/// Each proposal receives: 3 users × weight 20*W = total weight 60*W
+/// Total quadratic sum per proposal: (60*W)² = 3600*W²
+/// Alpha = 1, so funding = 1 × 3600*W² + 0 × contributions = 3600*W² shares per proposal
+/// Matching pool added = (totalQuadraticSum - totalLinearSum) = (7200*W² - 2400*W²) = 4800*W² ether
 ///
 /// ASSET DISTRIBUTION:
-/// Total assets: 2400 user deposits + 4800 matching pool = 7200 ether
-/// Total shares: 3600 × 2 = 7200 shares
-/// Shares:Assets ratio: 7200/7200 = 1:1 (perfect ratio achieved)
+/// Total assets: 2400*W² user cost + 4800*W² matching pool = 7200*W² (scaled by 1 ether for tokens)
+/// Total shares: 3600*W² × 2 = 7200*W² shares
+/// Shares:Assets ratio preserved for 1:1 redemption
 ///
 /// VERIFICATION POINTS:
 /// 1. Asset conservation through all phases
@@ -62,8 +62,9 @@ contract QuadraticVotingAccountingAuditTest is Test {
 
     // Test parameters
     uint256 constant USER_DEPOSIT = 1000 ether; // Each user deposits same amount
-    uint256 constant VOTE_WEIGHT = 20; // Each vote has weight 20
-    uint256 constant VOTE_COST = 400; // 20² = 400 voting power cost
+    uint256 constant W = 65536; // 2^16 scaling factor so weight^2 is always a multiple of 2^32 (STEP)
+    uint256 constant VOTE_WEIGHT = 20 * W; // Each vote has weight 20*W
+    uint256 constant VOTE_COST = VOTE_WEIGHT * VOTE_WEIGHT; // (20*W)² voting power cost
     uint256 constant ALPHA_NUMERATOR = 1; // 100% quadratic funding
     uint256 constant ALPHA_DENOMINATOR = 1;
     uint256 constant QUORUM_REQUIREMENT = 500;
@@ -454,33 +455,32 @@ contract QuadraticVotingAccountingAuditTest is Test {
         );
 
         // Verify proposal funding calculation
-        // Each proposal: 3 users × weight 20 = total weight 60
-        // QuadraticFunding: α × (60)² + (1-α) × contributions = 1 × 3600 + 0 × 1200 = 3600
-        currentTestCtx.expectedFundingPerProposal = 3600;
+        // Each proposal: 3 users × weight 20*W = total weight 60*W
+        // QuadraticFunding: α × (60*W)² + (1-α) × contributions = 1 × 3600*W² + 0 = 3600*W²
+        currentTestCtx.expectedFundingPerProposal = 3600 * W * W;
         assertEq(
             postVotingState.proposal1Funding,
             currentTestCtx.expectedFundingPerProposal,
-            "Proposal 1 funding should be 3600"
+            "Proposal 1 funding should be 3600*W*W"
         );
         assertEq(
             postVotingState.proposal2Funding,
             currentTestCtx.expectedFundingPerProposal,
-            "Proposal 2 funding should be 3600"
+            "Proposal 2 funding should be 3600*W*W"
         );
 
         // ==================== PHASE 4.5: ADD MATCHING POOL FOR 1:1 RATIO ====================
         console.log("=== PHASE 4.5: ADD MATCHING POOL FOR 1:1 RATIO ===");
 
         // Calculate matching pool needed using ProperQF formula and store in test context
-        currentTestCtx.totalQuadraticSum = mechanism.totalQuadraticSum(); // Should be 7200 (3600 × 2)
-        currentTestCtx.totalLinearSum = mechanism.totalLinearSum(); // Should be 2400 (1200 × 2)
-        uint256 currentAssets = postVotingState.totalMechanismAssets; // User deposits = totalLinearSum
+        currentTestCtx.totalQuadraticSum = mechanism.totalQuadraticSum(); // 7200 * W² (= 3600*W² × 2)
+        currentTestCtx.totalLinearSum = mechanism.totalLinearSum(); // 2400 * W² (= 1200*W² × 2)
+        uint256 currentAssets = postVotingState.totalMechanismAssets; // User deposits (3000 ether)
 
-        // For alpha = 1: matching pool = totalQuadraticSum - totalLinearSum
-        currentTestCtx.matchingPoolNeeded =
-            (currentTestCtx.totalQuadraticSum - currentTestCtx.totalLinearSum) *
-            1 ether;
+        // For 1:1 shares:assets ratio, total assets must equal totalQuadraticSum (in ether units)
         currentTestCtx.totalAssetsNeeded = currentTestCtx.totalQuadraticSum * 1 ether; // For 1:1 ratio
+        // Matching pool = target total assets - current user deposits
+        currentTestCtx.matchingPoolNeeded = currentTestCtx.totalAssetsNeeded - currentAssets;
 
         console.log("Total quadratic sum:", currentTestCtx.totalQuadraticSum);
         console.log("Total linear sum:", currentTestCtx.totalLinearSum);
@@ -533,21 +533,21 @@ contract QuadraticVotingAccountingAuditTest is Test {
         _verifyAccountingInvariants(postQueueingState, "POST_QUEUING");
 
         // Verify share minting - should be exact with alpha = 1
-        uint256 expectedSharesPerRecipient = currentTestCtx.expectedFundingPerProposal; // 3600 shares per recipient
+        uint256 expectedSharesPerRecipient = currentTestCtx.expectedFundingPerProposal; // 3600*W*W shares per recipient
         assertEq(
             postQueueingState.recipient1Shares,
             expectedSharesPerRecipient,
-            "Recipient1 should get exactly 3600 shares"
+            "Recipient1 should get exactly 3600*W*W shares"
         );
         assertEq(
             postQueueingState.recipient2Shares,
             expectedSharesPerRecipient,
-            "Recipient2 should get exactly 3600 shares"
+            "Recipient2 should get exactly 3600*W*W shares"
         );
         assertEq(
             postQueueingState.totalSharesSupply,
             expectedSharesPerRecipient * 2,
-            "Total shares should be exactly 7200"
+            "Total shares should be exactly 7200*W*W"
         );
 
         // Verify timelock setup
@@ -733,27 +733,27 @@ contract QuadraticVotingAccountingAuditTest is Test {
 
         vm.warp(startTime + VOTING_DELAY + 1);
 
-        // DIFFERENT VOTE PATTERNS - Asymmetric voting
+        // DIFFERENT VOTE PATTERNS - Asymmetric voting (weights scaled by W for exact quantization)
         // Project 1: Gets strong support (more votes)
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 25, recipient1); // 625 voting power
+        _tokenized(address(mechanism)).castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 25 * W, recipient1); // 625*W² voting power
         vm.prank(bob);
-        _tokenized(address(mechanism)).castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 20, recipient1); // 400 voting power
+        _tokenized(address(mechanism)).castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 20 * W, recipient1); // 400*W² voting power
         vm.prank(charlie);
-        _tokenized(address(mechanism)).castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 15, recipient1); // 225 voting power
+        _tokenized(address(mechanism)).castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 15 * W, recipient1); // 225*W² voting power
 
         // Project 2: Gets moderate support (fewer votes, but still meets quorum)
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 15, recipient2); // 225 voting power
+        _tokenized(address(mechanism)).castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 15 * W, recipient2); // 225*W² voting power
         vm.prank(bob);
-        _tokenized(address(mechanism)).castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 12, recipient2); // 144 voting power
+        _tokenized(address(mechanism)).castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 12 * W, recipient2); // 144*W² voting power
 
         console.log("=== VOTE PATTERNS ===");
-        console.log("Project 1 votes: Alice(25), Bob(20), Charlie(15) = total weight 60");
-        console.log("Project 2 votes: Alice(15), Bob(12) = total weight 27");
-        console.log("Project 1 vote costs: 625 + 400 + 225 = 1250");
-        console.log("Project 2 vote costs: 225 + 144 = 369");
-        console.log("Total linear sum: 1250 + 369 = 1619");
+        console.log("Project 1 votes: Alice(25*W), Bob(20*W), Charlie(15*W) = total weight 60*W");
+        console.log("Project 2 votes: Alice(15*W), Bob(12*W) = total weight 27*W");
+        console.log("Project 1 vote costs: 625*W^2 + 400*W^2 + 225*W^2 = 1250*W^2");
+        console.log("Project 2 vote costs: 225*W^2 + 144*W^2 = 369*W^2");
+        console.log("Total linear sum: (1250 + 369)*W^2 = 1619*W^2");
 
         vm.warp(startTime + VOTING_DELAY + VOTING_PERIOD + 1);
 
@@ -960,53 +960,53 @@ contract QuadraticVotingAccountingAuditTest is Test {
 
         // === SYMMETRIC VOTING PATTERN ===
         console.log("=== VOTING PATTERNS ===");
-        console.log("Alice votes: Project1(20), Project2(20), Project3(20)");
-        console.log("Bob votes: Project1(15), Project2(15), Project3(15)");
-        console.log("Vote costs: Alice = 3*(20^2) = 1200, Bob = 3*(15^2) = 675");
-        console.log("Total linear sum: 1200 + 675 = 1875");
+        console.log("Alice votes: Project1(20*W), Project2(20*W), Project3(20*W)");
+        console.log("Bob votes: Project1(15*W), Project2(15*W), Project3(15*W)");
+        console.log("Vote costs: Alice = 3*(20*W)^2 = 1200*W^2, Bob = 3*(15*W)^2 = 675*W^2");
+        console.log("Total linear sum: (1200 + 675)*W^2 = 1875*W^2");
 
-        // Alice votes the same amount (20) for each project
+        // Alice votes the same amount (20*W) for each project
         vm.startPrank(alice);
         _tokenized(address(mechanism)).castVote(
             currentTestCtx.pid1,
             TokenizedAllocationMechanism.VoteType.For,
-            20,
+            20 * W,
             recipient1
-        ); // Cost: 400
+        ); // Cost: 400*W²
         _tokenized(address(mechanism)).castVote(
             currentTestCtx.pid2,
             TokenizedAllocationMechanism.VoteType.For,
-            20,
+            20 * W,
             recipient2
-        ); // Cost: 400
+        ); // Cost: 400*W²
         _tokenized(address(mechanism)).castVote(
             currentTestCtx.pid3,
             TokenizedAllocationMechanism.VoteType.For,
-            20,
+            20 * W,
             recipient3
-        ); // Cost: 400
+        ); // Cost: 400*W²
         vm.stopPrank();
 
-        // Bob votes the same amount (15) for each project
+        // Bob votes the same amount (15*W) for each project
         vm.startPrank(bob);
         _tokenized(address(mechanism)).castVote(
             currentTestCtx.pid1,
             TokenizedAllocationMechanism.VoteType.For,
-            15,
+            15 * W,
             recipient1
-        ); // Cost: 225
+        ); // Cost: 225*W²
         _tokenized(address(mechanism)).castVote(
             currentTestCtx.pid2,
             TokenizedAllocationMechanism.VoteType.For,
-            15,
+            15 * W,
             recipient2
-        ); // Cost: 225
+        ); // Cost: 225*W²
         _tokenized(address(mechanism)).castVote(
             currentTestCtx.pid3,
             TokenizedAllocationMechanism.VoteType.For,
-            15,
+            15 * W,
             recipient3
-        ); // Cost: 225
+        ); // Cost: 225*W²
         vm.stopPrank();
 
         vm.warp(currentTestCtx.startTime + VOTING_DELAY + VOTING_PERIOD + 1);
@@ -1029,14 +1029,14 @@ contract QuadraticVotingAccountingAuditTest is Test {
         console.log("Project 3 funding:", project3Funding);
 
         // Expected calculations with alpha = 1.0 (default):
-        // Each project: Alice(20) + Bob(15) = vote weight 35
-        // Quadratic funding per project: (35)^2 = 1225
-        // Linear funding per project: 400 + 225 = 625
-        // Total per project: 1225 + 0 = 1225 (since alpha=1, linear component is 0)
+        // Each project: Alice(20*W) + Bob(15*W) = vote weight 35*W
+        // Quadratic funding per project: (35*W)^2 = 1225*W^2
+        // Linear funding per project: 400*W^2 + 225*W^2 = 625*W^2
+        // Total per project: 1225*W^2 + 0 = 1225*W^2 (since alpha=1, linear component is 0)
 
-        assertEq(currentTestCtx.expectedProject1Funding, 1225, "Project 1 should have symmetric funding");
-        assertEq(currentTestCtx.expectedProject2Funding, 1225, "Project 2 should have symmetric funding");
-        assertEq(project3Funding, 1225, "Project 3 should have symmetric funding");
+        assertEq(currentTestCtx.expectedProject1Funding, 1225 * W * W, "Project 1 should have symmetric funding");
+        assertEq(currentTestCtx.expectedProject2Funding, 1225 * W * W, "Project 2 should have symmetric funding");
+        assertEq(project3Funding, 1225 * W * W, "Project 3 should have symmetric funding");
 
         // Verify symmetry: all projects should have identical funding
         assertEq(
@@ -1119,7 +1119,7 @@ contract QuadraticVotingAccountingAuditTest is Test {
             currentTestCtx.recipient1Shares +
             currentTestCtx.recipient2Shares +
             currentTestCtx.recipient3Shares;
-        currentTestCtx.expectedTotalAssets = 3 * 1225; // 3 projects × 1225 funding each
+        currentTestCtx.expectedTotalAssets = 3 * 1225 * W * W; // 3 projects × 1225*W² funding each
         assertEq(
             currentTestCtx.totalSharesRedeemed,
             currentTestCtx.expectedTotalAssets,
@@ -1174,10 +1174,13 @@ contract QuadraticVotingAccountingAuditTest is Test {
         console.log("Project 2 funding:", project2Funding);
 
         // Calculate expected funding in scoped block to limit stack usage
+        // Weights are scaled by W, so quadratic terms scale by W² and linear terms scale by W²
         {
-            uint256 project1QuadraticComponent = (60 * 60 * ctx.constrainedAlphaNumerator) /
+            uint256 project1QuadraticComponent = (60 * W * 60 * W * ctx.constrainedAlphaNumerator) /
                 ctx.constrainedAlphaDenominator;
             uint256 project1LinearComponent = (1250 *
+                W *
+                W *
                 (ctx.constrainedAlphaDenominator - ctx.constrainedAlphaNumerator)) / ctx.constrainedAlphaDenominator;
             ctx.expectedProject1Funding = project1QuadraticComponent + project1LinearComponent;
 
@@ -1189,9 +1192,11 @@ contract QuadraticVotingAccountingAuditTest is Test {
         }
 
         {
-            uint256 project2QuadraticComponent = (27 * 27 * ctx.constrainedAlphaNumerator) /
+            uint256 project2QuadraticComponent = (27 * W * 27 * W * ctx.constrainedAlphaNumerator) /
                 ctx.constrainedAlphaDenominator;
             uint256 project2LinearComponent = (369 *
+                W *
+                W *
                 (ctx.constrainedAlphaDenominator - ctx.constrainedAlphaNumerator)) / ctx.constrainedAlphaDenominator;
             ctx.expectedProject2Funding = project2QuadraticComponent + project2LinearComponent;
 

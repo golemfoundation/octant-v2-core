@@ -17,6 +17,8 @@ contract QuadraticVotingRecipientJourneyTest is Test {
     ERC20Mock token;
     QuadraticVotingMechanism mechanism;
 
+    uint256 constant W = 65536;
+
     address alice = address(0x1);
     address bob = address(0x2);
     address charlie = address(0x3);
@@ -182,7 +184,7 @@ contract QuadraticVotingRecipientJourneyTest is Test {
             symbol: "RJTEST",
             votingDelay: VOTING_DELAY,
             votingPeriod: VOTING_PERIOD,
-            quorumShares: QUORUM_REQUIREMENT,
+            quorumShares: QUORUM_REQUIREMENT * W * W,
             timelockDelay: TIMELOCK_DELAY,
             gracePeriod: 7 days,
             owner: address(0)
@@ -265,15 +267,15 @@ contract QuadraticVotingRecipientJourneyTest is Test {
 
         // Create different voting outcomes
         // Charlie: Successful (meets quorum)
-        _castVote(alice, currentTestCtx.pidCharlie, 30, charlie);
-        _castVote(bob, currentTestCtx.pidCharlie, 15, charlie);
+        _castVote(alice, currentTestCtx.pidCharlie, 30 * W, charlie);
+        _castVote(bob, currentTestCtx.pidCharlie, 15 * W, charlie);
 
         // Dave: Failed (below quorum)
-        _castVote(bob, currentTestCtx.pidDave, 10, dave);
+        _castVote(bob, currentTestCtx.pidDave, 10 * W, dave);
 
         // Eve: Negative outcome
-        _castVote(alice, currentTestCtx.pidEve, 12, eve);
-        _castVote(frank, currentTestCtx.pidEve, 8, eve);
+        _castVote(alice, currentTestCtx.pidEve, 12 * W, eve);
+        _castVote(frank, currentTestCtx.pidEve, 8 * W, eve);
 
         // Recipients can monitor progress in real-time using getTally() from ProperQF
         (, , currentTestCtx.charlieQuadraticFunding, currentTestCtx.charlieLinearFunding) = mechanism.getTally(
@@ -307,10 +309,12 @@ contract QuadraticVotingRecipientJourneyTest is Test {
             uint(_tokenized(address(mechanism)).state(currentTestCtx.pidCharlie)),
             uint(TokenizedAllocationMechanism.ProposalState.Succeeded)
         );
+        // Dave: weight 10 only, funding = 100 < 500 quorum
         assertEq(
             uint(_tokenized(address(mechanism)).state(currentTestCtx.pidDave)),
             uint(TokenizedAllocationMechanism.ProposalState.Defeated)
         );
+        // Eve: weights 12 + 8 = sqrtSum 20, funding = 0.5*(20)^2 + 0.5*(144+64) = 200+104 = 304 < 500 quorum
         assertEq(
             uint(_tokenized(address(mechanism)).state(currentTestCtx.pidEve)),
             uint(TokenizedAllocationMechanism.ProposalState.Defeated)
@@ -336,8 +340,8 @@ contract QuadraticVotingRecipientJourneyTest is Test {
         vm.warp(votingStartTime + 1);
 
         // Generate successful vote outcome
-        _castVote(alice, pid, 30, charlie);
-        _castVote(bob, pid, 20, charlie);
+        _castVote(alice, pid, 30 * W, charlie);
+        _castVote(bob, pid, 20 * W, charlie);
 
         vm.warp(votingEndTime + 1);
         (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
@@ -420,8 +424,8 @@ contract QuadraticVotingRecipientJourneyTest is Test {
         vm.warp(votingStartTime + 1);
 
         // Vote for both proposals
-        _castVote(alice, currentTestCtx.pid1, 30, charlie);
-        _castVote(bob, currentTestCtx.pid2, 25, dave);
+        _castVote(alice, currentTestCtx.pid1, 30 * W, charlie);
+        _castVote(bob, currentTestCtx.pid2, 25 * W, dave);
 
         vm.warp(votingEndTime + 1);
         (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
@@ -613,7 +617,7 @@ contract QuadraticVotingRecipientJourneyTest is Test {
         // Use absolute warp for voting
         vm.warp(votingStartTime + 1);
 
-        _castVote(alice, pid, 30, charlie);
+        _castVote(alice, pid, 30 * W, charlie);
 
         vm.warp(votingEndTime + 1);
         (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));

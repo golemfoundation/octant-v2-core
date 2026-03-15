@@ -25,6 +25,7 @@ contract QuadraticVotingVoterJourneyTest is Test {
     address grace = address(0x7);
     address henry = address(0x8);
 
+    uint256 constant W = 65536; // weight multiplier so weight^2 >= 2^32 (shift=32 quantization)
     uint256 constant LARGE_DEPOSIT = 1000 ether;
     uint256 constant MEDIUM_DEPOSIT = 500 ether;
     uint256 constant SMALL_DEPOSIT = 100 ether;
@@ -202,24 +203,27 @@ contract QuadraticVotingVoterJourneyTest is Test {
         vm.warp(votingStartTime + 1);
 
         // Quadratic voting - cost is weight^2
-        // Alice votes with weight 31, cost = 31^2 = 961 voting power
-        (uint256 alicePrevPower, uint256 aliceNewPower) = _castVote(alice, pid1, 31, charlie);
+        // Alice votes with weight 31*W, cost = (31*W)^2 = 961*W^2 voting power
+        (uint256 alicePrevPower, uint256 aliceNewPower) = _castVote(alice, pid1, 31 * W, charlie);
 
-        assertEq(alicePrevPower - aliceNewPower, 31 * 31, "Alice should have spent 961 voting power");
-        assertEq(aliceNewPower, LARGE_DEPOSIT - (31 * 31));
+        assertEq(alicePrevPower - aliceNewPower, 31 * W * 31 * W, "Alice should have spent 961*W*W voting power");
+        assertEq(aliceNewPower, LARGE_DEPOSIT - (31 * W * 31 * W));
         assertTrue(mechanism.hasVoted(pid1, alice));
 
-        // Bob votes with weight 10, cost = 10^2 = 100 voting power
-        _castVote(bob, pid1, 10, charlie);
-        assertEq(_tokenized(address(mechanism)).votingPower(bob), MEDIUM_DEPOSIT - (10 * 10));
+        // Bob votes with weight 10*W, cost = (10*W)^2 = 100*W^2 voting power
+        _castVote(bob, pid1, 10 * W, charlie);
+        assertEq(_tokenized(address(mechanism)).votingPower(bob), MEDIUM_DEPOSIT - (10 * W * 10 * W));
 
-        // Bob votes again with weight 15, cost = 15^2 = 225 voting power
-        _castVote(bob, pid2, 15, dave);
-        assertEq(_tokenized(address(mechanism)).votingPower(bob), MEDIUM_DEPOSIT - 100 - 225);
+        // Bob votes again with weight 15*W, cost = (15*W)^2 = 225*W^2 voting power
+        _castVote(bob, pid2, 15 * W, dave);
+        assertEq(
+            _tokenized(address(mechanism)).votingPower(bob),
+            MEDIUM_DEPOSIT - (10 * W * 10 * W) - (15 * W * 15 * W)
+        );
 
-        // Frank votes with weight 5, cost = 5^2 = 25 voting power
-        _castVote(frank, pid2, 5, dave);
-        assertEq(_tokenized(address(mechanism)).votingPower(frank), SMALL_DEPOSIT - 25);
+        // Frank votes with weight 5*W, cost = (5*W)^2 = 25*W^2 voting power
+        _castVote(frank, pid2, 5 * W, dave);
+        assertEq(_tokenized(address(mechanism)).votingPower(frank), SMALL_DEPOSIT - (5 * W * 5 * W));
 
         // Note: QuadraticVoting uses ProperQF tallying, not simple vote counts
         // The actual funding calculation will be done during shares conversion
@@ -244,7 +248,7 @@ contract QuadraticVotingVoterJourneyTest is Test {
         vm.warp(votingStartTime - 50);
         vm.expectRevert();
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 8, charlie);
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 8 * W, charlie);
 
         // Warp to voting period
         vm.warp(votingStartTime + 1);
@@ -260,23 +264,23 @@ contract QuadraticVotingVoterJourneyTest is Test {
         );
 
         // Cannot vote twice
-        _castVote(alice, pid, 8, charlie);
+        _castVote(alice, pid, 8 * W, charlie);
 
         vm.expectRevert(abi.encodeWithSelector(QuadraticVotingMechanism.AlreadyVoted.selector, alice, pid));
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, charlie);
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, charlie);
 
         // Cannot vote after voting period
         vm.warp(votingEndTime + 1);
         vm.expectRevert();
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 8, charlie);
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 8 * W, charlie);
 
         // Unregistered user cannot vote
         vm.warp(votingStartTime + 500);
         vm.expectRevert();
         vm.prank(henry);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 1, charlie);
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 1 * W, charlie);
     }
 
     /// @notice Test voter power conservation and management
@@ -301,24 +305,25 @@ contract QuadraticVotingVoterJourneyTest is Test {
         uint256 initialPower = _tokenized(address(mechanism)).votingPower(alice);
         assertEq(initialPower, LARGE_DEPOSIT);
 
-        // First vote - quadratic cost: 10^2 = 100
-        uint256 vote1Weight = 10;
+        // First vote - quadratic cost: (10*W)^2 = 100*W^2
+        uint256 vote1Weight = 10 * W;
         (uint256 prevPower1, uint256 newPower1) = _castVote(alice, pid1, vote1Weight, charlie);
 
         assertEq(prevPower1, initialPower, "Initial power should match");
         assertEq(newPower1, initialPower - (vote1Weight * vote1Weight), "Power consumed correctly");
 
         // Second vote with remaining power
-        uint256 vote2Weight = 10; // Quadratic cost: 10^2 = 100
+        uint256 vote2Weight = 10 * W; // Quadratic cost: (10*W)^2 = 100*W^2
         _castVote(alice, pid2, vote2Weight, dave);
 
         uint256 powerAfterVote2 = _tokenized(address(mechanism)).votingPower(alice);
         assertEq(powerAfterVote2, initialPower - (vote1Weight * vote1Weight) - (vote2Weight * vote2Weight));
-        assertEq(powerAfterVote2, 1000 ether - (10 * 10) - (10 * 10)); // 1000 ether - 200 voting power units
+        uint256 expectedCost = (10 * W * 10 * W) + (10 * W * 10 * W);
+        assertEq(powerAfterVote2, 1000 ether - expectedCost);
 
         // Verify vote records
         assertTrue(mechanism.hasVoted(pid1, alice));
         assertTrue(mechanism.hasVoted(pid2, alice));
-        assertEq(_tokenized(address(mechanism)).votingPower(alice), 1000 ether - 200);
+        assertEq(_tokenized(address(mechanism)).votingPower(alice), 1000 ether - expectedCost);
     }
 }

@@ -21,6 +21,7 @@ contract QuadraticVotingTimelockEnforcementTest is Test {
     address bob = address(0x2);
     address charlie = address(0x3);
 
+    uint256 constant W = 65536;
     uint256 constant LARGE_DEPOSIT = 1000 ether;
     uint256 constant QUORUM_REQUIREMENT = 500; // Adjusted for quadratic funding
     uint256 constant VOTING_DELAY = 100;
@@ -84,7 +85,7 @@ contract QuadraticVotingTimelockEnforcementTest is Test {
         vm.warp(votingStartTime + 1);
 
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, charlie); // 30^2 = 900 > 500 quorum
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30 * W, charlie); // (30*W)^2 = 900*W^2 > 500 quorum
 
         vm.warp(votingEndTime + 1);
         (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
@@ -94,8 +95,8 @@ contract QuadraticVotingTimelockEnforcementTest is Test {
         (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success2, "Queue failed");
 
-        // Verify shares minted - QuadraticVoting: vote weight 30 produces 900 funding
-        uint256 charlieShares = 900; // 30^2 = 900 with α=0.5 → 0.5×900 + 0.5×900 = 900
+        // Verify shares minted - QuadraticVoting: vote weight 30*W produces 900*W^2 funding
+        uint256 charlieShares = 900 * W * W; // (30*W)^2 = 900*W^2 with alpha=0.5 -> 0.5*900*W^2 + 0.5*900*W^2 = 900*W^2
         assertEq(_tokenized(address(mechanism)).balanceOf(charlie), charlieShares);
 
         // Test 1: Immediately after queuing - should be blocked by timelock
@@ -149,7 +150,7 @@ contract QuadraticVotingTimelockEnforcementTest is Test {
         vm.warp(votingStartTime + 1);
 
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, charlie); // 30^2 = 900 > 500 quorum
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30 * W, charlie); // (30*W)^2 = 900*W^2 > 500 quorum
 
         vm.warp(votingEndTime + 1);
         (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
@@ -159,7 +160,7 @@ contract QuadraticVotingTimelockEnforcementTest is Test {
         (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success2, "Queue failed");
 
-        uint256 charlieShares = 900; // Vote weight 30 produces 900 shares
+        uint256 charlieShares = 900 * W * W; // Vote weight 30*W produces 900*W^2 shares
         console.log("Charlie received shares:", charlieShares);
 
         // Test 1: Exactly when timelock expires - should work
@@ -167,36 +168,36 @@ contract QuadraticVotingTimelockEnforcementTest is Test {
         assertEq(_tokenized(address(mechanism)).maxRedeem(charlie), charlieShares);
 
         vm.prank(charlie);
-        uint256 assetsReceived1 = _tokenized(address(mechanism)).redeem(300, charlie, charlie);
+        uint256 assetsReceived1 = _tokenized(address(mechanism)).redeem(300 * W * W, charlie, charlie);
 
         // With matching pool: total assets = 1000 (alice) + 2000 (matching pool) = 3000 ether
-        // 300 shares out of 900 total = (300/900) × 3000 = 1000 ether
+        // 300*W^2 shares out of 900*W^2 total = (300/900) * 3000 = 1000 ether
         uint256 expectedAssets1 = 1000 ether;
         assertEq(assetsReceived1, expectedAssets1);
-        assertEq(_tokenized(address(mechanism)).balanceOf(charlie), 600); // 900 - 300 = 600
+        assertEq(_tokenized(address(mechanism)).balanceOf(charlie), 600 * W * W); // 900*W^2 - 300*W^2 = 600*W^2
 
         // Test 2: Middle of valid window - should work
         vm.warp(queueTime + TIMELOCK_DELAY + GRACE_PERIOD / 2);
-        assertEq(_tokenized(address(mechanism)).maxRedeem(charlie), 600); // 900 - 300 = 600
+        assertEq(_tokenized(address(mechanism)).maxRedeem(charlie), 600 * W * W); // 900*W^2 - 300*W^2 = 600*W^2
 
         vm.prank(charlie);
-        uint256 assetsReceived2 = _tokenized(address(mechanism)).redeem(300, charlie, charlie);
-        uint256 expectedAssets2 = 1000 ether; // Same ratio: (300/900) × 3000 = 1000 ether
+        uint256 assetsReceived2 = _tokenized(address(mechanism)).redeem(300 * W * W, charlie, charlie);
+        uint256 expectedAssets2 = 1000 ether; // Same ratio: (300*W^2/900*W^2) * 3000 = 1000 ether
         assertEq(assetsReceived2, expectedAssets2);
-        assertEq(_tokenized(address(mechanism)).balanceOf(charlie), 300);
+        assertEq(_tokenized(address(mechanism)).balanceOf(charlie), 300 * W * W);
 
         // Test 3: One second before grace period expires - should work
         uint256 redeemableTime = _tokenized(address(mechanism)).globalRedemptionStart();
         vm.warp(redeemableTime + GRACE_PERIOD - 1);
-        assertEq(_tokenized(address(mechanism)).maxRedeem(charlie), 300);
+        assertEq(_tokenized(address(mechanism)).maxRedeem(charlie), 300 * W * W);
 
         vm.prank(charlie);
-        uint256 assetsReceived3 = _tokenized(address(mechanism)).redeem(300, charlie, charlie);
-        uint256 expectedAssets3 = 1000 ether; // Same ratio: (300/900) × 3000 = 1000 ether
+        uint256 assetsReceived3 = _tokenized(address(mechanism)).redeem(300 * W * W, charlie, charlie);
+        uint256 expectedAssets3 = 1000 ether; // Same ratio: (300*W^2/900*W^2) * 3000 = 1000 ether
         assertEq(assetsReceived3, expectedAssets3);
         assertEq(_tokenized(address(mechanism)).balanceOf(charlie), 0);
 
-        // Verify total redemption: 3 × 1000 ether = 3000 ether (all assets)
+        // Verify total redemption: 3 * 1000 ether = 3000 ether (all assets)
         assertEq(assetsReceived1 + assetsReceived2 + assetsReceived3, 3000 ether);
     }
 
@@ -219,7 +220,7 @@ contract QuadraticVotingTimelockEnforcementTest is Test {
         vm.warp(votingStartTime + 1);
 
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, charlie); // 30^2 = 900 > 500 quorum
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30 * W, charlie); // (30*W)^2 = 900*W^2 > 500 quorum
 
         vm.warp(votingEndTime + 1);
         (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
@@ -229,7 +230,7 @@ contract QuadraticVotingTimelockEnforcementTest is Test {
         (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success2, "Queue failed");
 
-        uint256 charlieShares = 900; // Vote weight 30 produces 900 shares
+        uint256 charlieShares = 900 * W * W; // Vote weight 30*W produces 900*W^2 shares
 
         // Fast forward past grace period
         vm.warp(queueTime + TIMELOCK_DELAY + GRACE_PERIOD + 1);
@@ -293,10 +294,10 @@ contract QuadraticVotingTimelockEnforcementTest is Test {
 
         // Vote for both
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 30, charlie); // 30^2 = 900 > 500 quorum
+        _tokenized(address(mechanism)).castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 30 * W, charlie); // (30*W)^2 = 900*W^2 > 500 quorum
 
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 30, bob); // 30^2 = 900 > 500 quorum
+        _tokenized(address(mechanism)).castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 30 * W, bob); // (30*W)^2 = 900*W^2 > 500 quorum
 
         vm.warp(votingEndTime + 1);
         (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
@@ -317,20 +318,20 @@ contract QuadraticVotingTimelockEnforcementTest is Test {
         uint256 charlieRedeemableTime = _tokenized(address(mechanism)).globalRedemptionStart();
         uint256 bobRedeemableTime = _tokenized(address(mechanism)).globalRedemptionStart();
         vm.warp(charlieRedeemableTime);
-        assertEq(_tokenized(address(mechanism)).maxRedeem(charlie), 900);
+        assertEq(_tokenized(address(mechanism)).maxRedeem(charlie), 900 * W * W);
         // Bob's timelock should still be active since he was queued later
         if (charlieRedeemableTime < bobRedeemableTime) {
             assertEq(_tokenized(address(mechanism)).maxRedeem(bob), 0);
         } else {
-            assertEq(_tokenized(address(mechanism)).maxRedeem(bob), 900);
+            assertEq(_tokenized(address(mechanism)).maxRedeem(bob), 900 * W * W);
         }
 
         vm.prank(charlie);
-        uint256 charlieAssets = _tokenized(address(mechanism)).redeem(900, charlie, charlie);
+        uint256 charlieAssets = _tokenized(address(mechanism)).redeem(900 * W * W, charlie, charlie);
 
         // With matching pool: total assets = 1500 (alice + bob) + 2000 (matching pool) = 3500 ether
-        // Each recipient gets 900 shares, total shares = 1800
-        // Charlie's 900 shares = (900/1800) × 3500 = 1750 ether
+        // Each recipient gets 900*W^2 shares, total shares = 1800*W^2
+        // Charlie's 900*W^2 shares = (900/1800) * 3500 = 1750 ether
         uint256 expectedAssetsPerRecipient = 1750 ether;
         assertEq(charlieAssets, expectedAssetsPerRecipient);
 
@@ -338,15 +339,15 @@ contract QuadraticVotingTimelockEnforcementTest is Test {
         if (charlieRedeemableTime < bobRedeemableTime) {
             vm.expectRevert("Allocation: redeem more than max");
             vm.prank(bob);
-            _tokenized(address(mechanism)).redeem(900, bob, bob);
+            _tokenized(address(mechanism)).redeem(900 * W * W, bob, bob);
         }
 
         // At bob's timelock expiry - bob can now redeem
         vm.warp(bobRedeemableTime);
-        assertEq(_tokenized(address(mechanism)).maxRedeem(bob), 900);
+        assertEq(_tokenized(address(mechanism)).maxRedeem(bob), 900 * W * W);
 
         vm.prank(bob);
-        uint256 bobAssets = _tokenized(address(mechanism)).redeem(900, bob, bob);
+        uint256 bobAssets = _tokenized(address(mechanism)).redeem(900 * W * W, bob, bob);
         assertEq(bobAssets, expectedAssetsPerRecipient);
 
         // Verify independent schedules worked correctly

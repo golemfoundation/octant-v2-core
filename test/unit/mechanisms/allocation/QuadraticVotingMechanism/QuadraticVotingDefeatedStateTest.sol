@@ -18,6 +18,7 @@ contract QuadraticVotingDefeatedStateTest is Test {
     address alice = address(0x1);
     address frank = address(0x6);
 
+    uint256 constant W = 65536; // weight multiplier so weight^2 >= 2^32 (shift=32 quantization)
     uint256 constant LARGE_DEPOSIT = 1000 ether;
     uint256 constant QUORUM_REQUIREMENT = 200 ether;
     uint256 constant VOTING_DELAY = 100;
@@ -85,9 +86,9 @@ contract QuadraticVotingDefeatedStateTest is Test {
 
         // Vote with insufficient amount for quorum - QuadraticFunding calculation needed
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, frank);
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10 * W, frank);
 
-        console.log("Vote weight: 10, quadratic cost: 100 voting power");
+        console.log("Vote weight: 10*W, quadratic cost: 100*W*W voting power");
 
         // Check vote tally before finalization using getTally() from ProperQF
         (, , uint256 quadraticFunding, uint256 linearFunding) = mechanism.getTally(pid);

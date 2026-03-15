@@ -140,6 +140,38 @@ module OCTANT-LEMMAS
     // to inspect the stuck term and adjust the pattern.
     //
 
+    //
+    // ProperQF quantization lemmas (shift-32 encode/decode)
+    //
+    // The EVM compiles `value >> 32` then `encoded << 32` into byte operations:
+    //   encode: extracts upper 28 bytes via #buf(28, value /Int pow32)
+    //   decode: appends 4 zero bytes and reads as uint256 via #asWord
+    // K leaves these as symbolic #buf/#asWord terms. These lemmas close the gap.
+    //
+
+    // L1: decode(encode(x)) == x for step-aligned values
+    // Pattern from `kontrol show`: #asWord(#buf(28, X /Int pow32) +Bytes b"\x00\x00\x00\x00") ==Int X
+    rule [quant-decode-encode]:
+      #asWord ( #buf ( 28 , ( X /Int pow32 ) ) +Bytes b"\x00\x00\x00\x00" ) => X
+      requires 0 <=Int X andBool X <Int pow256
+       andBool X modInt pow32 ==Int 0
+      [simplification, preserves-definedness]
+
+    // L1b: #asWord(#buf(30, k) ++ 0x0000) == k * pow16 (weight = k * MIN_VOTE_WEIGHT)
+    // Appears in P10 when K represents weight = k * 2^16 via byte concatenation
+    rule [quant-weight-from-k]:
+      #asWord ( #buf ( 30 , K ) +Bytes b"\x00\x00" ) => K *Int pow16
+      requires 0 <=Int K andBool K <Int pow240
+      [simplification, preserves-definedness]
+
+    // L2: low 4 bytes of step-aligned value are zero
+    // Pattern from `kontrol show`: #range(#buf(32, X), 28, 4) ==K b"\x00\x00\x00\x00"
+    rule [quant-low-bytes-zero]:
+      #range ( #buf ( 32 , X ) , 28 , 4 ) => b"\x00\x00\x00\x00"
+      requires 0 <=Int X andBool X <Int pow256
+       andBool X modInt pow32 ==Int 0
+      [simplification, preserves-definedness]
+
     rule [ceilDiv-ge]:
       D *Int ( ( N /Int D ) +Int bool2Word ( 0 <Int ( N modInt D ) ) ) >=Int N => true
       requires 0 <Int D andBool 0 <=Int N

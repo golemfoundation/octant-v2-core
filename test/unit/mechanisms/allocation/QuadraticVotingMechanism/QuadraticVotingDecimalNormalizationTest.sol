@@ -33,6 +33,8 @@ contract MockToken is ERC20 {
 /// @dev Demonstrates the fix for the decimal normalization bug where compareOptimalAlpha() would
 ///      incorrectly compare raw token amounts with 18-decimal normalized quadratic/linear sums
 contract QuadraticVotingDecimalNormalizationTest is Test {
+    uint256 constant W = 65536; // weight multiplier so weight^2 >= 2^32 (shift=32 quantization)
+
     AllocationMechanismFactory factory;
     MockToken token6Decimals; // USDC-like token
     MockToken token18Decimals; // ETH-like token
@@ -93,14 +95,14 @@ contract QuadraticVotingDecimalNormalizationTest is Test {
     }
 
     function _fundUsers() internal {
-        // Fund with equivalent amounts:
-        // 6 decimals: 1000 USDC = 1000 * 10^6
-        // 18 decimals: 1000 ETH = 1000 * 10^18
-        // 8 decimals: 1000 WBTC = 1000 * 10^8
+        // Fund with equivalent amounts (scaled up for W-scaled vote weights):
+        // 6 decimals: 1_000_000 USDC = 1_000_000 * 10^6
+        // 18 decimals: 1_000_000 ETH = 1_000_000 * 10^18
+        // 8 decimals: 1_000_000 WBTC = 1_000_000 * 10^8
 
-        uint256 amount6 = 1000 * 10 ** 6; // 1000 USDC
-        uint256 amount18 = 1000 * 10 ** 18; // 1000 ETH
-        uint256 amount8 = 1000 * 10 ** 8; // 1000 WBTC
+        uint256 amount6 = 1_000_000 * 10 ** 6;
+        uint256 amount18 = 1_000_000 * 10 ** 18;
+        uint256 amount8 = 1_000_000 * 10 ** 8;
 
         // Fund each user for each token
         address[3] memory users = [alice, bob, charlie];
@@ -117,21 +119,21 @@ contract QuadraticVotingDecimalNormalizationTest is Test {
         console.log("=== Decimal Normalization Test ===");
 
         // Setup: Register users and create proposals for each mechanism
-        _setupVotingScenario(mechanism6, token6Decimals, 1000 * 10 ** 6); // 1000 USDC
-        _setupVotingScenario(mechanism18, token18Decimals, 1000 * 10 ** 18); // 1000 ETH
-        _setupVotingScenario(mechanism8, token8Decimals, 1000 * 10 ** 8); // 1000 WBTC
+        _setupVotingScenario(mechanism6, token6Decimals, 1_000_000 * 10 ** 6);
+        _setupVotingScenario(mechanism18, token18Decimals, 1_000_000 * 10 ** 18);
+        _setupVotingScenario(mechanism8, token8Decimals, 1_000_000 * 10 ** 8);
 
         // Cast equivalent votes on each mechanism
         _castEquivalentVotes();
 
         // Test calculateOptimalAlpha with equivalent amounts
-        uint256 matchingPool6 = 5000 * 10 ** 6; // 5000 USDC
-        uint256 matchingPool18 = 5000 * 10 ** 18; // 5000 ETH
-        uint256 matchingPool8 = 5000 * 10 ** 8; // 5000 WBTC
+        uint256 matchingPool6 = 5_000_000 * 10 ** 6;
+        uint256 matchingPool18 = 5_000_000 * 10 ** 18;
+        uint256 matchingPool8 = 5_000_000 * 10 ** 8;
 
-        uint256 userDeposits6 = 3000 * 10 ** 6; // 3000 USDC
-        uint256 userDeposits18 = 3000 * 10 ** 18; // 3000 ETH
-        uint256 userDeposits8 = 3000 * 10 ** 8; // 3000 WBTC
+        uint256 userDeposits6 = 3_000_000 * 10 ** 6;
+        uint256 userDeposits18 = 3_000_000 * 10 ** 18;
+        uint256 userDeposits8 = 3_000_000 * 10 ** 8;
 
         console.log("\n--- Calculate Optimal Alpha for Each Token ---");
 
@@ -171,7 +173,7 @@ contract QuadraticVotingDecimalNormalizationTest is Test {
         console.log("=== Insufficient Assets Test - Low Decimal Token ===");
 
         // Setup with USDC (6 decimals)
-        _setupVotingScenario(mechanism6, token6Decimals, 1000 * 10 ** 6);
+        _setupVotingScenario(mechanism6, token6Decimals, 1_000_000 * 10 ** 6);
         _castVotesOnMechanism(mechanism6);
 
         // Use very small matching pool and user deposits (in raw token amounts)
@@ -253,10 +255,20 @@ contract QuadraticVotingDecimalNormalizationTest is Test {
             for (uint i = 0; i < users.length; i++) {
                 vm.startPrank(users[i]);
 
-                // Vote on proposal 1 and 2 with weight 10 each
-                // Cost: 10^2 = 100 voting power per vote, 200 total per user
-                _tokenized(address(mechanisms[m])).castVote(1, TokenizedAllocationMechanism.VoteType.For, 10, projectA);
-                _tokenized(address(mechanisms[m])).castVote(2, TokenizedAllocationMechanism.VoteType.For, 10, projectB);
+                // Vote on proposal 1 and 2 with weight 10*W each
+                // Cost: (10*W)^2 = 100*W^2 voting power per vote
+                _tokenized(address(mechanisms[m])).castVote(
+                    1,
+                    TokenizedAllocationMechanism.VoteType.For,
+                    10 * W,
+                    projectA
+                );
+                _tokenized(address(mechanisms[m])).castVote(
+                    2,
+                    TokenizedAllocationMechanism.VoteType.For,
+                    10 * W,
+                    projectB
+                );
 
                 vm.stopPrank();
             }
@@ -280,9 +292,9 @@ contract QuadraticVotingDecimalNormalizationTest is Test {
         for (uint i = 0; i < users.length; i++) {
             vm.startPrank(users[i]);
 
-            // Vote on proposal 1 and 2 with weight 10 each
-            _tokenized(address(mechanism)).castVote(1, TokenizedAllocationMechanism.VoteType.For, 10, projectA);
-            _tokenized(address(mechanism)).castVote(2, TokenizedAllocationMechanism.VoteType.For, 10, projectB);
+            // Vote on proposal 1 and 2 with weight 10*W each
+            _tokenized(address(mechanism)).castVote(1, TokenizedAllocationMechanism.VoteType.For, 10 * W, projectA);
+            _tokenized(address(mechanism)).castVote(2, TokenizedAllocationMechanism.VoteType.For, 10 * W, projectB);
 
             vm.stopPrank();
         }

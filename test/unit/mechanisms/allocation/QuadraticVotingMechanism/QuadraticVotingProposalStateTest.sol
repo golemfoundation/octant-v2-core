@@ -26,6 +26,7 @@ contract QuadraticVotingProposalStateTest is Test {
     address grace = address(0x7); // Recipient
     address henry = address(0x8); // Recipient
 
+    uint256 constant W = 65536; // weight multiplier so weight^2 >= 2^32 (shift=32 quantization)
     uint256 constant LARGE_DEPOSIT = 1000 ether;
     uint256 constant MEDIUM_DEPOSIT = 500 ether;
     uint256 constant QUORUM_REQUIREMENT = 500;
@@ -51,7 +52,7 @@ contract QuadraticVotingProposalStateTest is Test {
             symbol: "PSTEST",
             votingDelay: VOTING_DELAY,
             votingPeriod: VOTING_PERIOD,
-            quorumShares: QUORUM_REQUIREMENT,
+            quorumShares: QUORUM_REQUIREMENT * W * W,
             timelockDelay: TIMELOCK_DELAY,
             gracePeriod: GRACE_PERIOD,
             owner: address(0)
@@ -136,11 +137,11 @@ contract QuadraticVotingProposalStateTest is Test {
 
         // Recipient can monitor voting progress
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, dave);
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30 * W, dave);
 
         (, , uint256 quadraticFunding, uint256 linearFunding) = mechanism.getTally(pid);
         uint256 forVotes = quadraticFunding + linearFunding;
-        assertEq(forVotes, 900);
+        assertEq(forVotes, 900 * W * W);
 
         // TALLYING after voting ends but before finalized
         vm.warp(votingEndTime + 10);
@@ -184,7 +185,7 @@ contract QuadraticVotingProposalStateTest is Test {
         // Cannot vote on canceled proposal
         vm.expectRevert();
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 8, dave);
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 8 * W, dave);
 
         // State remains CANCELED permanently
         vm.warp(votingEndTime + 100);
@@ -225,13 +226,23 @@ contract QuadraticVotingProposalStateTest is Test {
 
         // Proposal 1: Insufficient votes (below quorum)
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pidLowVotes, TokenizedAllocationMechanism.VoteType.For, 10, frank);
+        _tokenized(address(mechanism)).castVote(pidLowVotes, TokenizedAllocationMechanism.VoteType.For, 10 * W, frank);
 
         // Proposal 2: Low total votes (below quorum)
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pidNegativeVotes, TokenizedAllocationMechanism.VoteType.For, 15, grace);
+        _tokenized(address(mechanism)).castVote(
+            pidNegativeVotes,
+            TokenizedAllocationMechanism.VoteType.For,
+            15 * W,
+            grace
+        );
         vm.prank(bob);
-        _tokenized(address(mechanism)).castVote(pidNegativeVotes, TokenizedAllocationMechanism.VoteType.For, 10, grace);
+        _tokenized(address(mechanism)).castVote(
+            pidNegativeVotes,
+            TokenizedAllocationMechanism.VoteType.For,
+            10 * W,
+            grace
+        );
 
         // Finalize voting
         vm.warp(votingEndTime + 1);
@@ -280,7 +291,7 @@ contract QuadraticVotingProposalStateTest is Test {
 
         // Vote to meet quorum
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, henry);
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30 * W, henry);
 
         vm.warp(votingEndTime + 1);
         (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
@@ -303,7 +314,7 @@ contract QuadraticVotingProposalStateTest is Test {
         (, , uint256 quadraticFunding, uint256 linearFunding) = mechanism.getTally(pid);
         uint256 forVotes = quadraticFunding + linearFunding;
         uint256 againstVotes = 0; // QuadraticVoting only supports For votes
-        assertEq(forVotes, 900);
+        assertEq(forVotes, 900 * W * W);
         assertEq(againstVotes, 0);
         assertTrue(forVotes - againstVotes >= QUORUM_REQUIREMENT);
     }
@@ -327,7 +338,7 @@ contract QuadraticVotingProposalStateTest is Test {
         vm.warp(votingStartTime + 1);
 
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, charlie);
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30 * W, charlie);
 
         vm.warp(votingEndTime + 1);
         (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
@@ -345,7 +356,7 @@ contract QuadraticVotingProposalStateTest is Test {
         );
 
         // Recipient receives shares but cannot redeem yet due to timelock
-        uint256 expectedShares = 900;
+        uint256 expectedShares = 900 * W * W;
         assertEq(_tokenized(address(mechanism)).balanceOf(charlie), expectedShares);
         assertEq(_tokenized(address(mechanism)).proposalShares(pid), expectedShares);
 
@@ -384,7 +395,7 @@ contract QuadraticVotingProposalStateTest is Test {
         vm.warp(votingStartTime + 1);
 
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, dave);
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30 * W, dave);
 
         vm.warp(votingEndTime + 1);
         (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
@@ -397,7 +408,7 @@ contract QuadraticVotingProposalStateTest is Test {
         vm.warp(block.timestamp + TIMELOCK_DELAY + 1);
 
         // Recipient redeems shares
-        uint256 expectedShares = 900;
+        uint256 expectedShares = 900 * W * W;
         uint256 daveTokensBefore = token.balanceOf(dave);
 
         vm.prank(dave);
@@ -441,7 +452,7 @@ contract QuadraticVotingProposalStateTest is Test {
         vm.warp(votingStartTime + 1);
 
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, eve);
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30 * W, eve);
 
         vm.warp(votingEndTime + 1);
         (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
@@ -460,12 +471,12 @@ contract QuadraticVotingProposalStateTest is Test {
         );
 
         // Recipient still has shares but cannot redeem (expired)
-        assertEq(_tokenized(address(mechanism)).balanceOf(eve), 900);
+        assertEq(_tokenized(address(mechanism)).balanceOf(eve), 900 * W * W);
 
         // Redemption should fail due to expiration
         vm.expectRevert("Allocation: redeem more than max");
         vm.prank(eve);
-        _tokenized(address(mechanism)).redeem(900, eve, eve);
+        _tokenized(address(mechanism)).redeem(900 * W * W, eve, eve);
     }
 
     /// @notice Test complete recipient journey through multiple proposal states
@@ -540,10 +551,15 @@ contract QuadraticVotingProposalStateTest is Test {
 
         // Vote on remaining proposals
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pidSuccessful, TokenizedAllocationMechanism.VoteType.For, 30, charlie);
+        _tokenized(address(mechanism)).castVote(
+            pidSuccessful,
+            TokenizedAllocationMechanism.VoteType.For,
+            30 * W,
+            charlie
+        );
 
         vm.prank(bob);
-        _tokenized(address(mechanism)).castVote(pidDefeated, TokenizedAllocationMechanism.VoteType.For, 10, dave); // Below quorum
+        _tokenized(address(mechanism)).castVote(pidDefeated, TokenizedAllocationMechanism.VoteType.For, 10 * W, dave); // Below quorum
 
         // Finalize
         vm.warp(votingEndTime + 1);
@@ -574,7 +590,7 @@ contract QuadraticVotingProposalStateTest is Test {
         );
 
         // Verify recipient outcomes
-        assertEq(_tokenized(address(mechanism)).balanceOf(charlie), 900); // Success
+        assertEq(_tokenized(address(mechanism)).balanceOf(charlie), 900 * W * W); // Success
         assertEq(_tokenized(address(mechanism)).balanceOf(dave), 0); // Defeated
         assertEq(_tokenized(address(mechanism)).balanceOf(eve), 0); // Canceled
 
@@ -582,7 +598,7 @@ contract QuadraticVotingProposalStateTest is Test {
         vm.warp(block.timestamp + TIMELOCK_DELAY + 1);
 
         vm.prank(charlie);
-        uint256 charlieAssets = _tokenized(address(mechanism)).redeem(900, charlie, charlie);
+        uint256 charlieAssets = _tokenized(address(mechanism)).redeem(900 * W * W, charlie, charlie);
 
         // With matching pool: total assets = 1500 (alice + bob) + 2000 (matching pool) = 3500 ether
         // 900 shares out of 900 total shares = 100% of 3500 ether = 3500 ether

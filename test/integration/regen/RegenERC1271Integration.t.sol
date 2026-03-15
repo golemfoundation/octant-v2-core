@@ -248,7 +248,7 @@ contract RegenERC1271IntegrationTest is Test {
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
         // Prepare vote signature - use sqrt of voting power for quadratic voting
-        uint256 voteWeight = 1; // Start with a small weight
+        uint256 voteWeight = 1 << 16; // MIN_VOTE_WEIGHT: quadratic cost = 2^32
         uint256 voteDeadline = block.timestamp + 1 hours;
         uint256 voteNonce = TokenizedAllocationMechanism(address(allocationMechanism)).nonces(address(contractSigner));
 

@@ -15,4 +15,5 @@ solmate/=dependencies/solmate-6.8.0/
 staker/=dependencies/staker-1.0.1/src/
 surl/=dependencies/surl-0.0.0/src/
 tokenized-strategy/=dependencies/tokenized-strategy-3.0.4/
+uint-quantization-lib/=dependencies/uint-quantization-lib-7.1.0/
 zodiac/=dependencies/gnosisguild-zodiac-4.1.1/contracts/

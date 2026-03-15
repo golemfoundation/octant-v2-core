@@ -18,6 +18,7 @@ contract QuadraticVotingDebugTimelockTest is Test {
     address alice = address(0x1);
     address charlie = address(0x3);
 
+    uint256 constant W = 65536;
     uint256 constant LARGE_DEPOSIT = 1000 ether;
     uint256 constant TIMELOCK_DELAY = 1 days;
 
@@ -64,7 +65,7 @@ contract QuadraticVotingDebugTimelockTest is Test {
         vm.warp(100100);
 
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 31, charlie); // 31^2 = 961 > 500 quorum
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 31 * W, charlie); // (31*W)^2 survives shift-32 quantization
 
         // Move past voting period: startTime + votingDelay + votingPeriod = 100000 + 100 + 1000 = 101100
         vm.warp(101101);

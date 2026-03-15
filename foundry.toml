@@ -68,5 +68,6 @@ staker = { version = "1.0.1", git = "https://github.com/withtally/staker", tag =
 surl = { version = "0.0.0", git = "https://github.com/memester-xyz/surl", rev = "5f92a5260c8e0198ca3ee6a16255d6cda4e0887a" }
 tokenized-strategy = { version = "3.0.4", git = "https://github.com/yearn/tokenized-strategy", tag = "v3.0.4" }
 tokenized-strategy-periphery = { version = "3.0.2", git = "https://github.com/yearn/tokenized-strategy-periphery", tag = "v3.0.2" }
+uint-quantization-lib = "7.1.0"
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options

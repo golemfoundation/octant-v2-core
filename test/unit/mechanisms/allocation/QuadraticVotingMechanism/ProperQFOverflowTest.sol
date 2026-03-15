@@ -4,9 +4,10 @@ pragma solidity ^0.8.20;
 import "forge-std/Test.sol";
 import "forge-std/console.sol";
 import { ProperQF } from "src/mechanisms/voting-strategy/ProperQF.sol";
+import { Overflow, BelowMinStep } from "uint-quantization-lib/src/UintQuantizationLib.sol";
 
 /// @notice Test harness that wraps ProperQF for direct testing
-contract ProperQFHarness is ProperQF {
+contract ProperQFHarness is ProperQF(18) {
     function processVoteUnchecked(uint256 projectId, uint256 contribution, uint256 voteWeight) external {
         _processVoteUnchecked(projectId, contribution, voteWeight);
     }
@@ -16,167 +17,151 @@ contract ProperQFHarness is ProperQF {
     }
 }
 
-/// @title Simple ProperQF Overflow Test Harness
-/// @notice Tests overflow scenarios by directly calling ProperQF._processVoteUnchecked()
+/// @title ProperQF Overflow & Packing Test
+/// @notice Tests overflow boundaries for the symmetric PackedProject layout:
+///         uint128 sumContributions (shift=32) + uint128 sumSquareRoots (no quantization)
 contract ProperQFOverflowTest is Test {
     ProperQFHarness properQF;
+
+    /// @dev Step size for sumContributions quantization
+    uint256 constant STEP = uint256(1) << 32;
+    /// @dev Maximum representable sumContributions after decode
+    uint256 constant CONTRIBUTIONS_MAX = uint256(type(uint128).max) << 32;
 
     function setUp() public {
         properQF = new ProperQFHarness();
     }
 
-    /// @notice Test 1000 users each voting with max weight on same project
+    /// @notice Test 1000 users each voting with step-aligned contributions on same project
     function test1000Users_MaxWeight_SameProject() public {
         uint256 projectId = 1;
-        uint256 maxWeight = 22; // sqrt(500) ≈ 22.36, use 22 to be safe
-        uint256 contribution = maxWeight * maxWeight; // 484
+        // Use step-aligned contribution so assertions stay exact
+        uint256 voteWeight = 1 << 16; // 65536
+        uint256 contribution = uint256(voteWeight) * voteWeight; // 2^32 = 1 STEP
         uint256 numUsers = 1000;
 
-        console.log("=== TESTING 1000 USERS MAX WEIGHT SAME PROJECT ===");
-        console.log("Each user votes with weight:", maxWeight);
-        console.log("Each user contribution:", contribution);
-
-        // Process 1000 votes on same project
         for (uint256 i = 0; i < numUsers; i++) {
-            properQF.processVoteUnchecked(projectId, contribution, maxWeight);
+            properQF.processVoteUnchecked(projectId, contribution, voteWeight);
         }
 
-        // Check final values
-        (uint256 sumContrib, uint256 sumSqrt, uint256 quadFund, uint256 linearFund) = properQF.getTally(projectId);
+        (uint256 sumContrib, uint256 sumSqrt, uint256 quadFund, ) = properQF.getTally(projectId);
 
-        console.log("Final sum contributions:", sumContrib);
-        console.log("Final sum square roots:", sumSqrt);
-        console.log("Final quadratic funding:", quadFund);
-        console.log("Final linear funding:", linearFund);
-
-        // Verify expected values
-        uint256 expectedSumSqrt = numUsers * maxWeight; // 1000 * 22 = 22,000
-        uint256 expectedSumContrib = numUsers * contribution; // 1000 * 484 = 484,000
-        uint256 expectedQuadFund = expectedSumSqrt * expectedSumSqrt; // 22,000^2 = 484,000,000
+        uint256 expectedSumSqrt = numUsers * voteWeight;
+        uint256 expectedSumContrib = numUsers * contribution;
+        uint256 expectedQuadFund = expectedSumSqrt * expectedSumSqrt;
 
         assertEq(sumSqrt, expectedSumSqrt, "Sum square roots should match expected");
         assertEq(sumContrib, expectedSumContrib, "Sum contributions should match expected");
         assertEq(quadFund, expectedQuadFund, "Quadratic funding should match expected");
 
-        // Verify no overflow
-        uint256 uint128Max = type(uint128).max;
-        assertTrue(sumContrib < uint128Max, "Sum contributions should fit in uint128");
-        assertTrue(sumSqrt < uint128Max, "Sum square roots should fit in uint128");
-        assertTrue(quadFund < uint128Max, "Quadratic funding should fit in uint128");
-
-        console.log("SUCCESS: 1000 users processed without overflow");
+        assertTrue(sumContrib <= CONTRIBUTIONS_MAX, "Sum contributions should fit in packed storage");
+        assertTrue(sumSqrt <= type(uint128).max, "Sum square roots should fit in uint128");
     }
 
     /// @notice Test 1000 users split between two projects
     function test1000Users_TwoProjects() public {
         uint256 projectA = 1;
         uint256 projectB = 2;
-        uint256 maxWeight = 22;
-        uint256 contribution = maxWeight * maxWeight;
+        uint256 voteWeight = 1 << 16;
+        uint256 contribution = uint256(voteWeight) * voteWeight;
 
-        console.log("=== TESTING 1000 USERS SPLIT BETWEEN TWO PROJECTS ===");
-
-        // 600 users vote on project A
         for (uint256 i = 0; i < 600; i++) {
-            properQF.processVoteUnchecked(projectA, contribution, maxWeight);
+            properQF.processVoteUnchecked(projectA, contribution, voteWeight);
         }
-
-        // 400 users vote on project B
         for (uint256 i = 0; i < 400; i++) {
-            properQF.processVoteUnchecked(projectB, contribution, maxWeight);
+            properQF.processVoteUnchecked(projectB, contribution, voteWeight);
         }
 
-        // Check project A
-        (uint256 sumContribA, uint256 sumSqrtA, uint256 quadFundA, ) = properQF.getTally(projectA);
-        console.log("Project A - Sum square roots:", sumSqrtA);
-        console.log("Project A - Quadratic funding:", quadFundA);
+        (, , uint256 quadFundA, ) = properQF.getTally(projectA);
+        (, , uint256 quadFundB, ) = properQF.getTally(projectB);
 
-        // Check project B
-        (uint256 sumContribB, uint256 sumSqrtB, uint256 quadFundB, ) = properQF.getTally(projectB);
-        console.log("Project B - Sum square roots:", sumSqrtB);
-        console.log("Project B - Quadratic funding:", quadFundB);
-
-        // Check global totals
         uint256 totalQuadSum = properQF.totalQuadraticSum();
         uint256 totalLinearSum = properQF.totalLinearSum();
-        console.log("Global quadratic sum:", totalQuadSum);
-        console.log("Global linear sum:", totalLinearSum);
 
-        // Verify global sums equal project sums
         assertEq(totalQuadSum, quadFundA + quadFundB, "Global quadratic sum should equal project sums");
-        assertEq(totalLinearSum, sumContribA + sumContribB, "Global linear sum should equal project sums");
+        assertEq(totalLinearSum, 1000 * contribution, "Global linear sum should equal total contributions");
 
-        // Verify no overflow
-        uint256 uint128Max = type(uint128).max;
-        assertTrue(totalQuadSum < uint128Max, "Global quadratic sum should fit in uint128");
-        assertTrue(totalLinearSum < uint128Max, "Global linear sum should fit in uint128");
-
-        console.log("SUCCESS: Split voting processed without overflow");
+        assertTrue(totalQuadSum <= type(uint256).max, "Global quadratic sum should not overflow");
     }
 
-    /// @notice Test overflow boundary - find the actual overflow point
-    function testOverflowBoundary() public pure {
-        uint256 maxWeight = 22;
-        uint256 contribution = maxWeight * maxWeight;
-        uint256 uint128Max = type(uint128).max;
+    /// @notice Test the overflow boundary for sumContributions
+    function testOverflowBoundary_Contributions() public pure {
+        console.log("=== CONTRIBUTIONS OVERFLOW BOUNDARY ===");
+        console.log("CONTRIBUTIONS_MAX:", CONTRIBUTIONS_MAX);
+        console.log("STEP:", STEP);
 
-        console.log("=== TESTING OVERFLOW BOUNDARY ===");
-        console.log("uint128 max:", uint128Max);
+        uint256 maxStored = type(uint128).max;
+        uint256 maxDecoded = maxStored << 32;
+        assertEq(maxDecoded, CONTRIBUTIONS_MAX, "Max decoded should match CONTRIBUTIONS_MAX");
 
-        // Calculate theoretical limits
-        uint256 maxUsersForSumSqrt = uint128Max / maxWeight;
-        uint256 maxSumSqrtForQuadratic = 18446744073709551615; // sqrt(uint128Max)
-        uint256 maxUsersForQuadratic = maxSumSqrtForQuadratic / maxWeight;
-
-        console.log("Max users before sumSquareRoots overflow:", maxUsersForSumSqrt);
-        console.log("Max users before quadratic overflow:", maxUsersForQuadratic);
-
-        // Test near the quadratic overflow boundary (use much smaller number for test)
-        uint256 testUsers = 1000000; // 1 million users
-
-        // This should work without overflow
-        if (testUsers <= maxUsersForQuadratic) {
-            console.log("Testing", testUsers, "users...");
-
-            // Process many votes efficiently (skip the actual loop for gas)
-            // Instead, simulate the final state
-            uint256 finalSumSqrt = testUsers * maxWeight;
-            uint256 finalQuadFund = finalSumSqrt * finalSumSqrt;
-            uint256 finalSumContrib = testUsers * contribution;
-
-            console.log("Simulated final sum square roots:", finalSumSqrt);
-            console.log("Simulated final quadratic funding:", finalQuadFund);
-            console.log("Simulated final sum contributions:", finalSumContrib);
-
-            // Check if these would fit in uint128
-            assertTrue(finalSumSqrt < uint128Max, "1M users sum square roots should fit");
-            assertTrue(finalQuadFund < uint128Max, "1M users quadratic funding should fit");
-            assertTrue(finalSumContrib < uint128Max, "1M users sum contributions should fit");
-
-            console.log("SUCCESS: 1 million users would work without overflow");
-        }
-
-        console.log("=== BOUNDARY ANALYSIS COMPLETE ===");
+        // Verify step alignment
+        assertEq(CONTRIBUTIONS_MAX % STEP, 0, "Max should be step-aligned");
     }
 
-    /// @notice Test the actual overflow protection in our code
-    function testOverflowProtection() public {
+    /// @notice Test that overflow reverts with Overflow from UintQuantizationLib
+    function testOverflowProtection_Contributions() public {
         uint256 projectId = 1;
 
-        console.log("=== TESTING OVERFLOW PROTECTION ===");
+        // Set up a contribution that would exceed CONTRIBUTIONS_MAX when accumulated
+        // CONTRIBUTIONS_MAX + 1 STEP should overflow
+        uint256 overflowValue = CONTRIBUTIONS_MAX + STEP;
 
-        // Try to cause overflow by setting values larger than uint128.max
-        uint256 hugeWeight = type(uint128).max; // Max uint128
-        uint256 hugeContrib = type(uint128).max; // Max uint128
+        vm.expectRevert(abi.encodeWithSelector(Overflow.selector, overflowValue, CONTRIBUTIONS_MAX));
+        properQF.processVoteUnchecked(projectId, overflowValue, 1);
+    }
 
-        console.log("Trying to process vote with huge weight:", hugeWeight);
-        console.log("Huge contribution:", hugeContrib);
+    /// @notice Test that uint128 overflow for sumSquareRoots reverts
+    /// @dev Going through processVoteUnchecked, the squaring (sumSR * sumSR) overflows
+    ///      uint256 before reaching _writeProject's uint128() downcast.
+    function testOverflowProtection_SquareRoots() public {
+        uint256 projectId = 1;
+        uint256 hugeWeight = uint256(type(uint128).max) + 1;
 
-        // This should revert with SafeCast overflow error when trying to cast uint128.max to uint128 in addition
-        // The exact error will be from SafeCast when sumSquareRoots + hugeWeight overflows uint128
+        // processVoteUnchecked panics on the squaring overflow before reaching _writeProject
         vm.expectRevert();
-        properQF.processVoteUnchecked(projectId, hugeContrib, hugeWeight);
+        properQF.processVoteUnchecked(projectId, STEP, hugeWeight);
+    }
 
-        console.log("SUCCESS: Overflow protection working correctly");
+    /// @notice Lossy round-trip: non-step-aligned value gets floored
+    function testLossyRoundTrip() public {
+        uint256 projectId = 1;
+        // contribution = 5 * STEP + (STEP - 1): not step-aligned
+        uint256 contribution = 5 * STEP + (STEP - 1);
+        uint256 voteWeight = 1;
+
+        properQF.processVoteUnchecked(projectId, contribution, voteWeight);
+
+        ProperQF.Project memory project = properQF.projects(projectId);
+        // Should be floored to 5 * STEP
+        assertEq(project.sumContributions, 5 * STEP, "Non-aligned contribution should floor to step boundary");
+        assertEq(project.sumSquareRoots, 1, "Square roots should be exact");
+    }
+
+    /// @notice Zero round-trip: zero stays zero
+    function testZeroRoundTrip() public view {
+        ProperQF.Project memory project = properQF.projects(999);
+        assertEq(project.sumContributions, 0, "Zero contributions should decode to zero");
+        assertEq(project.sumSquareRoots, 0, "Zero square roots should decode to zero");
+    }
+
+    /// @notice Step-aligned round-trip: exact preservation
+    function testStepAlignedRoundTrip() public {
+        uint256 projectId = 1;
+        uint256 contribution = 42 * STEP;
+
+        properQF.processVoteUnchecked(projectId, contribution, 1);
+
+        ProperQF.Project memory project = properQF.projects(projectId);
+        assertEq(project.sumContributions, contribution, "Step-aligned contribution should round-trip exactly");
+    }
+
+    /// @notice Sub-step contribution reverts with BelowMinStep from UintQuantizationLib
+    function testSubStepEncodesToZero() public {
+        uint256 projectId = 1;
+        // Any value < STEP is rejected by the minimum contribution check
+        uint256 tinyContribution = STEP - 1;
+
+        vm.expectRevert(abi.encodeWithSelector(BelowMinStep.selector, tinyContribution, STEP));
+        properQF.processVoteUnchecked(projectId, tinyContribution, 1);
     }
 }

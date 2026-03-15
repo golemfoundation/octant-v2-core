@@ -2,6 +2,7 @@
 pragma solidity ^0.8.0;
 
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
+import { Quant, UintQuantizationLib as QuantLib } from "uint-quantization-lib/src/UintQuantizationLib.sol";
 
 /**
  * @title Proper Quadratic Funding (QF) math and tallying
@@ -10,9 +11,55 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
  * @notice Incremental QF tallying utilities with alpha-weighted quadratic/linear funding.
  * @dev Provides storage isolation via deterministic slot, input validation helpers,
  *      and funding aggregation with well-defined rounding behavior.
+ *
+ *      Storage packing: each project occupies exactly 1 slot (256 bits):
+ *        sumContributions : uint128, shift=32 (lossy quantization via UintQuantizationLib)
+ *        sumSquareRoots   : uint128, shift=0  (lossless, no quantization)
+ *
+ *      sumContributions quantization (CONTRIBUTIONS_SCHEME):
+ *        encode: stored = value >> 32  (floors to nearest step)
+ *        decode: value  = stored << 32
+ *        step   = 2^32 = 4,294,967,296 wei (~4.3 nanotoken at 18 decimals)
+ *        max    = (2^128 - 1) << 32    (~1.46e48 wei = ~1.46e30 tokens at 18 decimals)
+ *
+ *        Contribution values entering ProperQF are quadratic costs (weight^2) in the
+ *        18-decimal-normalized voting-power space (see QuadraticVotingMechanism
+ *        ._normalizeToDecimals). Since voting power is always normalized to 18 decimals
+ *        regardless of the underlying asset, the step size of ~4.3 nanotoken applies
+ *        uniformly. Minimum weight = sqrt(step) = 2^16 = 65536, enforced by the
+ *        BelowMinStep guard (from UintQuantizationLib) in _processVoteUnchecked.
+ *
+ *        Per-project sumContributions readback is lossy (floored to step boundary).
+ *        Global totalLinearSum stays exact: the delta update pattern in
+ *        _processVoteUnchecked computes (old - decoded + (decoded + contribution)),
+ *        so the quantization errors cancel.
+ *
+ *      sumSquareRoots: stored as uint128, no quantization.
+ *        The uint128 ceiling matches the arithmetic constraint: sumSquareRoots is
+ *        squared on-chain (sumSR * sumSR), which overflows uint256 at 2^128.
+ *        Overflow protection comes from Solidity 0.8's checked uint128() downcast
+ *        in _writeProject (defense-in-depth; the squaring catches it first).
  */
 abstract contract ProperQF {
     using Math for uint256;
+
+    /// @notice Quantization scheme for sumContributions: stored as uint128, shift=32.
+    /// @dev Contributions are quadratic costs (weight^2) in 18-decimal-normalized voting-power
+    ///      space (see QuadraticVotingMechanism._normalizeToDecimals), so these bounds hold
+    ///      uniformly regardless of the underlying asset's native decimals.
+    ///      Step size: 2^32 ~= 4.3e9 wei (~4.3 nanotoken) : floor-rounding error per encode.
+    ///      Max value: (2^128 - 1) << 32 ~= 1.46e48 wei (~1.46e30 tokens).
+    ///      Global sums (totalLinearSum) stay exact because quantization errors cancel in the
+    ///      delta update pattern of _processVoteUnchecked; only per-project readback is lossy.
+    /// Equivalent to QuantLib.create(32, 128); constant required to avoid immutable bloat.
+    /// Cross-validated by Kontrol proof P7 (testProductionSchemeConsistency).
+    Quant internal constant CONTRIBUTIONS_SCHEME = Quant.wrap(uint16((128 << 8) | 32));
+
+    /// @dev sumSquareRoots is stored as uint128 with no quantization.
+    ///      Max value: 2^128 - 1 ~= 3.40e38.
+    ///      The uint128 ceiling matches the arithmetic constraint: sumSquareRoots is squared
+    ///      on-chain (sumSR * sumSR), which overflows uint256 at 2^128.
+    ///      Overflow protection comes from Solidity 0.8's checked uint128() downcast in _writeProject.
 
     // Custom Errors
     error ContributionMustBePositive();
@@ -24,24 +71,39 @@ abstract contract ProperQF {
     error LinearSumUnderflow();
     error DenominatorMustBePositive();
     error AlphaMustBeLessOrEqualToOne();
+    error UnsupportedInputDecimals(uint8 provided, uint8 expected);
+
+    /// @notice Expected decimal precision for all contribution/voting-power inputs.
+    /// @dev CONTRIBUTIONS_SCHEME's step size (2^32 ~= 4.3 nanotoken) and MIN_VOTE_WEIGHT (2^16)
+    ///      are calibrated for 18-decimal-normalized values. Feeding lower-precision inputs
+    ///      (e.g., raw 6-decimal USDC) would cause the step to silently swallow entire contributions.
+    uint8 internal constant INPUT_DECIMALS = 18;
 
     /// @notice Storage slot for ProperQF storage (ERC-7201 namespaced storage)
     /// @dev https://eips.ethereum.org/EIPS/eip-7201
     bytes32 private constant STORAGE_SLOT =
         bytes32(uint256(keccak256(abi.encode(uint256(keccak256(bytes("proper.qf.storage"))) - 1))) & ~uint256(0xff));
 
-    /// @notice Per-project aggregated sums
+    /// @notice Per-project aggregated sums (public return type, decoded)
     struct Project {
-        /// @notice Sum of contributions for this project (asset base units)
+        /// @notice Sum of contributions for this project (asset base units, lossy: floored to CONTRIBUTIONS_STEP)
         uint256 sumContributions;
         /// @notice Sum of square roots of all contributions (dimensionless)
         uint256 sumSquareRoots;
     }
 
+    /// @notice Packed per-project storage: 128 + 128 = 256 bits = 1 slot
+    struct PackedProject {
+        /// @notice Sum of contributions, quantized: stored = value >> 32
+        uint128 sumContributions;
+        /// @notice Sum of square roots, stored without quantization (ceiling matches squaring constraint)
+        uint128 sumSquareRoots;
+    }
+
     /// @notice Main storage struct containing all mutable state for ProperQF
     struct ProperQFStorage {
-        /// @notice Mapping of project IDs to project data
-        mapping(uint256 => Project) projects;
+        /// @notice Mapping of project IDs to packed project data (1 slot each)
+        mapping(uint256 => PackedProject) projects;
         /// @notice Numerator for alpha (dimensionless; 1.0 = denominator)
         uint256 alphaNumerator;
         /// @notice Denominator for alpha (must be > 0)
@@ -62,8 +124,11 @@ abstract contract ProperQF {
     /// @param newDenominator New alpha denominator
     event AlphaUpdated(uint256 oldNumerator, uint256 oldDenominator, uint256 newNumerator, uint256 newDenominator);
 
-    /// @notice Constructor initializes default alpha values in storage
-    constructor() {
+    /// @notice Constructor validates input decimal precision and initializes default alpha values.
+    /// @param inputDecimals Must be 18. Forces inheritors to explicitly acknowledge the
+    ///        decimal precision that CONTRIBUTIONS_SCHEME and MIN_VOTE_WEIGHT are calibrated for.
+    constructor(uint8 inputDecimals) {
+        if (inputDecimals != INPUT_DECIMALS) revert UnsupportedInputDecimals(inputDecimals, INPUT_DECIMALS);
         ProperQFStorage storage s = _getProperQFStorage();
         s.alphaNumerator = 10000; // Default alpha = 1.0 (10000/10000)
         s.alphaDenominator = 10000;
@@ -78,10 +143,11 @@ abstract contract ProperQF {
         }
     }
 
-    /// @notice Returns project aggregated sums
+    /// @notice Returns project aggregated sums (decoded from packed storage)
     /// @param projectId ID of the project to query
     function projects(uint256 projectId) public view returns (Project memory) {
-        return _getProperQFStorage().projects[projectId];
+        (uint256 sumC, uint256 sumSR) = _readProject(projectId);
+        return Project({ sumContributions: sumC, sumSquareRoots: sumSR });
     }
 
     /// @notice Returns alpha numerator
@@ -136,35 +202,34 @@ abstract contract ProperQF {
     }
 
     /**
-     * @notice Process vote without validation - for trusted callers who have already validated
-     * @dev Skips input validation for gas optimization when caller guarantees correctness
+     * @notice Process vote without full validation - only enforces the quantization minimum.
+     * @dev Skips sqrt-tolerance checks for gas optimization when caller guarantees correctness.
+     *      Enforces contribution >= CONTRIBUTIONS_SCHEME.stepSize() to prevent silent zeroing
+     *      of per-project sumContributions due to floor quantization.
+     *      Delta update pattern ensures totalLinearSum stays exact despite lossy per-project storage.
      * @param projectId ID of project to update
-     * @param contribution Contribution amount (asset base units)
+     * @param contribution Contribution amount (must be >= CONTRIBUTIONS_SCHEME.stepSize())
      * @param voteWeight Vote weight (dimensionless; sqrt of contribution)
      */
     function _processVoteUnchecked(uint256 projectId, uint256 contribution, uint256 voteWeight) internal {
+        CONTRIBUTIONS_SCHEME.requireMinStep(contribution);
+
         ProperQFStorage storage s = _getProperQFStorage();
-        Project memory project = s.projects[projectId];
+        (uint256 oldSumContributions, uint256 oldSumSquareRoots) = _readProject(projectId);
 
-        uint256 newSumSquareRoots = project.sumSquareRoots + voteWeight;
-        uint256 newSumContributions = project.sumContributions + contribution;
+        uint256 newSumSquareRoots = oldSumSquareRoots + voteWeight;
+        uint256 newSumContributions = oldSumContributions + contribution;
 
-        uint256 oldQuadraticFunding = project.sumSquareRoots * project.sumSquareRoots;
+        uint256 oldQuadraticFunding = oldSumSquareRoots * oldSumSquareRoots;
         uint256 newQuadraticFunding = newSumSquareRoots * newSumSquareRoots;
 
         if (s.totalQuadraticSum < oldQuadraticFunding) revert QuadraticSumUnderflow();
-        if (s.totalLinearSum < project.sumContributions) revert LinearSumUnderflow();
+        if (s.totalLinearSum < oldSumContributions) revert LinearSumUnderflow();
 
-        uint256 newTotalQuadraticSum = s.totalQuadraticSum - oldQuadraticFunding + newQuadraticFunding;
-        uint256 newTotalLinearSum = s.totalLinearSum - project.sumContributions + newSumContributions;
+        s.totalQuadraticSum = s.totalQuadraticSum - oldQuadraticFunding + newQuadraticFunding;
+        s.totalLinearSum = s.totalLinearSum - oldSumContributions + newSumContributions;
 
-        s.totalQuadraticSum = newTotalQuadraticSum;
-        s.totalLinearSum = newTotalLinearSum;
-
-        project.sumSquareRoots = newSumSquareRoots;
-        project.sumContributions = newSumContributions;
-
-        s.projects[projectId] = project;
+        _writeProject(projectId, newSumContributions, newSumSquareRoots);
 
         s.totalFunding = _calculateWeightedTotalFunding();
     }
@@ -201,16 +266,35 @@ abstract contract ProperQF {
         returns (uint256 sumContributions, uint256 sumSquareRoots, uint256 quadraticFunding, uint256 linearFunding)
     {
         ProperQFStorage storage s = _getProperQFStorage();
-        Project storage project = s.projects[projectId];
+        (uint256 sumC, uint256 sumSR) = _readProject(projectId);
 
-        uint256 rawQuadraticFunding = project.sumSquareRoots * project.sumSquareRoots;
+        uint256 rawQuadraticFunding = sumSR * sumSR;
 
         return (
-            project.sumContributions,
-            project.sumSquareRoots,
+            sumC,
+            sumSR,
             (rawQuadraticFunding * s.alphaNumerator) / s.alphaDenominator,
-            (project.sumContributions * (s.alphaDenominator - s.alphaNumerator)) / s.alphaDenominator
+            (sumC * (s.alphaDenominator - s.alphaNumerator)) / s.alphaDenominator
         );
+    }
+
+    // ── Pack/unpack helpers ──────────────────────────────────────────────
+
+    /// @notice Decode packed project storage into full-width uint256 values
+    function _readProject(uint256 projectId) internal view returns (uint256 sumContributions, uint256 sumSquareRoots) {
+        PackedProject storage packed = _getProperQFStorage().projects[projectId];
+        sumContributions = CONTRIBUTIONS_SCHEME.decode(uint256(packed.sumContributions));
+        sumSquareRoots = uint256(packed.sumSquareRoots);
+    }
+
+    /// @notice Encode and store full-width values into packed project storage
+    /// @dev sumContributions: reverts with Overflow(value, max) if it exceeds CONTRIBUTIONS_SCHEME.max().
+    ///      sumSquareRoots: reverts via Solidity 0.8 checked downcast if it exceeds type(uint128).max.
+    function _writeProject(uint256 projectId, uint256 sumContributions, uint256 sumSquareRoots) internal {
+        _getProperQFStorage().projects[projectId] = PackedProject({
+            sumContributions: uint128(CONTRIBUTIONS_SCHEME.encode(sumContributions)),
+            sumSquareRoots: uint128(sumSquareRoots)
+        });
     }
 
     /**

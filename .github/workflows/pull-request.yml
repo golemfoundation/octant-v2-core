@@ -282,6 +282,7 @@ jobs:
     env:
       PYTHONPATH: /home/user/.local/lib/python3.10/site-packages
       XDG_CACHE_HOME: /home/user/.cache
+      COLUMNS: "200"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -296,5 +297,5 @@ jobs:
         run: kontrol build
 
       - name: Kontrol Prove
-        run: kontrol prove --workers 4
+        run: kontrol prove --workers 8
         timeout-minutes: 240

@@ -4,7 +4,7 @@ pragma solidity ^0.8.0;
 import { ProperQF } from "src/mechanisms/voting-strategy/ProperQF.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
-contract HarnessProperQF is ProperQF {
+contract HarnessProperQF is ProperQF(18) {
     // Custom Errors
     error AlphaMustBeLEQOne();
     error PercentageMustBeLEQ100();
@@ -78,10 +78,8 @@ contract HarnessProperQF is ProperQF {
         s.totalLinearSum = value;
     }
 
-    /// @notice Directly set project data for testing
+    /// @notice Directly set project data for testing (encodes into packed storage)
     function setProject(uint256 projectId, uint256 sumContributions, uint256 sumSquareRoots) public {
-        ProperQFStorage storage s = _getProperQFStorage();
-        s.projects[projectId].sumContributions = sumContributions;
-        s.projects[projectId].sumSquareRoots = sumSquareRoots;
+        _writeProject(projectId, sumContributions, sumSquareRoots);
     }
 }

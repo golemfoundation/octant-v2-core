@@ -15,6 +15,8 @@ contract QuadraticVotingTimelockDebugTest is Test {
     ERC20Mock token;
     QuadraticVotingMechanism mechanism;
 
+    uint256 constant W = 65536;
+
     address alice = address(0x1);
     address charlie = address(0x3);
 
@@ -63,7 +65,7 @@ contract QuadraticVotingTimelockDebugTest is Test {
 
         vm.warp(votingStartTime + 1);
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 31, charlie); // 31^2 = 961 > 500 quorum
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 31 * W, charlie); // (31*W)^2 survives shift-32 quantization
 
         vm.warp(votingEndTime + 1);
         (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));

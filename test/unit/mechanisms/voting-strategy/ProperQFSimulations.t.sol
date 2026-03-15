@@ -9,6 +9,9 @@ import { console2 as console } from "forge-std/console2.sol";
 contract ProperQFSimulationTest is Test {
     HarnessProperQF public qf;
 
+    /// @dev Quantization step for sumContributions (lossy readback tolerance)
+    uint256 constant STEP = uint256(1) << 32;
+
     function setUp() public {
         qf = new HarnessProperQF();
     }
@@ -92,9 +95,11 @@ contract ProperQFSimulationTest is Test {
                 expectedSqrtSum += qf.exposed_sqrt(voters[j].contributions[i]);
             }
 
-            assertEq(
+            // Per-project sumContributions is lossy: tolerance = numVoters * STEP
+            assertApproxEqAbs(
                 results[i][0],
                 expectedContributions,
+                numVoters * STEP,
                 string.concat("Project ", vm.toString(i), " total contributions mismatch")
             );
             assertEq(results[i][1], expectedSqrtSum, string.concat("Project ", vm.toString(i), " sqrt sum mismatch"));
@@ -186,9 +191,11 @@ contract ProperQFSimulationTest is Test {
         // Verify that quadratic portion is 60% of what it was
         assertEq(newQuadratic, (initialQuadratic * 6000) / 10000, "Quadratic funding should be 60% of original");
 
-        // Linear portion should now be 40% of the contribution (was 0% when alpha=1.0)
-        // With alpha=0.6, linear funding = (1-α) × contribution = 0.4 × contribution
-        uint256 expectedLinear = (contribution * 4000) / 10000; // 40% of contribution
+        // Linear portion should now be 40% of the decoded contribution (was 0% when alpha=1.0)
+        // With alpha=0.6, linear funding = (1-α) × decoded_sumC = 0.4 × decoded_sumC
+        // Use the actual decoded sumC from getTally since it is lossy
+        (uint256 decodedSumC, , , ) = qf.getTally(projectId);
+        uint256 expectedLinear = (decodedSumC * 4000) / 10000;
         assertEq(newLinear, expectedLinear, "Linear funding should be 40% of contribution when alpha=0.6");
     }
 
@@ -234,14 +241,14 @@ contract ProperQFSimulationTest is Test {
 
         // Calculate expected totals from individual project results
         uint256 expectedQuadraticSum = 0;
-        uint256 expectedLinearSum = 0;
+        uint256 decodedLinearSum = 0;
         uint256 expectedTotalFunding = 0;
 
         for (uint256 i = 0; i < numProjects; i++) {
             // For each project, get the square root sum and calculate quadratic funding
             uint256 sqrtSum = results[i][1];
             expectedQuadraticSum += sqrtSum * sqrtSum;
-            expectedLinearSum += results[i][0];
+            decodedLinearSum += results[i][0]; // decoded (lossy) per-project values
             // With alpha = 1.0, totalFunding = quadraticSum only
             expectedTotalFunding += sqrtSum * sqrtSum;
         }
@@ -251,9 +258,16 @@ contract ProperQFSimulationTest is Test {
         uint256 actualLinearSum = qf.totalLinearSum();
         uint256 actualTotalFunding = qf.totalFunding();
 
-        // Verify totals match
+        // Quadratic totals are exact (computed from lossless sumSquareRoots)
         assertEq(actualQuadraticSum, expectedQuadraticSum, "Total quadratic sum mismatch");
-        assertEq(actualLinearSum, expectedLinearSum, "Total linear sum mismatch");
+        // totalLinearSum is exact (delta cancellation), but decoded per-project sums are lossy.
+        // The difference is bounded by numVoters * numProjects * STEP.
+        assertApproxEqAbs(
+            actualLinearSum,
+            decodedLinearSum,
+            numVoters * numProjects * STEP,
+            "Total linear sum mismatch"
+        );
         assertEq(actualTotalFunding, expectedTotalFunding, "Total funding mismatch");
     }
 
@@ -356,11 +370,16 @@ contract ProperQFSimulationTest is Test {
         uint256 expectedQuadraticPerProject = expectedSqrtSumPerProject * expectedSqrtSumPerProject;
 
         for (uint256 i = 0; i < numProjects; i++) {
-            assertEq(results[i][0], expectedContributionPerProject, "Uniform contributions mismatch");
+            assertApproxEqAbs(
+                results[i][0],
+                expectedContributionPerProject,
+                numVoters * STEP,
+                "Uniform contributions mismatch"
+            );
             assertEq(results[i][2], expectedQuadraticPerProject, "Uniform quadratic funding mismatch");
         }
 
-        // Verify global totals
+        // Verify global totals (exact: delta cancellation)
         assertEq(qf.totalQuadraticSum(), expectedQuadraticPerProject * numProjects, "Total quadratic sum mismatch");
         assertEq(qf.totalLinearSum(), expectedContributionPerProject * numProjects, "Total linear sum mismatch");
     }
@@ -382,7 +401,12 @@ contract ProperQFSimulationTest is Test {
         uint256 expectedQuadraticPerProject = expectedSqrtSumPerProject * expectedSqrtSumPerProject;
 
         for (uint256 i = 0; i < numProjects; i++) {
-            assertEq(results[i][0], expectedContributionPerProject, " contributions per project mismatch");
+            assertApproxEqAbs(
+                results[i][0],
+                expectedContributionPerProject,
+                numVoters * STEP,
+                " contributions per project mismatch"
+            );
             assertEq(
                 results[i][2],
                 expectedQuadraticPerProject,
@@ -390,7 +414,7 @@ contract ProperQFSimulationTest is Test {
             );
         }
 
-        // Verify global totals
+        // Verify global totals (exact: delta cancellation)
         assertEq(qf.totalQuadraticSum(), expectedQuadraticPerProject * numProjects, "Total quadratic sum mismatch");
         assertEq(qf.totalLinearSum(), expectedContributionPerProject * numProjects, "Total linear sum mismatch");
     }
@@ -460,6 +484,7 @@ contract ProperQFSimulationTest is Test {
         uint256 expectedQuadraticPerProject = expectedSqrtSumPerProject * expectedSqrtSumPerProject;
 
         for (uint256 i = 0; i < numProjects; i++) {
+            // projectLinearSums tracks running totals before encoding, so they are exact
             assertEq(
                 projectLinearSums[i],
                 expectedContributionPerProject,

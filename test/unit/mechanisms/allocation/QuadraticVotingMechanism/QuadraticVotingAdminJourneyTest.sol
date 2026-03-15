@@ -23,6 +23,7 @@ contract QuadraticVotingAdminJourneyTest is Test {
     address dave = address(0x4);
     address newOwner = address(0xa);
 
+    uint256 constant W = 65536; // weight multiplier so weight^2 >= 2^32 (shift=32 quantization)
     uint256 constant LARGE_DEPOSIT = 1000 ether;
     uint256 constant MEDIUM_DEPOSIT = 500 ether;
     uint256 constant QUORUM_REQUIREMENT = 500; // Adjusted for quadratic funding
@@ -81,7 +82,7 @@ contract QuadraticVotingAdminJourneyTest is Test {
             symbol: "AJTEST",
             votingDelay: VOTING_DELAY,
             votingPeriod: VOTING_PERIOD,
-            quorumShares: QUORUM_REQUIREMENT,
+            quorumShares: QUORUM_REQUIREMENT * W * W,
             timelockDelay: TIMELOCK_DELAY,
             gracePeriod: 7 days,
             owner: address(0)
@@ -108,7 +109,7 @@ contract QuadraticVotingAdminJourneyTest is Test {
         assertEq(address(_tokenized(address(mechanism)).asset()), address(token));
         assertEq(_tokenized(address(mechanism)).votingDelay(), VOTING_DELAY);
         assertEq(_tokenized(address(mechanism)).votingPeriod(), VOTING_PERIOD);
-        assertEq(_tokenized(address(mechanism)).quorumShares(), QUORUM_REQUIREMENT);
+        assertEq(_tokenized(address(mechanism)).quorumShares(), QUORUM_REQUIREMENT * W * W);
         assertEq(_tokenized(address(mechanism)).timelockDelay(), TIMELOCK_DELAY);
 
         // Verify owner context (deployer becomes owner)
@@ -152,19 +153,19 @@ contract QuadraticVotingAdminJourneyTest is Test {
         // Admin monitors voting progress - advance to voting period
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
-        _castVote(alice, pid1, 22, charlie);
-        _castVote(bob, pid1, 8, charlie);
-        _castVote(alice, pid2, 18, dave);
-        _castVote(bob, pid2, 18, dave);
+        _castVote(alice, pid1, 22 * W, charlie);
+        _castVote(bob, pid1, 8 * W, charlie);
+        _castVote(alice, pid2, 18 * W, dave);
+        _castVote(bob, pid2, 18 * W, dave);
 
         // Admin checks real-time vote tallies using getTally() from ProperQF
         (, , uint256 p1QuadraticFunding, uint256 p1LinearFunding) = mechanism.getTally(pid1);
         uint256 p1For = p1QuadraticFunding + p1LinearFunding;
-        assertEq(p1For, 724); // QuadraticFunding: (22+8)² × 0.5 + linear portion = 724
+        assertEq(p1For, 724 * W * W); // QuadraticFunding: (22+8)² × 0.5 + linear portion = 724, scaled by W^2
 
         (, , uint256 p2QuadraticFunding, uint256 p2LinearFunding) = mechanism.getTally(pid2);
         uint256 p2For = p2QuadraticFunding + p2LinearFunding;
-        assertEq(p2For, 972); // QuadraticFunding: (18+18)² × 0.5 + linear portion = 972
+        assertEq(p2For, 972 * W * W); // QuadraticFunding: (18+18)² × 0.5 + linear portion = 972, scaled by W^2
 
         // Admin monitors proposal states during voting
         assertEq(
@@ -186,7 +187,7 @@ contract QuadraticVotingAdminJourneyTest is Test {
         // Advance to voting period
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
-        _castVote(alice, pid, 20, charlie);
+        _castVote(alice, pid, 20 * W, charlie);
 
         // Cannot finalize before voting period ends
         vm.expectRevert();
@@ -217,11 +218,11 @@ contract QuadraticVotingAdminJourneyTest is Test {
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
         // Create outcomes: one success, one failure
-        _castVote(alice, pidSuccessful, 25, charlie);
-        _castVote(bob, pidSuccessful, 15, charlie);
+        _castVote(alice, pidSuccessful, 25 * W, charlie);
+        _castVote(bob, pidSuccessful, 15 * W, charlie);
 
         // Failed proposal gets insufficient votes
-        _castVote(bob, pidFailed, 8, dave);
+        _castVote(bob, pidFailed, 8 * W, dave);
 
         // Advance past voting period
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
@@ -317,7 +318,7 @@ contract QuadraticVotingAdminJourneyTest is Test {
         // Advance to voting period
         vm.warp(block.timestamp + VOTING_DELAY + 1);
 
-        _castVote(alice, pid, 20, charlie);
+        _castVote(alice, pid, 20 * W, charlie);
 
         // Emergency pause during voting
         (bool success, ) = address(mechanism).call(abi.encodeWithSignature("pause()"));
@@ -326,14 +327,14 @@ contract QuadraticVotingAdminJourneyTest is Test {
         // All operations blocked
         vm.expectRevert(TokenizedAllocationMechanism.PausedError.selector);
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 8, charlie);
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 8 * W, charlie);
 
         // Resume operations
         (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("unpause()"));
         require(success2, "Unpause failed");
 
         // Operations work again - use bob since alice already voted
-        _castVote(bob, pid, 8, charlie);
+        _castVote(bob, pid, 8 * W, charlie);
 
         // Ownership transfer during crisis
         address emergencyAdmin = newOwner;

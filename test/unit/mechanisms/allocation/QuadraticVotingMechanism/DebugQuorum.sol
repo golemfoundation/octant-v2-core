@@ -15,6 +15,7 @@ contract DebugQuorum is Test {
     ERC20Mock token;
     QuadraticVotingMechanism mechanism;
 
+    uint256 constant W = 65536; // weight multiplier so weight^2 >= 2^32 (shift=32 quantization)
     address alice = address(0x1);
     address charlie = address(0x3);
 
@@ -68,11 +69,11 @@ contract DebugQuorum is Test {
         // Try different vote weights to find minimum for quorum
         vm.warp(votingStartTime + 1);
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 31, charlie); // 31^2 = 961 > 200 ether quorum
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 31 * W, charlie); // (31*W)^2 = 961*W^2
 
         console.log("=== AFTER VOTING ===");
-        console.log("Vote weight used: 31");
-        console.log("Quadratic cost: 961");
+        console.log("Vote weight used: 31*W");
+        console.log("Quadratic cost: 961*W*W");
 
         // Get funding breakdown
         uint256 sumContributions;
