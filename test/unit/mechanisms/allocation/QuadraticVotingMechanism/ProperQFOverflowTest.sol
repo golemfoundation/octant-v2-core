@@ -156,7 +156,7 @@ contract ProperQFOverflowTest is Test {
     }
 
     /// @notice Sub-step contribution reverts with BelowMinStep from UintQuantizationLib
-    function testSubStepEncodesToZero() public {
+    function testSubStepRevertsWithBelowMinStep() public {
         uint256 projectId = 1;
         // Any value < STEP is rejected by the minimum contribution check
         uint256 tinyContribution = STEP - 1;
