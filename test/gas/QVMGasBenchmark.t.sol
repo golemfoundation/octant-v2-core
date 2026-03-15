@@ -24,7 +24,8 @@ contract QVMGasBenchmark is Test {
         qf = new HarnessProperQF();
     }
 
-    // ── _processVoteUnchecked (the hot path) ─────────────────────────────
+    // ── Per-operation micro-benchmarks ───────────────────────────────────
+    // These isolate individual operations for diagnosing regressions.
 
     /// @notice Gas cost of processVoteUnchecked on a cold project (first vote)
     function test_gas_processVoteUnchecked_cold() public {
@@ -33,13 +34,9 @@ contract QVMGasBenchmark is Test {
 
     /// @notice Gas cost of processVoteUnchecked on a warm project (second vote)
     function test_gas_processVoteUnchecked_warm() public {
-        // Warm up project 1
         qf.exposed_processVoteUnchecked(1, ALIGNED_CONTRIBUTION, ALIGNED_WEIGHT);
-        // Measure second vote (warm SLOAD + SSTORE)
         qf.exposed_processVoteUnchecked(1, ALIGNED_CONTRIBUTION, ALIGNED_WEIGHT);
     }
-
-    // ── _processVote (with sqrt validation) ──────────────────────────────
 
     /// @notice Gas cost of processVote on a cold project
     function test_gas_processVote_cold() public {
@@ -52,20 +49,10 @@ contract QVMGasBenchmark is Test {
         qf.exposed_processVote(1, ALIGNED_CONTRIBUTION, ALIGNED_WEIGHT);
     }
 
-    // ── Read operations ──────────────────────────────────────────────────
-
     /// @notice Gas cost of reading project tally (packed storage decode)
     function test_gas_getTally() public {
-        // Write data first
         qf.exposed_processVoteUnchecked(1, ALIGNED_CONTRIBUTION, ALIGNED_WEIGHT);
-        // Measure read
         qf.getTally(1);
-    }
-
-    /// @notice Gas cost of reading projects() view (packed storage decode)
-    function test_gas_projects() public {
-        qf.exposed_processVoteUnchecked(1, ALIGNED_CONTRIBUTION, ALIGNED_WEIGHT);
-        qf.projects(1);
     }
 
     /// @notice Gas cost of reading totalFunding
@@ -74,31 +61,82 @@ contract QVMGasBenchmark is Test {
         qf.totalFunding();
     }
 
-    // ── Alpha operations ─────────────────────────────────────────────────
-
     /// @notice Gas cost of setAlpha
     function test_gas_setAlpha() public {
         qf.exposed_setAlpha(6000, 10000);
     }
 
-    // ── Multi-project scenario ───────────────────────────────────────────
+    // ── Lifetime scenario: 1000-project epoch ───────────────────────────
+    //
+    // Models a mature Octant epoch with 1000 projects, 200 voters, ~3950 total votes.
+    //
+    // Popularity distribution:
+    //   50 popular projects:  20 votes each  (1000 votes)
+    //   200 mid-tier projects: 8 votes each  (1600 votes)
+    //   300 active projects:   3 votes each  ( 900 votes)
+    //   450 tail projects:     1 vote each   ( 450 votes)
+    //
+    // Storage pattern:
+    //   1000 cold SSTOREs (first vote on each project)
+    //   2950 warm SSTOREs (subsequent votes)
+    //   1000 SLOADs       (tally sweep at epoch end)
+    //
+    // This is the headline number for storage layer cost at production scale.
 
-    /// @notice Gas cost of voting across 5 different projects (all cold)
-    function test_gas_vote_5_projects_cold() public {
-        for (uint256 i = 1; i <= 5; i++) {
+    /// @notice Full epoch lifecycle: seed + accumulate + tally for 1000 projects
+    function test_gas_epoch_1000_projects() public {
+        // Phase 1: Seed - first vote on all 1000 projects (all cold SSTOREs)
+        for (uint256 i = 1; i <= 1000; i++) {
+            qf.exposed_processVoteUnchecked(i, ALIGNED_CONTRIBUTION, ALIGNED_WEIGHT);
+        }
+
+        // Phase 2: Accumulate - subsequent votes with realistic popularity distribution
+
+        // Popular tier: 50 projects get 19 more votes each
+        for (uint256 i = 1; i <= 50; i++) {
+            for (uint256 v = 0; v < 19; v++) {
+                qf.exposed_processVoteUnchecked(i, ALIGNED_CONTRIBUTION, ALIGNED_WEIGHT);
+            }
+        }
+
+        // Mid-tier: 200 projects get 7 more votes each
+        for (uint256 i = 51; i <= 250; i++) {
+            for (uint256 v = 0; v < 7; v++) {
+                qf.exposed_processVoteUnchecked(i, ALIGNED_CONTRIBUTION, ALIGNED_WEIGHT);
+            }
+        }
+
+        // Active tier: 300 projects get 2 more votes each
+        for (uint256 i = 251; i <= 550; i++) {
+            for (uint256 v = 0; v < 2; v++) {
+                qf.exposed_processVoteUnchecked(i, ALIGNED_CONTRIBUTION, ALIGNED_WEIGHT);
+            }
+        }
+
+        // Tail tier: 450 projects stay at 1 vote (no more writes)
+
+        // Phase 3: Tally - read all 1000 project tallies for funding distribution
+        for (uint256 i = 1; i <= 1000; i++) {
+            qf.getTally(i);
+        }
+    }
+
+    /// @notice Seed phase only: first vote on all 1000 projects (isolates cold SSTORE cost)
+    function test_gas_epoch_seed_1000() public {
+        for (uint256 i = 1; i <= 1000; i++) {
             qf.exposed_processVoteUnchecked(i, ALIGNED_CONTRIBUTION, ALIGNED_WEIGHT);
         }
     }
 
-    /// @notice Gas cost of voting across 5 different projects (all warm)
-    function test_gas_vote_5_projects_warm() public {
-        // Warm all 5
-        for (uint256 i = 1; i <= 5; i++) {
+    /// @notice Tally sweep: read all 1000 project tallies (isolates packed SLOAD cost)
+    function test_gas_epoch_tally_1000() public {
+        // Seed first so there's data to read
+        for (uint256 i = 1; i <= 1000; i++) {
             qf.exposed_processVoteUnchecked(i, ALIGNED_CONTRIBUTION, ALIGNED_WEIGHT);
         }
-        // Measure warm votes
-        for (uint256 i = 1; i <= 5; i++) {
-            qf.exposed_processVoteUnchecked(i, ALIGNED_CONTRIBUTION, ALIGNED_WEIGHT);
+        // Measure tally reads
+        for (uint256 i = 1; i <= 1000; i++) {
+            qf.getTally(i);
         }
     }
 }
