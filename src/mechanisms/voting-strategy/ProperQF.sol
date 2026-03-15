@@ -26,8 +26,10 @@ import { Quant, UintQuantizationLib as QuantLib } from "uint-quantization-lib/sr
  *        18-decimal-normalized voting-power space (see QuadraticVotingMechanism
  *        ._normalizeToDecimals). Since voting power is always normalized to 18 decimals
  *        regardless of the underlying asset, the step size of ~4.3 nanotoken applies
- *        uniformly. Minimum weight = sqrt(step) = 2^16 = 65536, enforced by the
+ *        uniformly. Minimum contribution >= stepSize (2^32), enforced by the
  *        BelowMinStep guard (from UintQuantizationLib) in _processVoteUnchecked.
+ *        Minimum weight = sqrt(step) = 2^16 = 65536, enforced upstream by
+ *        QuadraticVotingMechanism (weight >= MIN_VOTE_WEIGHT, weight % MIN_VOTE_WEIGHT == 0).
  *
  *        Per-project sumContributions readback is lossy (floored to step boundary).
  *        Global totalLinearSum stays exact: the delta update pattern in
@@ -180,6 +182,14 @@ abstract contract ProperQF {
      * @dev Implements incremental update quadratic funding algorithm with validations:
      *      - contribution > 0 (asset base units)
      *      - voteWeight > 0 and voteWeight^2 == contribution within 10% tolerance
+     *
+     *      WARNING: This function does NOT enforce weight alignment to MIN_VOTE_WEIGHT.
+     *      Per-project sumContributions readback is lossy (floored to CONTRIBUTIONS_STEP)
+     *      unless the caller guarantees contribution is step-aligned (i.e., contribution %
+     *      CONTRIBUTIONS_SCHEME.stepSize() == 0). In production, QuadraticVotingMechanism
+     *      enforces alignment via weight % MIN_VOTE_WEIGHT == 0 before calling
+     *      _processVoteUnchecked. Direct callers of _processVote must be aware of lossy
+     *      per-project readback if alignment is not enforced externally.
      * @param projectId ID of project to update
      * @param contribution Contribution to add in asset base units
      * @param voteWeight Square root of contribution (dimensionless)

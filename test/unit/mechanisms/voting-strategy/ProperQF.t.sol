@@ -91,7 +91,9 @@ contract ProperQFTest is Test {
     }
 
     function testFuzz_process_vote(uint256 contribution) public {
-        // Bound contribution to prevent overflow; upper bound is the packed field max
+        // Conservative step-aligned upper bound: sqrt(contribMax) ~= 2^64, keeping
+        // square roots within uint128 and squarings within uint256 during vote processing.
+        // Note: the actual scheme max is (uint128.max << 32), which is much larger.
         uint256 contribMax = uint256(type(uint96).max) << 32;
         contribution = bound(contribution, STEP, contribMax);
 

@@ -16,6 +16,7 @@ import { IAddressSet } from "src/utils/IAddressSet.sol";
 import { ProperQF } from "src/mechanisms/voting-strategy/ProperQF.sol";
 import { HarnessProperQF } from "test/unit/mechanisms/harness/HarnessProperQF.sol";
 import { InBlockset } from "src/errors.sol";
+import { ProperQFConcrete } from "verification/kontrol/ProperQFProofHarness.k.sol";
 
 /// @title Mock ERC20 token with configurable decimals for branch testing
 contract BranchTestMockToken is ERC20 {
@@ -270,6 +271,66 @@ contract MechanismBranchCoverageTest is Test {
         vm.prank(alice);
         vm.expectRevert(QuadraticVotingMechanism.InsufficientVotingPowerForQuadraticCost.selector);
         _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 200 * W, recipient1);
+    }
+
+    // ===== QuadraticVotingMechanism: WeightBelowMinimum =====
+
+    function test_castVote_weightBelowMinimum_reverts() public {
+        _signupUser(alice, DEPOSIT);
+
+        vm.prank(alice);
+        uint256 pid = _tam().propose(recipient1, "Test proposal");
+
+        vm.warp(block.timestamp + VOTING_DELAY + 1);
+
+        // Weight = 1 which is below MIN_VOTE_WEIGHT (65536)
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(QuadraticVotingMechanism.WeightBelowMinimum.selector, 1, W));
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 1, recipient1);
+    }
+
+    // ===== QuadraticVotingMechanism: WeightNotAligned =====
+
+    function test_castVote_weightNotAligned_reverts() public {
+        _signupUser(alice, DEPOSIT);
+
+        vm.prank(alice);
+        uint256 pid = _tam().propose(recipient1, "Test proposal");
+
+        vm.warp(block.timestamp + VOTING_DELAY + 1);
+
+        // Weight = W + 1 (65537): above minimum but not aligned to MIN_VOTE_WEIGHT
+        vm.prank(alice);
+        vm.expectRevert(abi.encodeWithSelector(QuadraticVotingMechanism.WeightNotAligned.selector, W + 1, W));
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, W + 1, recipient1);
+    }
+
+    // ===== QuadraticVotingMechanism: WeightAtMinimum succeeds =====
+
+    function test_castVote_weightAtMinimum_succeeds() public {
+        _signupUser(alice, DEPOSIT);
+
+        vm.prank(alice);
+        uint256 pid = _tam().propose(recipient1, "Test proposal");
+
+        vm.warp(block.timestamp + VOTING_DELAY + 1);
+
+        // Weight = W (65536): exactly at minimum, properly aligned
+        vm.prank(alice);
+        _tam().castVote(pid, TokenizedAllocationMechanism.VoteType.For, W, recipient1);
+
+        assertTrue(mechanism.hasVoted(pid, alice), "Vote should be recorded");
+    }
+
+    // ===== Drift guard: QVM.MIN_VOTE_WEIGHT == ProperQFConcrete.PROD_MIN_VOTE_WEIGHT =====
+
+    function test_minVoteWeight_matchesKontrolHarness() public {
+        ProperQFConcrete prod = new ProperQFConcrete();
+        assertEq(
+            mechanism.MIN_VOTE_WEIGHT(),
+            prod.PROD_MIN_VOTE_WEIGHT(),
+            "QVM.MIN_VOTE_WEIGHT must match Kontrol harness PROD_MIN_VOTE_WEIGHT"
+        );
     }
 
     // ===== QuadraticVotingMechanism: ZeroAddressCannotPropose =====
