@@ -395,12 +395,12 @@ interface IMultistrategyVault {
     // MaxWithdraw functions with different parameter combinations to match Vyper
     function maxWithdraw(address owner) external view returns (uint256);
     function maxWithdraw(address owner, uint256 maxLoss) external view returns (uint256);
-    function maxWithdraw(address owner, uint256 maxLoss, address[] memory strategies) external view returns (uint256);
+    function maxWithdraw(address owner, uint256 maxLoss, address[] calldata strategies) external view returns (uint256);
 
     // MaxRedeem functions with different parameter combinations to match Vyper
     function maxRedeem(address owner) external view returns (uint256);
     function maxRedeem(address owner, uint256 maxLoss) external view returns (uint256);
-    function maxRedeem(address owner, uint256 maxLoss, address[] memory strategies) external view returns (uint256);
+    function maxRedeem(address owner, uint256 maxLoss, address[] calldata strategies) external view returns (uint256);
 
     function FACTORY() external view returns (address);
     function apiVersion() external pure returns (string memory);

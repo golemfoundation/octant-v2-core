@@ -57,8 +57,6 @@ contract Finding231Fix is Test {
 
         vm.expectEmit(false, false, false, true);
         emit IMultistrategyLockedVault.RageQuitCooldownPeriodChangeCancelled(newPeriod, proposedAt, cancelTime);
-        vm.expectEmit(false, false, false, true);
-        emit IMultistrategyLockedVault.PendingRageQuitCooldownPeriodChange(0, 0);
 
         vault.cancelRageQuitCooldownPeriodChange();
 

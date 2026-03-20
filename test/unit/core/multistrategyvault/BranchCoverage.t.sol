@@ -619,7 +619,7 @@ contract MultistrategyVaultBranchCoverageTest is Test {
         vault.update_debt(address(strategy), 5e18, 0);
 
         // No loss, so should return 0
-        uint256 loss = vault.assess_share_of_unrealised_losses(address(strategy), 5e18, 2e18);
+        uint256 loss = vault.assess_share_of_unrealised_losses(address(strategy), 2e18);
         assertEq(loss, 0);
     }
 
@@ -637,7 +637,7 @@ contract MultistrategyVaultBranchCoverageTest is Test {
 
         // assetsNeeded > currentDebt should revert
         vm.expectRevert(IMultistrategyVault.NotEnoughDebt.selector);
-        vault.assess_share_of_unrealised_losses(address(strategy), 5e18, 6e18);
+        vault.assess_share_of_unrealised_losses(address(strategy), 6e18);
     }
 
     // --- assess_share_of_unrealised_losses 2-param: revert when assetsNeeded > debt ---

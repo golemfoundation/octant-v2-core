@@ -1514,7 +1514,7 @@ contract MultistrategyVault is IMultistrategyVault {
         address receiver_,
         address owner_
     ) external virtual nonReentrant returns (uint256) {
-        address[] memory emptyArray = new address[](0);
+        address[] memory emptyArray = _emptyStrategies();
         uint256 shares = _convertToShares(assets_, Rounding.ROUND_UP);
         _redeem(msg.sender, receiver_, owner_, assets_, shares, 0, emptyArray);
         return shares;
@@ -1533,7 +1533,7 @@ contract MultistrategyVault is IMultistrategyVault {
         address receiver_,
         address owner_
     ) external virtual nonReentrant returns (uint256) {
-        address[] memory emptyArray = new address[](0);
+        address[] memory emptyArray = _emptyStrategies();
         uint256 assets = _convertToAssets(shares_, Rounding.ROUND_DOWN);
         return _redeem(msg.sender, receiver_, owner_, assets, shares_, 10_000, emptyArray);
     }
@@ -1760,7 +1760,7 @@ contract MultistrategyVault is IMultistrategyVault {
     function maxWithdraw(
         address owner_,
         uint256 maxLoss_,
-        address[] memory strategiesArray_
+        address[] calldata strategiesArray_
     ) external view virtual override returns (uint256) {
         return _max_withdraw(owner_, maxLoss_, strategiesArray_);
     }
@@ -1782,7 +1782,7 @@ contract MultistrategyVault is IMultistrategyVault {
     function maxRedeem(
         address owner_,
         uint256 maxLoss_,
-        address[] memory strategiesArray_
+        address[] calldata strategiesArray_
     ) external view virtual override returns (uint256) {
         return
             Math.min(
@@ -1800,7 +1800,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @return max Maximum withdrawable assets
      */
     function maxWithdraw(address owner_, uint256 maxLoss_) external view virtual returns (uint256) {
-        address[] memory emptyArray = new address[](0);
+        address[] memory emptyArray = _emptyStrategies();
         return _max_withdraw(owner_, maxLoss_, emptyArray);
     }
 
@@ -1811,7 +1811,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @return max Maximum withdrawable assets
      */
     function maxWithdraw(address owner_) external view virtual returns (uint256) {
-        address[] memory emptyArray = new address[](0);
+        address[] memory emptyArray = _emptyStrategies();
         return _max_withdraw(owner_, 0, emptyArray);
     }
 
@@ -1823,7 +1823,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @return max Maximum redeemable shares
      */
     function maxRedeem(address owner_, uint256 maxLoss_) external view virtual returns (uint256) {
-        address[] memory emptyArray = new address[](0);
+        address[] memory emptyArray = _emptyStrategies();
         return
             Math.min(
                 _convertToShares(_max_withdraw(owner_, maxLoss_, emptyArray), Rounding.ROUND_DOWN),
@@ -1838,7 +1838,7 @@ contract MultistrategyVault is IMultistrategyVault {
      * @return max Maximum redeemable shares
      */
     function maxRedeem(address owner_) external view virtual returns (uint256) {
-        address[] memory emptyArray = new address[](0);
+        address[] memory emptyArray = _emptyStrategies();
         return
             Math.min(
                 _convertToShares(_max_withdraw(owner_, MAX_BPS, emptyArray), Rounding.ROUND_DOWN),
@@ -2722,4 +2722,7 @@ contract MultistrategyVault is IMultistrategyVault {
         );
         require(success && (data.length == 0 || abi.decode(data, (bool))), TransferFailed());
     }
+
+    /// @dev Returns an empty address array without allocating via `new address[](0)`.
+    function _emptyStrategies() internal pure returns (address[] memory) {}
 }
