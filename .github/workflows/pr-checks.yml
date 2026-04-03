@@ -103,7 +103,7 @@ jobs:
     name: Test suite
     if: github.head_ref != 'main'
     timeout-minutes: 15
-    runs-on: ubuntu-latest
+    runs-on: general
     container:
       image: *node_extended_image
       credentials:
@@ -153,7 +153,7 @@ jobs:
     name: Code Coverage
     if: github.head_ref != 'main'
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    runs-on: general
     container:
       image: *node_extended_image
       credentials:

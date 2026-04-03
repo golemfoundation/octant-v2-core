@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       source:
-        description: 'Dev tag (e.g., 1.2.0-develop.5) or "main" for hotfix'
+        description: 'Dev tag (e.g., 1.2.0-develop.5) or "master" for hotfix'
         required: true
         type: string
 
@@ -14,7 +14,7 @@ concurrency:
 
 env:
   SERVICE_NAME: octant-v2-core
-  X-GITHUB_ENVIRONMENT: &GITHUB_ENVIRONMENT actions
+  X-GITHUB_ENVIRONMENT: &GITHUB_ENVIRONMENT production
   MASTER_BRANCH_NAME: master
 
 permissions:
