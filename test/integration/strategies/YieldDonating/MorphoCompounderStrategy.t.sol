@@ -462,7 +462,9 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
         }
     }
 
-    /// @notice Test that triggers "too much loss" by removing idle funds and mocking withdraw
+    /// @notice Test that triggers "too much loss" by removing idle funds and mocking `freeFunds`.
+    /// @dev Also locks in the redeem-only invariant: `_freeFunds` must reach the compounder
+    ///      via `redeem`, never via the amount-based `withdraw`.
     function testLossDoesNotTriggerTooMuchLossError() public {
         uint256 depositAmount = 100000e6;
         address morphoBlueVault = MorphoTestConfig.MORPHO_BLUE_VAULT;
@@ -492,6 +494,7 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
         airdrop(ERC20(_asset()), _compounderVault(), depositAmount / 10);
 
         vm.mockCall(_compounderVault(), abi.encodeWithSignature("freeFunds(uint256)"), "");
+        vm.expectCall(_compounderVault(), abi.encodeWithSelector(_INNER_WITHDRAW), 0);
 
         vm.startPrank(user);
         YieldDonatingTokenizedStrategy(address(strategy)).redeem(vaultShares - 2, user, user, 10_000);
@@ -501,4 +504,25 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
 
         assertEq(ERC20(_asset()).balanceOf(user), depositAmount / 10, "User should have received balance");
     }
+
+    /// @notice `_freeFunds` must redeem proportional inner shares, not call the
+    ///         amount-based inner `withdraw`.
+    function test_freeFunds_RedeemsProportionalShares() public {
+        // Arrange
+        uint256 depositAmount = 100_000e6;
+        airdrop(ERC20(_asset()), user, depositAmount);
+        vm.prank(user);
+        IERC4626(address(strategy)).deposit(depositAmount, user);
+
+        // Assert (registered before the act per cheatcode contract)
+        vm.expectCall(_compounderVault(), abi.encodeWithSelector(_INNER_WITHDRAW), 0);
+        vm.expectCall(_compounderVault(), abi.encodeWithSelector(_INNER_REDEEM), 1);
+
+        // Act
+        vm.prank(user);
+        IERC4626(address(strategy)).withdraw(depositAmount / 2, user, user);
+    }
+
+    bytes4 private constant _INNER_WITHDRAW = bytes4(keccak256("withdraw(uint256,address,address,uint256)"));
+    bytes4 private constant _INNER_REDEEM = bytes4(keccak256("redeem(uint256,address,address,uint256)"));
 }

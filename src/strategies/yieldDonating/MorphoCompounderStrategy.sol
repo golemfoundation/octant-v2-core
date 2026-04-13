@@ -5,6 +5,7 @@ import { BaseHealthCheck } from "src/strategies/periphery/BaseHealthCheck.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import { ITokenizedStrategy } from "src/core/interfaces/ITokenizedStrategy.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
  * @title MorphoCompounderStrategy
@@ -124,13 +125,38 @@ contract MorphoCompounderStrategy is BaseHealthCheck {
     }
 
     /**
-     * @dev Withdraws assets from Morpho compounder vault
-     * @param _amount Amount of assets to withdraw in asset base units
-     * @custom:security maxLoss set to 100% (10_000 BPS) to prevent revert cascades
-     *                  MultistrategyVault enforces actual loss limits via updateDebt
+     * @dev Redeems a proportional slice of vault shares to free `_amount`. Using the
+     *      strategy's stored deployed total as the denominator forces an unreported
+     *      underlying loss onto the exiter via `TokenizedStrategy._withdraw`'s maxLoss
+     *      path instead of letting them bypass it through an amount-based withdraw at
+     *      the post-loss PPS.
+     * @param _amount Amount of assets to attempt to free
+     * @custom:security maxLoss=10_000 BPS on the inner call mirrors prior semantics;
+     *                  the outer layer enforces the user-supplied loss cap
      */
     function _freeFunds(uint256 _amount) internal override {
-        ITokenizedStrategy(compounderVault).withdraw(_amount, address(this), address(this), 10_000);
+        ITokenizedStrategy vault = ITokenizedStrategy(compounderVault);
+        uint256 vaultShares = vault.balanceOf(address(this));
+        if (vaultShares == 0) return;
+
+        uint256 idleAssets = IERC20(asset).balanceOf(address(this));
+        uint256 storedTotal = TokenizedStrategy.totalAssets();
+        uint256 denom = storedTotal > idleAssets ? storedTotal - idleAssets : vault.maxWithdraw(address(this));
+        if (denom == 0) return;
+
+        uint256 sharesToRedeem = _amount >= denom
+            ? vaultShares
+            : Math.mulDiv(vaultShares, _amount, denom, Math.Rounding.Ceil);
+
+        if (sharesToRedeem == 0) return;
+
+        if (sharesToRedeem < vaultShares && vault.previewRedeem(sharesToRedeem) < _amount) {
+            unchecked {
+                sharesToRedeem++;
+            }
+        }
+
+        vault.redeem(sharesToRedeem, address(this), address(this), 10_000);
     }
 
     /**
