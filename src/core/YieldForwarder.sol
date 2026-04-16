@@ -2,6 +2,7 @@
 pragma solidity ^0.8.25;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @notice Minimal interface for strategy share redemption
@@ -83,6 +84,8 @@ interface IReportable {
  *           `setKeeper` for the new forwarder.
  */
 contract YieldForwarder is ReentrancyGuard {
+    using SafeERC20 for IERC20;
+
     // ============================================
     // ERRORS
     // ============================================
@@ -106,6 +109,12 @@ contract YieldForwarder is ReentrancyGuard {
     /// @param shares Amount of shares redeemed
     /// @param assets Amount of underlying assets forwarded
     event YieldForwarded(address indexed strategy, address indexed receiver, uint256 shares, uint256 assets);
+
+    /// @notice Emitted when an arbitrary token balance is forwarded to the receiver
+    /// @param token Address of the token whose balance was flushed
+    /// @param receiver Address that received the token balance
+    /// @param amount Amount of the token transferred
+    event TokenForwarded(address indexed token, address indexed receiver, uint256 amount);
 
     // ============================================
     // STATE
@@ -161,5 +170,32 @@ contract YieldForwarder is ReentrancyGuard {
         assets = IRedeemable(strategy).redeem(shares, receiver, address(this), maxLoss);
 
         emit YieldForwarded(strategy, receiver, shares, assets);
+    }
+
+    /**
+     * @notice Forwards the full balance of an arbitrary ERC-20 token to the immutable receiver
+     * @dev Bailsec #63. Permissionless by design: the caller picks WHICH token to flush,
+     *      but cannot pick WHERE it goes -- the destination is the construction-time
+     *      `receiver`, so no new trust surface is introduced relative to the ordinary
+     *      report path. Intended for airdrops and other non-pipeline tokens that arrive
+     *      at this contract (for example when this forwarder is the `dragonRouter` of
+     *      a strategy whose `sweepAirdrop` delivers non-asset tokens here).
+     *
+     *      Strategy share tokens SHOULD NOT be flushed through this path for normal
+     *      yield accounting -- use {reportAndForward} so shares are redeemed to the
+     *      underlying asset first. Calling `forwardToken(strategy)` is still safe
+     *      (receiver ends up holding redeemable shares, no loss of funds), and is in
+     *      fact the operational workaround when `reportAndForward` is temporarily
+     *      blocked by tight `maxRedeem` liquidity on the strategy.
+     *
+     *      Returns silently (without reverting) if the balance is zero so keepers and
+     *      bots can call it speculatively without having to pre-check every token.
+     * @param token ERC-20 token whose balance should be flushed to the receiver
+     */
+    function forwardToken(address token) external nonReentrant {
+        uint256 balance = IERC20(token).balanceOf(address(this));
+        if (balance == 0) return;
+        IERC20(token).safeTransfer(receiver, balance);
+        emit TokenForwarded(token, receiver, balance);
     }
 }
