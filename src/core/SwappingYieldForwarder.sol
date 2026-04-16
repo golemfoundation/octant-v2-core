@@ -2,6 +2,7 @@
 pragma solidity ^0.8.25;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ISwapper } from "./interfaces/ISwapper.sol";
 import { ITokenizedStrategy } from "./interfaces/ITokenizedStrategy.sol";
@@ -66,6 +67,14 @@ contract SwappingYieldForwarder is YieldForwarder {
     /// @param actual Amount actually reported
     error InsufficientSwapOutput(uint256 expected, uint256 actual);
 
+    /// @notice Thrown when setMinSlippageBps is called with a value above MAX_BPS
+    error InvalidSlippageBps();
+
+    /// @notice Thrown when the caller's minAmountOut falls below the admin-set floor
+    /// @param floor Required minimum (assetsIn * minSlippageBps / MAX_BPS)
+    /// @param supplied The minAmountOut the keeper passed in
+    error SlippageFloorTooLoose(uint256 floor, uint256 supplied);
+
     // ============================================
     // EVENTS
     // ============================================
@@ -89,6 +98,11 @@ contract SwappingYieldForwarder is YieldForwarder {
     /// @param newSwapper The newly installed ISwapper implementation
     event SwapperUpdated(address indexed oldSwapper, address indexed newSwapper);
 
+    /// @notice Emitted when the admin-set slippage floor is updated
+    /// @param oldBps Previous floor (basis points of assetsIn)
+    /// @param newBps New floor
+    event MinSlippageBpsUpdated(uint16 oldBps, uint16 newBps);
+
     // ============================================
     // STATE
     // ============================================
@@ -108,6 +122,16 @@ contract SwappingYieldForwarder is YieldForwarder {
     /// @dev Settable by vault.management() to pivot to a different adapter
     ///      (e.g. a new pool tier, a new DEX version) without redeploying.
     ISwapper public swapper;
+
+    /// @notice Denominator for basis-point calculations (10_000 = 100%)
+    uint16 public constant MAX_BPS = 10_000;
+
+    /// @notice Admin-settable floor on minAmountOut, denominated as basis points
+    ///         of assetsIn. Default 0 means no floor (keeper fully trusted for slippage).
+    /// @dev Intended for near-parity pairs (stablecoin↔stablecoin, LST↔LST) where
+    ///      a conservative floor is meaningful. For heterogeneous pairs, management
+    ///      should keep this at 0 and rely on the keeper's oracle-informed minAmountOut.
+    uint16 public minSlippageBps;
 
     // ============================================
     // MODIFIERS
@@ -163,6 +187,15 @@ contract SwappingYieldForwarder is YieldForwarder {
         swapper = ISwapper(_newSwapper);
     }
 
+    /// @notice Update the slippage floor applied to the keeper's minAmountOut
+    /// @dev Authorized by vault.management(). Passing 0 disables the floor.
+    /// @param _bps New floor in basis points of assetsIn (max 10_000)
+    function setMinSlippageBps(uint16 _bps) external onlyVaultManagement {
+        if (_bps > MAX_BPS) revert InvalidSlippageBps();
+        emit MinSlippageBpsUpdated(minSlippageBps, _bps);
+        minSlippageBps = _bps;
+    }
+
     /**
      * @notice Calls report() on the strategy, redeems profit shares, swaps the underlying
      *         asset to the target asset via the configured ISwapper, and forwards to the receiver
@@ -199,6 +232,23 @@ contract SwappingYieldForwarder is YieldForwarder {
         }
 
         address assetIn = IERC4626Asset(strategy).asset();
+
+        // Admin-set slippage floor (bailsec #67): keeper's minAmountOut must be at
+        // least `assetsIn * minSlippageBps / MAX_BPS`, normalized from `assetIn` decimals
+        // into `targetAsset` decimals so mixed-decimal pairs (USDC 6 <-> USDS 18, etc.)
+        // aren't silently bypassed or DoS'd. Default 0 disables. The 1:1 value assumption
+        // matches the documented use case (near-parity pairs: stablecoin<>stablecoin,
+        // LST<>LST); admins must keep the floor at 0 for non-parity pairs.
+        uint16 floorBps = minSlippageBps;
+        if (floorBps != 0) {
+            uint8 inDecimals = IERC20Metadata(assetIn).decimals();
+            uint8 outDecimals = IERC20Metadata(targetAsset).decimals();
+            uint256 assetsInScaled = inDecimals >= outDecimals
+                ? assetsIn / (10 ** (inDecimals - outDecimals))
+                : assetsIn * (10 ** (outDecimals - inDecimals));
+            uint256 floor = (assetsInScaled * floorBps) / MAX_BPS;
+            if (minAmountOut < floor) revert SlippageFloorTooLoose(floor, minAmountOut);
+        }
 
         // Approve swapper and execute swap to receiver. The swapper pulls
         // via transferFrom and returns any unused tokenIn before returning.

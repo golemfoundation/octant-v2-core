@@ -15,6 +15,7 @@ import { MockStrategy } from "test/mocks/core/tokenized-strategies/MockStrategy.
 import { MockYieldSource } from "test/mocks/core/tokenized-strategies/MockYieldSource.sol";
 import { MockSwapper } from "test/mocks/MockSwapper.sol";
 import { IMockStrategy } from "test/mocks/core/IMockStrategy.sol";
+import { MockERC20 } from "test/mocks/MockERC20.sol";
 
 contract SwappingYieldForwarderTest is Test {
     SwappingYieldForwarder public forwarder;
@@ -449,6 +450,199 @@ contract SwappingYieldForwarderTest is Test {
     }
 
     // ═══════════════════════════════════════════════════════════
+    // setMinSlippageBps — ADMIN SLIPPAGE FLOOR (bailsec #67)
+    // ═══════════════════════════════════════════════════════════
+
+    function test_setMinSlippageBps_default_isZero() public view {
+        assertEq(forwarder.minSlippageBps(), 0, "Floor should default to 0 (disabled)");
+    }
+
+    function test_setMinSlippageBps_revertsOnNonManagement() public {
+        vm.prank(address(0xBAD));
+        vm.expectRevert(SwappingYieldForwarder.OnlyVaultManagement.selector);
+        forwarder.setMinSlippageBps(9_900);
+    }
+
+    function test_setMinSlippageBps_revertsAboveMaxBps() public {
+        vm.prank(management);
+        vm.expectRevert(SwappingYieldForwarder.InvalidSlippageBps.selector);
+        forwarder.setMinSlippageBps(10_001);
+    }
+
+    function test_setMinSlippageBps_updatesState() public {
+        vm.expectEmit(false, false, false, true);
+        emit SwappingYieldForwarder.MinSlippageBpsUpdated(0, 9_900);
+
+        vm.prank(management);
+        forwarder.setMinSlippageBps(9_900);
+
+        assertEq(forwarder.minSlippageBps(), 9_900);
+    }
+
+    /// @notice When a floor is set, the keeper cannot pass a minAmountOut below
+    ///         (assetsIn * floor / MAX_BPS). Regression for bailsec #67.
+    function test_reportSwapAndForward_enforcesSlippageFloor() public {
+        vm.prank(management);
+        forwarder.setMinSlippageBps(9_900); // 99% floor
+
+        _depositIntoStrategy(user, DEPOSIT_AMOUNT);
+        vm.prank(address(forwarder));
+        strategy.report();
+        uint256 profit = 10e18;
+        _simulateProfit(profit);
+
+        // minAmountOut = 0 is below the floor of assetsIn * 9_900 / 10_000
+        vm.prank(keeperEOA);
+        vm.expectRevert(
+            abi.encodeWithSelector(SwappingYieldForwarder.SlippageFloorTooLoose.selector, (profit * 9_900) / 10_000, 0)
+        );
+        forwarder.reportSwapAndForward(address(strategy), 10_000, 0);
+    }
+
+    /// @notice Codex P1 regression — USDC(6) -> USDS(18), 99% floor.
+    ///         Without decimals normalization the floor is computed in input-asset units
+    ///         (~990_000 wei for 1 USDC of profit), and a `minAmountOut` of 1e17 wei
+    ///         (a laughable 0.0001 USDS for 1 USDC of value) silently clears the check.
+    ///         With normalization the floor becomes 9.9e17 in target units, and the
+    ///         same minAmountOut reverts.
+    function test_reportSwapAndForward_floor_lowToHighDecimals_enforcesNormalizedFloor() public {
+        (
+            SwappingYieldForwarder fwd,
+            IMockStrategy strat,
+            MockERC20 assetMix,
+            ,
+            MockYieldSource yieldSrc
+        ) = _deployMixedDecimalFixture(6, 18);
+
+        vm.prank(management);
+        fwd.setMinSlippageBps(9_900);
+
+        uint256 depositAmt = 100e6;
+        uint256 profit = 1e6;
+        assetMix.mint(user, depositAmt);
+        vm.startPrank(user);
+        assetMix.approve(address(strat), depositAmt);
+        strat.deposit(depositAmt, user);
+        vm.stopPrank();
+        vm.prank(address(fwd));
+        strat.report();
+        assetMix.mint(address(yieldSrc), profit);
+
+        // Normalized floor = (1e6 * 10**12) * 9_900 / 10_000 = 9.9e17 (target units).
+        // Pre-fix floor (raw, no scaling) = 1e6 * 9_900 / 10_000 = 990_000 — so
+        // minAmountOut = 1e17 sits between the two and distinguishes the fix.
+        vm.prank(keeperEOA);
+        vm.expectRevert(
+            abi.encodeWithSelector(SwappingYieldForwarder.SlippageFloorTooLoose.selector, 9.9e17, 1e17)
+        );
+        fwd.reportSwapAndForward(address(strat), 10_000, 1e17);
+    }
+
+    /// @notice Codex P1 regression — USDS(18) -> USDC(6), 99% floor.
+    ///         Without normalization the floor is 9.9e17 (18-dec input units), which is
+    ///         orders of magnitude above any realistic USDC `minAmountOut`, turning every
+    ///         valid swap into a DoS. With normalization the floor is 990_000 (6-dec
+    ///         target units) and a `minAmountOut` of 1e6 (1 USDC) clears it.
+    function test_reportSwapAndForward_floor_highToLowDecimals_doesNotDos() public {
+        (
+            SwappingYieldForwarder fwd,
+            IMockStrategy strat,
+            MockERC20 assetMix,
+            ,
+            MockYieldSource yieldSrc
+        ) = _deployMixedDecimalFixture(18, 6);
+
+        vm.prank(management);
+        fwd.setMinSlippageBps(9_900);
+
+        uint256 depositAmt = 100e18;
+        uint256 profit = 1e18;
+        assetMix.mint(user, depositAmt);
+        vm.startPrank(user);
+        assetMix.approve(address(strat), depositAmt);
+        strat.deposit(depositAmt, user);
+        vm.stopPrank();
+        vm.prank(address(fwd));
+        strat.report();
+        assetMix.mint(address(yieldSrc), profit);
+
+        // Normalized floor = (1e18 / 10**12) * 9_900 / 10_000 = 990_000 (target units).
+        // Keeper passes minAmountOut = 1e6 (1 USDC), which clears the correct floor.
+        // Pre-fix: floor would be 9.9e17 and the same call would revert (DoS).
+        vm.prank(keeperEOA);
+        uint256 assetsOut = fwd.reportSwapAndForward(address(strat), 10_000, 1e6);
+        assertGt(assetsOut, 0, "swap should succeed when floor is correctly normalized");
+    }
+
+    /// @dev Internal helper: deploys a fresh forwarder + strategy pair whose asset
+    ///      and targetAsset have arbitrary decimals. Reuses the existing
+    ///      `receiver`/`keeperEOA`/`management`/`implementation` fixtures.
+    function _deployMixedDecimalFixture(
+        uint8 inDec,
+        uint8 outDec
+    )
+        internal
+        returns (
+            SwappingYieldForwarder fwd,
+            IMockStrategy strat,
+            MockERC20 assetMix,
+            MockERC20 targetMix,
+            MockYieldSource yieldSrc
+        )
+    {
+        assetMix = new MockERC20(inDec);
+        targetMix = new MockERC20(outDec);
+        yieldSrc = new MockYieldSource(address(assetMix));
+        MixedDecimalSwapper mixSwapper = new MixedDecimalSwapper(address(targetMix), inDec, outDec);
+
+        uint256 baseNonce = vm.getNonce(address(this));
+        address predictedStrat = vm.computeCreateAddress(address(this), baseNonce + 1);
+
+        fwd = new SwappingYieldForwarder(
+            receiver,
+            keeperEOA,
+            address(targetMix),
+            address(mixSwapper),
+            predictedStrat
+        );
+
+        strat = IMockStrategy(
+            address(
+                new MockStrategy(
+                    address(assetMix),
+                    address(yieldSrc),
+                    management,
+                    address(fwd),
+                    emergencyAdmin,
+                    address(fwd),
+                    address(implementation)
+                )
+            )
+        );
+        require(address(strat) == predictedStrat, "mixed-decimal fixture address mismatch");
+
+        vm.startPrank(management);
+        strat.setKeeper(address(fwd));
+        strat.setEmergencyAdmin(emergencyAdmin);
+        strat.setPendingManagement(management);
+        strat.acceptManagement();
+        vm.stopPrank();
+    }
+
+    /// @notice A floor of 0 (the default) preserves the prior "keeper sets slippage"
+    ///         behaviour — any minAmountOut including 0 is accepted.
+    function test_reportSwapAndForward_zeroFloor_acceptsZeroMinAmountOut() public {
+        _depositIntoStrategy(user, DEPOSIT_AMOUNT);
+        vm.prank(address(forwarder));
+        strategy.report();
+        _simulateProfit(10e18);
+
+        vm.prank(keeperEOA);
+        uint256 assetsOut = forwarder.reportSwapAndForward(address(strategy), 10_000, 0);
+        assertGt(assetsOut, 0);
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // POST-SWAP minAmountOut RE-CHECK (defense-in-depth)
     // ═══════════════════════════════════════════════════════════
 
@@ -467,9 +661,7 @@ contract SwappingYieldForwarderTest is Test {
         _simulateProfit(10e18);
 
         vm.prank(keeperEOA);
-        vm.expectRevert(
-            abi.encodeWithSelector(SwappingYieldForwarder.InsufficientSwapOutput.selector, 5e18, 1)
-        );
+        vm.expectRevert(abi.encodeWithSelector(SwappingYieldForwarder.InsufficientSwapOutput.selector, 5e18, 1));
         forwarder.reportSwapAndForward(address(strategy), 10_000, 5e18);
     }
 }
@@ -484,15 +676,44 @@ contract DishonestSwapper {
         outputToken = _outputToken;
     }
 
+    function swap(address tokenIn, address, uint256 amountIn, uint256, address receiver) external returns (uint256) {
+        IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
+        ERC20Mock(outputToken).mint(receiver, amountIn);
+        return 1; // lies: reports 1 wei despite minting full amount
+    }
+}
+
+/// @dev Mock swapper for mixed-decimal targets (MockERC20 output). Models a
+///      1:1-value conversion across a decimals gap: 1e{inDec} of tokenIn ->
+///      1e{outDec} of tokenOut. Required because MockSwapper hardcodes an
+///      ERC20Mock cast on the output token, which doesn't support custom decimals.
+contract MixedDecimalSwapper {
+    using SafeERC20 for IERC20;
+
+    address payable public immutable outputToken;
+    uint8 public immutable inDecimals;
+    uint8 public immutable outDecimals;
+
+    error Insufficient(uint256 expected, uint256 actual);
+
+    constructor(address _outputToken, uint8 _inDecimals, uint8 _outDecimals) {
+        outputToken = payable(_outputToken);
+        inDecimals = _inDecimals;
+        outDecimals = _outDecimals;
+    }
+
     function swap(
         address tokenIn,
         address,
         uint256 amountIn,
-        uint256,
+        uint256 minAmountOut,
         address receiver
-    ) external returns (uint256) {
+    ) external returns (uint256 amountOut) {
         IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
-        ERC20Mock(outputToken).mint(receiver, amountIn);
-        return 1; // lies: reports 1 wei despite minting full amount
+        amountOut = inDecimals >= outDecimals
+            ? amountIn / (10 ** (inDecimals - outDecimals))
+            : amountIn * (10 ** (outDecimals - inDecimals));
+        if (amountOut < minAmountOut) revert Insufficient(minAmountOut, amountOut);
+        MockERC20(outputToken).mint(receiver, amountOut);
     }
 }
