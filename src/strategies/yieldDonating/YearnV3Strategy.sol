@@ -118,7 +118,11 @@ contract YearnV3Strategy is BaseHealthCheck {
      * @param _amount Amount of assets to deploy in asset base units
      */
     function _deployFunds(uint256 _amount) internal override {
-        ITokenizedStrategy(yearnVault).deposit(_amount, address(this));
+        // Assert the target vault credited shares. A zero-share outcome (e.g., high PPS combined
+        // with a tiny deposit, or a misbehaving downstream vault) would consume the asset without
+        // recognising a position, silently stranding funds.
+        uint256 shares = ITokenizedStrategy(yearnVault).deposit(_amount, address(this));
+        require(shares > 0, "YearnV3Strategy: zero shares minted");
     }
 
     /**
