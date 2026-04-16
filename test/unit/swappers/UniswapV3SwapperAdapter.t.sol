@@ -2,6 +2,7 @@
 pragma solidity ^0.8.25;
 
 import { Test } from "forge-std/Test.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { ISwapRouter } from "@tokenized-strategy-periphery/interfaces/Uniswap/V3/ISwapRouter.sol";
 
@@ -149,6 +150,42 @@ contract UniswapV3SwapperAdapterTest is Test {
         assertEq(tokenB.balanceOf(receiver), amountOut);
         assertTrue(router.lastWasMultiHop(), "Should have used multi-hop path");
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // SWAP — PARTIAL FILL RESIDUE (bailsec #73, #74)
+    // ═══════════════════════════════════════════════════════════
+
+    /// @notice A partial fill (router pulls less than amountIn) must leave the
+    ///         adapter with zero balance, zero router allowance, and the unused
+    ///         tokenIn returned to the caller. Regression test for bailsec
+    ///         #73 (sweepable residue) and #74 (hanging approval).
+    function test_swap_partialFill_returnsLeftoverAndZerosApproval() public {
+        UniswapV3SwapperAdapter s = new UniswapV3SwapperAdapter(address(router), FEE, address(0), 0);
+
+        uint256 amountIn = 1000e18;
+        tokenA.mint(address(this), amountIn);
+        tokenA.approve(address(s), amountIn);
+
+        // Simulate shallow pool: router consumes 70% of amountIn and leaves
+        // the rest approved-but-not-pulled (equivalent to hitting MIN/MAX tick).
+        router.setConsumedBps(7000);
+        router.setOutputToken(address(tokenB));
+
+        uint256 amountOut = s.swap(address(tokenA), address(tokenB), amountIn, 0, receiver);
+
+        uint256 consumed = (amountIn * 7000) / 10_000;
+        uint256 leftover = amountIn - consumed;
+
+        assertEq(amountOut, consumed, "amountOut should reflect consumed input");
+        assertEq(tokenB.balanceOf(receiver), amountOut, "Receiver should get output");
+        assertEq(tokenA.balanceOf(address(s)), 0, "Adapter must hold zero tokenIn after swap");
+        assertEq(
+            IERC20(address(tokenA)).allowance(address(s), address(router)),
+            0,
+            "Adapter must have zero router allowance after swap"
+        );
+        assertEq(tokenA.balanceOf(address(this)), leftover, "Caller must receive unused tokenIn");
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -159,21 +196,43 @@ contract MockUniRouter {
     address public outputToken;
     uint24 public lastFee;
     bool public lastWasMultiHop;
+    uint256 public consumedBps = 10_000; // default: 100% consumption (full fill)
+
+    uint256 internal constant BPS = 10_000;
 
     function setOutputToken(address _token) external {
         outputToken = _token;
     }
 
+    /// @notice Control how much of amountIn the mock "consumes" from the caller.
+    ///         10_000 = full fill (default). Values below simulate a shallow
+    ///         pool reaching MIN/MAX tick where the real router pulls only
+    ///         the consumed amount via its pay callback.
+    function setConsumedBps(uint256 _bps) external {
+        consumedBps = _bps;
+    }
+
     function exactInputSingle(ISwapRouter.ExactInputSingleParams calldata params) external returns (uint256 amountOut) {
         lastFee = params.fee;
         lastWasMultiHop = false;
-        amountOut = params.amountIn;
+        uint256 consumed = (params.amountIn * consumedBps) / BPS;
+        // Simulate real router pulling only the consumed input from the caller.
+        ERC20Mock(params.tokenIn).transferFrom(msg.sender, address(this), consumed);
+        amountOut = consumed;
         ERC20Mock(outputToken).mint(params.recipient, amountOut);
     }
 
     function exactInput(ISwapRouter.ExactInputParams calldata params) external returns (uint256 amountOut) {
         lastWasMultiHop = true;
-        amountOut = params.amountIn;
+        // First token in the path is tokenIn
+        address tokenIn;
+        bytes calldata path = params.path;
+        assembly {
+            tokenIn := shr(96, calldataload(path.offset))
+        }
+        uint256 consumed = (params.amountIn * consumedBps) / BPS;
+        ERC20Mock(tokenIn).transferFrom(msg.sender, address(this), consumed);
+        amountOut = consumed;
         ERC20Mock(outputToken).mint(params.recipient, amountOut);
     }
 }
