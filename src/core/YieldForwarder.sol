@@ -25,6 +25,14 @@ interface IMaxRedeem {
     function maxRedeem(address owner) external view returns (uint256 maxShares);
 }
 
+/// @notice Minimal interface for ERC-4626 convertToAssets (floor rounding)
+interface IConvertible {
+    /// @notice Preview the assets returned for `shares`, rounded down (ERC-4626)
+    /// @param shares Amount of shares to preview
+    /// @return assets Assets that would be returned by redeem(), before fees/loss
+    function convertToAssets(uint256 shares) external view returns (uint256 assets);
+}
+
 /// @notice Minimal interface for triggering a strategy report
 interface IReportable {
     /// @notice Trigger a strategy report (realize gains/losses, mint profit shares)
@@ -182,6 +190,14 @@ contract YieldForwarder is ReentrancyGuard {
         // report once headroom recovers; the report() side effects above still commit.
         uint256 shares = Math.min(balance, IMaxRedeem(strategy).maxRedeem(address(this)));
         if (shares == 0) return 0;
+
+        // Bailsec #61: when totalAssets < totalSupply (a realised loss that was not
+        // absorbed because enableBurning is false), small share balances floor to zero
+        // assets and TokenizedStrategy.redeem reverts with ZERO_ASSETS. That revert
+        // would roll back the report() call above too. Skip the redeem and preserve
+        // the accounting update; the dust share balance stays at the forwarder and
+        // is picked up by a later report once the imbalance resolves on its own.
+        if (IConvertible(strategy).convertToAssets(shares) == 0) return 0;
 
         assets = IRedeemable(strategy).redeem(shares, receiver, address(this), maxLoss);
 

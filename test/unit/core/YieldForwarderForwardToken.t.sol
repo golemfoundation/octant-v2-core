@@ -31,12 +31,7 @@ contract YieldForwarderForwardTokenTest is Test {
         // need a non-zero address so the constructor accepts it.
         targetAsset = new ERC20Mock();
         MockSwapper swapper = new MockSwapper(address(targetAsset), 1e18);
-        swappingForwarder = new SwappingYieldForwarder(
-            receiver,
-            keeperEOA,
-            address(targetAsset),
-            address(swapper)
-        );
+        swappingForwarder = new SwappingYieldForwarder(receiver, keeperEOA, address(targetAsset), address(swapper));
 
         token = new ERC20Mock();
     }

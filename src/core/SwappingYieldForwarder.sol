@@ -5,7 +5,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { ISwapper } from "./interfaces/ISwapper.sol";
-import { YieldForwarder, IRedeemable, IReportable, IMaxRedeem } from "./YieldForwarder.sol";
+import { YieldForwarder, IRedeemable, IReportable, IMaxRedeem, IConvertible } from "./YieldForwarder.sol";
 
 /// @notice Minimal ERC4626 interface to read a strategy's underlying asset
 interface IERC4626Asset {
@@ -140,6 +140,12 @@ contract SwappingYieldForwarder is YieldForwarder {
         // share balance. Residual shares stay at the forwarder until headroom recovers.
         uint256 shares = Math.min(balance, IMaxRedeem(strategy).maxRedeem(address(this)));
         if (shares == 0) return 0;
+
+        // Bailsec #61: mirror reportAndForward's ZERO_ASSETS skip so a dust share
+        // balance on a loss-impaired strategy (totalAssets < totalSupply) does not
+        // roll back the report() above. The dust stays at the forwarder for a later
+        // report once the imbalance resolves.
+        if (IConvertible(strategy).convertToAssets(shares) == 0) return 0;
 
         // Redeem to this contract (not receiver) so we can swap first
         uint256 assetsIn = IRedeemable(strategy).redeem(shares, address(this), address(this), maxLoss);

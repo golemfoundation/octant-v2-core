@@ -45,12 +45,7 @@ contract MockStrategy is ERC20Mock {
         return (0, 0);
     }
 
-    function redeem(
-        uint256 shares,
-        address receiver,
-        address owner,
-        uint256
-    ) external returns (uint256 assets) {
+    function redeem(uint256 shares, address receiver, address owner, uint256) external returns (uint256 assets) {
         // Pre-fix guard would trip here if shares > _maxRedeemValue.
         require(shares <= _maxRedeemValue, "MAX_REDEEM");
         _burn(owner, shares);
@@ -83,12 +78,7 @@ contract YieldForwarderMaxRedeemTest is Test {
         forwarder = new YieldForwarder(receiver, keeperEOA);
 
         MockSwapper swapper = new MockSwapper(address(targetAsset), 1e18);
-        swappingForwarder = new SwappingYieldForwarder(
-            receiver,
-            keeperEOA,
-            address(targetAsset),
-            address(swapper)
-        );
+        swappingForwarder = new SwappingYieldForwarder(receiver, keeperEOA, address(targetAsset), address(swapper));
 
         strategy = new MockStrategy(address(underlying));
     }
