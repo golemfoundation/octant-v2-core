@@ -63,6 +63,24 @@ interface IReportable {
  *      routed through `sweepAirdrop`, management should immediately follow up
  *      with `YieldForwarder.forwardToken(airdropToken)` to move the swept balance
  *      onward to the hardcoded receiver.
+ *
+ *      MIGRATION NOTE -- 14-DAY DRAGON ROUTER COOLDOWN (Bailsec #66):
+ *      Because this contract is intended to act as both `keeper` and
+ *      `dragonRouter`, migrating a strategy to or away from a forwarder is
+ *      coupled to the TokenizedStrategy dragon-router cooldown: `setKeeper`
+ *      takes effect immediately, but `initiateDragonRouterChange` enforces a
+ *      14-day delay before `finalizeDragonRouterChange` can activate the new
+ *      router. In practice every forwarder swap is a >=14-day operation. That
+ *      delay is an intentional security invariant of the yield-skim design and
+ *      is not bypassable by design.
+ *      For compromised-keeper incident response, the correct posture is:
+ *        1. Immediately call `setEmergencyShutdown` on the strategy -- this
+ *           halts `report()`/profit minting, neutralizing the compromised
+ *           keeper with no 14-day wait.
+ *        2. Concurrently call `initiateDragonRouterChange` for the new
+ *           forwarder (14-day timer begins).
+ *        3. After 14 days, call `finalizeDragonRouterChange` and call
+ *           `setKeeper` for the new forwarder.
  */
 contract YieldForwarder is ReentrancyGuard {
     // ============================================
