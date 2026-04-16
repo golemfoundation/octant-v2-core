@@ -148,6 +148,17 @@ contract YearnV3Strategy is BaseHealthCheck {
     /**
      * @dev Emergency withdrawal after strategy shutdown
      * @param _amount Amount of assets to withdraw in asset base units
+     * @custom:security Delegates to `_freeFunds`, which withdraws from the Yearn v3 vault
+     *                  with `maxLoss = 10_000` BPS (100%). This is intentional: the emergency
+     *                  admin is expected to assess the underlying vault's loss state off-chain
+     *                  before invoking this path and to only call it when the realised loss is
+     *                  acceptable. Crystallising whatever the vault returns right now is
+     *                  symmetric with user-initiated withdrawals (see `_freeFunds`) and avoids
+     *                  the inversion where users in a loss state realise the loss but an admin
+     *                  bailing out during shutdown would revert. Adding a per-call `maxLoss`
+     *                  override would require changing the shared `TokenizedStrategy` emergency
+     *                  entry point, which is disproportionate for a concern that off-chain
+     *                  procedure already covers.
      */
     function _emergencyWithdraw(uint256 _amount) internal override {
         _freeFunds(_amount);
