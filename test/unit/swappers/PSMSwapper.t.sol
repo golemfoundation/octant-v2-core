@@ -323,6 +323,46 @@ contract PSMSwapperTest is Test {
         vm.expectRevert(abi.encodeWithSelector(PSMSwapper.NonOneToOneConversion.selector, amountIn, amountIn - 1));
         s.swap(address(usds), address(dai), amountIn, 0, receiver);
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // BUY_GEM ROUNDING DUST (bailsec #70)
+    // ═══════════════════════════════════════════════════════════
+
+    /// @notice The gemAmt computation in BUY_GEM floor-divides, so when
+    ///         amountIn isn't cleanly divisible by conversionFactor the
+    ///         PSM charges strictly less than amountIn. The residue must
+    ///         stay with the caller, not sit inside the adapter where an
+    ///         attacker could sweep it via a follow-up swap() call.
+    ///         Regression for bailsec #70.
+    function test_swap_buyGem_roundingDustStaysWithCaller() public {
+        MockPSM mockPSM = new MockPSM(address(dai), address(gem));
+        mockPSM.setTout(0);
+
+        PSMSwapper s = new PSMSwapper(
+            address(mockPSM),
+            PSMSwapper.Route.BUY_GEM,
+            address(dai),
+            address(gem),
+            CONVERSION_FACTOR
+        );
+
+        // amountIn = 1000e18 + 1 wei; conversionFactor = 1e12; tout = 0.
+        // gemAmt = floor(amountIn * WAD / (cf * WAD)) = 1e6 (dust = 1 wei DAI)
+        uint256 amountIn = 1000e18 + 1;
+        uint256 expectedGemAmt = 1_000_000_000; // 1e9 (= 1000e6)
+        uint256 actualPulled = 1000e18; // = gemAmt * cf * (WAD + 0) / WAD
+        uint256 expectedDust = amountIn - actualPulled; // 1 wei
+
+        dai.mint(address(this), amountIn);
+        dai.approve(address(s), amountIn);
+
+        uint256 amountOut = s.swap(address(dai), address(gem), amountIn, 0, receiver);
+
+        assertEq(amountOut, expectedGemAmt, "Output should be the floor-divided gem amount");
+        assertEq(gem.balanceOf(receiver), amountOut, "Receiver gets gem");
+        assertEq(dai.balanceOf(address(s)), 0, "Adapter must hold zero DAI after swap");
+        assertEq(dai.balanceOf(address(this)), expectedDust, "Rounding dust must stay with caller");
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -334,6 +374,9 @@ contract MockPSM {
     ERC20Mock public tokenIn;
     ERC20Mock public tokenOut;
     uint256 public tout_;
+    uint256 public mockConversionFactor = 1e12; // must match PSMSwapper constructor
+
+    uint256 internal constant WAD = 1e18;
 
     constructor(address _tokenIn, address _tokenOut) {
         tokenIn = ERC20Mock(_tokenIn);
@@ -342,6 +385,10 @@ contract MockPSM {
 
     function setTout(uint256 _tout) external {
         tout_ = _tout;
+    }
+
+    function setConversionFactor(uint256 _cf) external {
+        mockConversionFactor = _cf;
     }
 
     function tout() external view returns (uint256) {
@@ -356,9 +403,12 @@ contract MockPSM {
         tokenOut.mint(usr, gemAmt);
     }
 
-    /// @dev buyGem: caller sends DAI, PSM sends gem to caller
+    /// @dev buyGem: caller sends DAI, PSM sends gem to caller.
+    ///      Matches real PSM: pulls gemAmt * conversionFactor * (WAD + tout) / WAD of
+    ///      the input token, so the adapter must have approved at least that much.
     function buyGem(address usr, uint256 gemAmt) external {
-        // Mint gem to usr
+        uint256 daiAmount = (gemAmt * mockConversionFactor * (WAD + tout_)) / WAD;
+        tokenIn.transferFrom(msg.sender, address(this), daiAmount);
         tokenOut.mint(usr, gemAmt);
     }
 }

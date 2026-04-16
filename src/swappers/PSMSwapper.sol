@@ -128,21 +128,32 @@ contract PSMSwapper is ISwapper {
     ) external override returns (uint256 amountOut) {
         if (_tokenIn != tokenIn || _tokenOut != tokenOut) revert InvalidToken();
 
-        IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
-
+        // Per-route pull pattern. BUY_GEM computes the exact PSM charge
+        // upfront and pulls only that (rounding remainder stays with caller);
+        // the other routes consume the full amountIn so we pull it here.
         if (route == Route.SELL_GEM) {
+            IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
             amountOut = _sellGem(amountIn, receiver);
         } else if (route == Route.BUY_GEM) {
             amountOut = _buyGem(amountIn, receiver);
         } else if (route == Route.DAI_TO_USDS) {
+            IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
             amountOut = _daiToUsds(amountIn, receiver);
             minAmountOut = amountIn; // 1:1 converter, enforce exact output
         } else {
+            IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
             amountOut = _usdsToDai(amountIn, receiver);
             minAmountOut = amountIn; // 1:1 converter, enforce exact output
         }
 
         if (amountOut < minAmountOut) revert InsufficientOutput(minAmountOut, amountOut);
+
+        // Defense-in-depth: flush any residual tokenIn back to the caller so
+        // the adapter upholds the stateless invariant on every route.
+        uint256 leftover = IERC20(tokenIn).balanceOf(address(this));
+        if (leftover != 0) {
+            IERC20(tokenIn).safeTransfer(msg.sender, leftover);
+        }
     }
 
     // ============================================
@@ -165,21 +176,23 @@ contract PSMSwapper is ISwapper {
     }
 
     /// @dev Buy gem (e.g., USDC) with DAI/USDS via PSM.
-    ///      Calculates max gem purchasable from amountIn accounting for PSM fees (tout).
-    ///      PSM pulls DAI/USDS from this contract and sends gem to this contract,
-    ///      which then forwards to receiver.
+    ///      Calculates max gem purchasable from amountIn accounting for PSM fees (tout),
+    ///      then pulls ONLY the exact charge (gemAmt * conversionFactor * (WAD + tout) / WAD)
+    ///      via transferFrom so the floor-division remainder stays with the caller
+    ///      rather than being stranded in this adapter (bailsec #70).
     function _buyGem(uint256 amountIn, address receiver) internal returns (uint256 amountOut) {
         uint256 tout = IPSM(protocol).tout();
         uint256 gemAmt = (amountIn * WAD) / (conversionFactor * (WAD + tout));
         if (gemAmt == 0) revert InsufficientOutput(1, 0);
 
-        IERC20(tokenIn).forceApprove(protocol, amountIn);
+        uint256 actualPulled = (gemAmt * conversionFactor * (WAD + tout)) / WAD;
+        IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), actualPulled);
+        IERC20(tokenIn).forceApprove(protocol, actualPulled);
 
         uint256 balBefore = IERC20(tokenOut).balanceOf(address(this));
         IPSM(protocol).buyGem(address(this), gemAmt);
         amountOut = IERC20(tokenOut).balanceOf(address(this)) - balBefore;
 
-        // Reset approval for leftover (rounding may leave dust approved)
         IERC20(tokenIn).forceApprove(protocol, 0);
 
         IERC20(tokenOut).safeTransfer(receiver, amountOut);
