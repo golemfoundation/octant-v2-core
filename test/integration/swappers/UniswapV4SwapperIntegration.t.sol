@@ -335,11 +335,28 @@ contract UniswapV4MultiHopTest is Test {
         address keeper = address(0xCAFE);
         address recv = address(0xBEEF);
 
-        SwappingYieldForwarder fwd = new SwappingYieldForwarder(recv, keeper, DAI, address(swapAdapter));
-
         MorphoCompounderStrategyFactory fac = new MorphoCompounderStrategyFactory{
             salt: keccak256("OCT_MORPHO_COMPOUNDER_STRATEGY_VAULT_FACTORY_V1")
         }();
+
+        // Predict addresses to resolve the forwarder <-> strategy cycle.
+        address predictedFwd = vm.computeCreateAddress(address(this), vm.getNonce(address(this)));
+        address predictedStrat = fac.computeStrategyAddress(
+            fac.YS_USDC(),
+            fac.USDC(),
+            "MorphoCompounder Donating Strategy",
+            "osMORPHO",
+            mgmt,
+            predictedFwd,
+            address(0xA3),
+            predictedFwd,
+            false,
+            address(impl),
+            mgmt
+        );
+
+        SwappingYieldForwarder fwd = new SwappingYieldForwarder(recv, keeper, DAI, address(swapAdapter), predictedStrat);
+        require(address(fwd) == predictedFwd, "Forwarder address mismatch");
 
         vm.startPrank(mgmt);
         address stratAddr = fac.createStrategy(
@@ -353,6 +370,7 @@ contract UniswapV4MultiHopTest is Test {
             address(impl)
         );
         vm.stopPrank();
+        require(stratAddr == predictedStrat, "Strategy address mismatch");
 
         // Deposit
         address usr = address(0x1234);

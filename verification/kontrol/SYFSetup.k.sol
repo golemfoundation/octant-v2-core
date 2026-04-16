@@ -42,8 +42,16 @@ contract SYFSetup is KontrolTest {
         mockStrategy = new MockForwarderStrategy();
         mockSwapper = new MockForwarderSwapper();
 
-        // Deploy SwappingYieldForwarder with concrete immutables
-        syfForwarder = new SwappingYieldForwarder(_receiver, _keeper, address(targetAsset), address(mockSwapper));
+        // Deploy SwappingYieldForwarder with concrete immutables. The mock strategy
+        // doubles as the vault reference; its symbolic management() is not exercised
+        // in the current proofs (they don't call setSwapper).
+        syfForwarder = new SwappingYieldForwarder(
+            _receiver,
+            _keeper,
+            address(targetAsset),
+            address(mockSwapper),
+            address(mockStrategy)
+        );
 
         // ============================================
         // MAKE MOCK STRATEGY STORAGE SYMBOLIC

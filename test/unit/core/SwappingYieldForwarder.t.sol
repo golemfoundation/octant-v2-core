@@ -3,6 +3,7 @@ pragma solidity ^0.8.25;
 
 import { Test, Vm } from "forge-std/Test.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 
 import { SwappingYieldForwarder } from "src/core/SwappingYieldForwarder.sol";
@@ -45,8 +46,20 @@ contract SwappingYieldForwarderTest is Test {
         // Deploy swapper (1:1 rate)
         swapper = new MockSwapper(address(targetAsset), 1e18);
 
-        // Deploy SwappingYieldForwarder
-        forwarder = new SwappingYieldForwarder(receiver, keeperEOA, address(targetAsset), address(swapper));
+        // Break the forwarder <-> strategy circular reference by predicting the
+        // strategy's CREATE address. Forwarder needs the vault at construction,
+        // strategy needs the forwarder as keeper/donation at construction.
+        uint256 baseNonce = vm.getNonce(address(this));
+        address predictedStrategy = vm.computeCreateAddress(address(this), baseNonce + 1);
+
+        // Deploy SwappingYieldForwarder with the predicted strategy as its vault source
+        forwarder = new SwappingYieldForwarder(
+            receiver,
+            keeperEOA,
+            address(targetAsset),
+            address(swapper),
+            predictedStrategy
+        );
 
         // Deploy strategy with forwarder as both keeper and donation address
         strategy = IMockStrategy(
@@ -62,6 +75,7 @@ contract SwappingYieldForwarderTest is Test {
                 )
             )
         );
+        assertEq(address(strategy), predictedStrategy, "Predicted strategy address must match actual");
 
         vm.startPrank(management);
         strategy.setKeeper(address(forwarder));
@@ -112,24 +126,33 @@ contract SwappingYieldForwarderTest is Test {
         assertEq(address(forwarder.swapper()), address(swapper));
     }
 
+    function test_constructor_setsVault() public view {
+        assertEq(forwarder.vault(), address(strategy));
+    }
+
     function test_constructor_revertsOnZeroReceiver() public {
         vm.expectRevert(YieldForwarder.InvalidReceiver.selector);
-        new SwappingYieldForwarder(address(0), keeperEOA, address(targetAsset), address(swapper));
+        new SwappingYieldForwarder(address(0), keeperEOA, address(targetAsset), address(swapper), address(strategy));
     }
 
     function test_constructor_revertsOnZeroKeeper() public {
         vm.expectRevert(YieldForwarder.InvalidKeeper.selector);
-        new SwappingYieldForwarder(receiver, address(0), address(targetAsset), address(swapper));
+        new SwappingYieldForwarder(receiver, address(0), address(targetAsset), address(swapper), address(strategy));
     }
 
     function test_constructor_revertsOnZeroTargetAsset() public {
         vm.expectRevert(SwappingYieldForwarder.InvalidTargetAsset.selector);
-        new SwappingYieldForwarder(receiver, keeperEOA, address(0), address(swapper));
+        new SwappingYieldForwarder(receiver, keeperEOA, address(0), address(swapper), address(strategy));
     }
 
     function test_constructor_revertsOnZeroSwapper() public {
         vm.expectRevert(SwappingYieldForwarder.InvalidSwapper.selector);
-        new SwappingYieldForwarder(receiver, keeperEOA, address(targetAsset), address(0));
+        new SwappingYieldForwarder(receiver, keeperEOA, address(targetAsset), address(0), address(strategy));
+    }
+
+    function test_constructor_revertsOnZeroVault() public {
+        vm.expectRevert(SwappingYieldForwarder.InvalidVault.selector);
+        new SwappingYieldForwarder(receiver, keeperEOA, address(targetAsset), address(swapper), address(0));
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -366,5 +389,110 @@ contract SwappingYieldForwarderTest is Test {
 
     function test_strategyKeeperIsForwarder() public view {
         assertEq(strategy.keeper(), address(forwarder), "Strategy keeper should be forwarder");
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // setSwapper — VAULT MANAGEMENT (bailsec #72 / #75)
+    // ═══════════════════════════════════════════════════════════
+
+    function test_setSwapper_revertsOnNonManagementCaller() public {
+        MockSwapper newSwapper = new MockSwapper(address(targetAsset), 1e18);
+        vm.prank(address(0xBAD));
+        vm.expectRevert(SwappingYieldForwarder.OnlyVaultManagement.selector);
+        forwarder.setSwapper(address(newSwapper));
+    }
+
+    function test_setSwapper_revertsOnKeeperCaller() public {
+        MockSwapper newSwapper = new MockSwapper(address(targetAsset), 1e18);
+        vm.prank(keeperEOA);
+        vm.expectRevert(SwappingYieldForwarder.OnlyVaultManagement.selector);
+        forwarder.setSwapper(address(newSwapper));
+    }
+
+    function test_setSwapper_revertsOnZeroAddress() public {
+        vm.prank(management);
+        vm.expectRevert(SwappingYieldForwarder.InvalidSwapper.selector);
+        forwarder.setSwapper(address(0));
+    }
+
+    function test_setSwapper_rotatesSwapperFromManagement() public {
+        MockSwapper newSwapper = new MockSwapper(address(targetAsset), 1e18);
+
+        vm.expectEmit(true, true, false, false);
+        emit SwappingYieldForwarder.SwapperUpdated(address(swapper), address(newSwapper));
+
+        vm.prank(management);
+        forwarder.setSwapper(address(newSwapper));
+
+        assertEq(address(forwarder.swapper()), address(newSwapper));
+    }
+
+    /// @notice After rotation, reportSwapAndForward routes through the new swapper.
+    function test_setSwapper_newSwapperUsedOnNextSwap() public {
+        ERC20Mock newTargetMintedBy = targetAsset; // same target asset, different adapter
+        MockSwapper newSwapper = new MockSwapper(address(newTargetMintedBy), 2e18); // 2x rate
+
+        vm.prank(management);
+        forwarder.setSwapper(address(newSwapper));
+
+        _depositIntoStrategy(user, DEPOSIT_AMOUNT);
+        vm.prank(address(forwarder));
+        strategy.report();
+        _simulateProfit(10e18);
+
+        vm.prank(keeperEOA);
+        uint256 assetsOut = forwarder.reportSwapAndForward(address(strategy), 10_000, 0);
+
+        // New swapper at 2x rate: assetsOut should be roughly 2x the redeemed underlying
+        assertGt(assetsOut, 0);
+        assertEq(targetAsset.balanceOf(receiver), assetsOut);
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // POST-SWAP minAmountOut RE-CHECK (defense-in-depth)
+    // ═══════════════════════════════════════════════════════════
+
+    /// @notice A buggy swapper that under-reports assetsOut must be caught by
+    ///         the forwarder's own threshold check, even if the swapper itself
+    ///         doesn't revert. Regression for the defense-in-depth guard.
+    function test_reportSwapAndForward_revertsWhenSwapperReportsBelowMin() public {
+        // Install a dishonest swapper that mints the full output but returns 1 wei.
+        DishonestSwapper dishonest = new DishonestSwapper(address(targetAsset));
+        vm.prank(management);
+        forwarder.setSwapper(address(dishonest));
+
+        _depositIntoStrategy(user, DEPOSIT_AMOUNT);
+        vm.prank(address(forwarder));
+        strategy.report();
+        _simulateProfit(10e18);
+
+        vm.prank(keeperEOA);
+        vm.expectRevert(
+            abi.encodeWithSelector(SwappingYieldForwarder.InsufficientSwapOutput.selector, 5e18, 1)
+        );
+        forwarder.reportSwapAndForward(address(strategy), 10_000, 5e18);
+    }
+}
+
+/// @dev A swapper that lies about amountOut to exercise the forwarder's post-swap check.
+contract DishonestSwapper {
+    using SafeERC20 for IERC20;
+
+    address public immutable outputToken;
+
+    constructor(address _outputToken) {
+        outputToken = _outputToken;
+    }
+
+    function swap(
+        address tokenIn,
+        address,
+        uint256 amountIn,
+        uint256,
+        address receiver
+    ) external returns (uint256) {
+        IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
+        ERC20Mock(outputToken).mint(receiver, amountIn);
+        return 1; // lies: reports 1 wei despite minting full amount
     }
 }
