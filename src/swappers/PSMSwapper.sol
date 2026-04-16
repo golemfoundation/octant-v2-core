@@ -149,7 +149,8 @@ contract PSMSwapper is ISwapper {
 
     /// @dev Sell gem (e.g., USDC) for DAI/USDS via PSM.
     ///      PSM pulls gem from this contract and sends DAI/USDS to this contract,
-    ///      which then forwards to receiver.
+    ///      which then forwards to receiver. Any residual tokenIn is flushed to
+    ///      msg.sender so the adapter holds no tokens between calls.
     function _sellGem(uint256 amountIn, address receiver) internal returns (uint256 amountOut) {
         IERC20(tokenIn).forceApprove(protocol, amountIn);
 
@@ -160,12 +161,16 @@ contract PSMSwapper is ISwapper {
         IERC20(tokenIn).forceApprove(protocol, 0);
 
         IERC20(tokenOut).safeTransfer(receiver, amountOut);
+
+        _flushResidualTokenIn();
     }
 
     /// @dev Buy gem (e.g., USDC) with DAI/USDS via PSM.
     ///      Calculates max gem purchasable from amountIn accounting for PSM fees (tout).
     ///      PSM pulls DAI/USDS from this contract and sends gem to this contract,
-    ///      which then forwards to receiver.
+    ///      which then forwards to receiver. Because `gemAmt` is computed with floor
+    ///      division, PSM typically pulls strictly less than `amountIn`; the residual
+    ///      is flushed back to msg.sender.
     function _buyGem(uint256 amountIn, address receiver) internal returns (uint256 amountOut) {
         uint256 tout = IPSM(protocol).tout();
         uint256 gemAmt = (amountIn * WAD) / (conversionFactor * (WAD + tout));
@@ -181,6 +186,8 @@ contract PSMSwapper is ISwapper {
         IERC20(tokenIn).forceApprove(protocol, 0);
 
         IERC20(tokenOut).safeTransfer(receiver, amountOut);
+
+        _flushResidualTokenIn();
     }
 
     /// @dev Convert DAI to USDS via DaiUsds converter (always 1:1, permanently fee-free).
@@ -192,6 +199,8 @@ contract PSMSwapper is ISwapper {
         IExchange(protocol).daiToUsds(receiver, amountIn);
         amountOut = IERC20(tokenOut).balanceOf(receiver) - balBefore;
         if (amountOut != amountIn) revert NonOneToOneConversion(amountIn, amountOut);
+
+        _flushResidualTokenIn();
     }
 
     /// @dev Convert USDS to DAI via DaiUsds converter (always 1:1, permanently fee-free).
@@ -203,5 +212,19 @@ contract PSMSwapper is ISwapper {
         IExchange(protocol).usdsToDai(receiver, amountIn);
         amountOut = IERC20(tokenOut).balanceOf(receiver) - balBefore;
         if (amountOut != amountIn) revert NonOneToOneConversion(amountIn, amountOut);
+
+        _flushResidualTokenIn();
+    }
+
+    /// @dev Return any leftover tokenIn to `msg.sender`. Returning to `msg.sender` (the
+    ///      swap caller / paying party) preserves the adapter's caller-agnostic design:
+    ///      tokenOut goes to `receiver`, unused tokenIn goes back to whoever paid for
+    ///      it. Enforces the ISwapper "holds no tokens between calls" invariant so a
+    ///      later public caller cannot sweep accumulated dust via `swap(..., receiver=self)`.
+    function _flushResidualTokenIn() internal {
+        uint256 remaining = IERC20(tokenIn).balanceOf(address(this));
+        if (remaining != 0) {
+            IERC20(tokenIn).safeTransfer(msg.sender, remaining);
+        }
     }
 }

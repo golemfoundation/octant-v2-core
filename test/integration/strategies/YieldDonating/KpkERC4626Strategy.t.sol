@@ -2,6 +2,7 @@
 pragma solidity ^0.8.25;
 
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
 import { ERC4626Strategy } from "src/strategies/yieldDonating/ERC4626Strategy.sol";
 import { ERC4626StrategyFactory } from "src/factories/ERC4626StrategyFactory.sol";
@@ -240,10 +241,26 @@ contract KpkERC4626StrategyTest is BaseYieldDonatingIntegrationTest {
     }
 
     /// @notice Test available deposit limit with idle assets
+    /// @dev Mocks the target vault's `maxDeposit` and the asset's `balanceOf` so the assertion
+    ///      isolates the strategy's arithmetic (`vaultLimit - idleBalance`). Using the live
+    ///      fork response for `maxDeposit` (which can be `type(uint256).max` for some target
+    ///      vaults) combined with `deal()`-based airdrops is flaky across CI environments,
+    ///      where the strategy's internal `balanceOf` read would return zero while the
+    ///      external read still reported the airdropped amount.
     function testAvailableDepositLimitWithIdleAssets() public {
         uint256 idleAmount = 1000 * 10 ** uint256(_decimals());
+        uint256 mockedVaultLimit = 100_000_000 * 10 ** uint256(_decimals());
 
-        airdrop(ERC20(_asset()), address(strategy), idleAmount);
+        vm.mockCall(
+            _compounderVault(),
+            abi.encodeWithSelector(IERC4626.maxDeposit.selector, address(strategy)),
+            abi.encode(mockedVaultLimit)
+        );
+        vm.mockCall(
+            _asset(),
+            abi.encodeWithSelector(IERC20.balanceOf.selector, address(strategy)),
+            abi.encode(idleAmount)
+        );
 
         uint256 limit = strategy.availableDepositLimit(user);
         uint256 kpkLimit = IERC4626(_compounderVault()).maxDeposit(address(strategy));

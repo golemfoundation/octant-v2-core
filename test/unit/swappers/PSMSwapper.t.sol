@@ -274,6 +274,133 @@ contract PSMSwapperTest is Test {
     }
 
     // ═══════════════════════════════════════════════════════════
+    // SWAP — RESIDUAL DUST FLUSH
+    // ═══════════════════════════════════════════════════════════
+
+    /// @dev Regression test for residual tokenIn dust. Under a non-zero PSM fee (`tout`), floor
+    ///      division in `_buyGem` means PSM pulls less DAI than `amountIn`; the leftover
+    ///      must be flushed back to `msg.sender` so the adapter does not accumulate dust
+    ///      that a later caller could sweep via `swap(..., receiver=self)`.
+    function test_swap_buyGem_flushesResidualToMsgSender() public {
+        MockPSM mockPSM = new MockPSM(address(dai), address(gem));
+        uint256 tout = 0.01e18; // 1% fee — triggers non-trivial floor-division remainder
+        mockPSM.setTout(tout);
+        // Enable real-PSM behavior: mock now pulls the exact DAI charge via transferFrom.
+        mockPSM.setConversionFactor(CONVERSION_FACTOR);
+
+        PSMSwapper s = new PSMSwapper(
+            address(mockPSM),
+            PSMSwapper.Route.BUY_GEM,
+            address(dai),
+            address(gem),
+            CONVERSION_FACTOR
+        );
+
+        uint256 amountIn = 1000e18;
+        dai.mint(address(s), amountIn);
+
+        // Compute the exact DAI amount PSM will pull — leftover is the residual dust.
+        uint256 gemAmt = (amountIn * WAD) / (CONVERSION_FACTOR * (WAD + tout));
+        uint256 pulled = (gemAmt * CONVERSION_FACTOR * (WAD + tout)) / WAD;
+        uint256 dust = amountIn - pulled;
+        assertGt(dust, 0, "pre-check: non-zero dust expected for this scenario");
+
+        uint256 callerBalBefore = dai.balanceOf(address(this));
+
+        s.swap(address(dai), address(gem), amountIn, 0, receiver);
+
+        assertEq(dai.balanceOf(address(s)), 0, "swapper must hold zero tokenIn between calls");
+        assertEq(dai.balanceOf(address(this)), callerBalBefore + dust, "residual dust must be returned to msg.sender");
+        assertEq(gem.balanceOf(receiver), gemAmt, "receiver gets the gem output");
+    }
+
+    /// @dev The residual flush must also zero-out `_sellGem` (defense-in-depth). On the
+    ///      happy path PSM consumes the full amount, but unconditional flushing keeps the
+    ///      adapter caller-agnostic and closes any future edge case.
+    function test_swap_sellGem_flushesAnyResidualToMsgSender() public {
+        MockPSM mockPSM = new MockPSM(address(gem), address(dai));
+        PSMSwapper s = new PSMSwapper(address(mockPSM), PSMSwapper.Route.SELL_GEM, address(gem), address(dai), 0);
+
+        uint256 amountIn = 1000e18;
+        gem.mint(address(s), amountIn);
+
+        // Seed pre-existing dust that would have been strandable under the old adapter.
+        uint256 preExistingDust = 7 wei;
+        gem.mint(address(s), preExistingDust);
+
+        uint256 callerBalBefore = gem.balanceOf(address(this));
+
+        s.swap(address(gem), address(dai), amountIn, 0, receiver);
+
+        assertEq(gem.balanceOf(address(s)), 0, "swapper must hold zero tokenIn between calls");
+        assertEq(
+            gem.balanceOf(address(this)),
+            callerBalBefore + preExistingDust,
+            "pre-existing dust must be flushed to msg.sender"
+        );
+    }
+
+    /// @dev Flush in `_daiToUsds` is a defensive no-op on the happy path; this test
+    ///      seeds pre-existing dust and verifies the flush drains it.
+    function test_swap_daiToUsds_flushesAnyResidualToMsgSender() public {
+        MockExchange mockExchange = new MockExchange(address(dai), address(usds));
+        PSMSwapper s = new PSMSwapper(
+            address(mockExchange),
+            PSMSwapper.Route.DAI_TO_USDS,
+            address(dai),
+            address(usds),
+            0
+        );
+
+        uint256 amountIn = 1000e18;
+        dai.mint(address(s), amountIn);
+
+        uint256 preExistingDust = 3 wei;
+        dai.mint(address(s), preExistingDust);
+
+        uint256 callerBalBefore = dai.balanceOf(address(this));
+
+        s.swap(address(dai), address(usds), amountIn, amountIn, receiver);
+
+        assertEq(dai.balanceOf(address(s)), 0, "swapper must hold zero tokenIn between calls");
+        assertEq(
+            dai.balanceOf(address(this)),
+            callerBalBefore + preExistingDust,
+            "pre-existing dust must be flushed to msg.sender"
+        );
+    }
+
+    /// @dev Flush in `_usdsToDai` is a defensive no-op on the happy path; this test
+    ///      seeds pre-existing dust and verifies the flush drains it.
+    function test_swap_usdsToDai_flushesAnyResidualToMsgSender() public {
+        MockExchange mockExchange = new MockExchange(address(usds), address(dai));
+        PSMSwapper s = new PSMSwapper(
+            address(mockExchange),
+            PSMSwapper.Route.USDS_TO_DAI,
+            address(usds),
+            address(dai),
+            0
+        );
+
+        uint256 amountIn = 1000e18;
+        usds.mint(address(s), amountIn);
+
+        uint256 preExistingDust = 5 wei;
+        usds.mint(address(s), preExistingDust);
+
+        uint256 callerBalBefore = usds.balanceOf(address(this));
+
+        s.swap(address(usds), address(dai), amountIn, amountIn, receiver);
+
+        assertEq(usds.balanceOf(address(s)), 0, "swapper must hold zero tokenIn between calls");
+        assertEq(
+            usds.balanceOf(address(this)),
+            callerBalBefore + preExistingDust,
+            "pre-existing dust must be flushed to msg.sender"
+        );
+    }
+
+    // ═══════════════════════════════════════════════════════════
     // SWAP — NON-1:1 CONVERSION REVERT
     // ═══════════════════════════════════════════════════════════
 
@@ -320,9 +447,12 @@ contract PSMSwapperTest is Test {
 
 /// @dev Mock PSM that simulates sellGem and buyGem
 contract MockPSM {
+    uint256 internal constant WAD = 1e18;
+
     ERC20Mock public tokenIn;
     ERC20Mock public tokenOut;
     uint256 public tout_;
+    uint256 public conversionFactor;
 
     constructor(address _tokenIn, address _tokenOut) {
         tokenIn = ERC20Mock(_tokenIn);
@@ -331,6 +461,13 @@ contract MockPSM {
 
     function setTout(uint256 _tout) external {
         tout_ = _tout;
+    }
+
+    /// @dev Optional: set the gem-to-DAI conversion factor so buyGem pulls the exact
+    ///      DAI amount real LitePSM would charge. Default 0 preserves legacy mock
+    ///      behavior (no DAI pull) for tests that don't care about the pull pattern.
+    function setConversionFactor(uint256 _conversionFactor) external {
+        conversionFactor = _conversionFactor;
     }
 
     function tout() external view returns (uint256) {
@@ -345,9 +482,14 @@ contract MockPSM {
         tokenOut.mint(usr, gemAmt);
     }
 
-    /// @dev buyGem: caller sends DAI, PSM sends gem to caller
+    /// @dev buyGem: caller sends DAI, PSM sends gem to caller. If `conversionFactor`
+    ///      is set, pulls the exact DAI charge `gemAmt * conversionFactor * (WAD + tout) / WAD`
+    ///      from msg.sender -- matching real LitePSM behavior.
     function buyGem(address usr, uint256 gemAmt) external {
-        // Mint gem to usr
+        if (conversionFactor != 0) {
+            uint256 daiAmt = (gemAmt * conversionFactor * (WAD + tout_)) / WAD;
+            tokenIn.transferFrom(msg.sender, address(this), daiAmt);
+        }
         tokenOut.mint(usr, gemAmt);
     }
 }
