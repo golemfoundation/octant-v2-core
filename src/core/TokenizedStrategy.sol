@@ -1464,6 +1464,14 @@ abstract contract TokenizedStrategy {
     /**
      * @notice Sets whether to enable burning shares from dragon router during loss protection.
      * @dev Can only be called by the current `management`.
+     *
+     *      Operator note (Bailsec #64): when `dragonRouter` is a contract that
+     *      redeems its full share balance on every `report()` (for example a
+     *      YieldForwarder), the burn mechanism cannot absorb losses because the
+     *      dragon balance at loss time is always zero. In that configuration
+     *      `enableBurning` should be left `false`; losses will be socialized
+     *      across depositors via PPS reduction exactly as if burning were
+     *      disabled. See YieldForwarder NatSpec for details.
      * @param _enableBurning Whether to enable the burning mechanism.
      */
     function setEnableBurning(bool _enableBurning) external onlyManagement {

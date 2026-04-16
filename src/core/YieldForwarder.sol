@@ -43,6 +43,15 @@ interface IReportable {
  *      - Keeper-gated: only the designated keeper can trigger
  *      - Single-purpose: assets can only flow to the hardcoded receiver
  *      - Strategy is passed as a call-time parameter to avoid circular dependencies
+ *
+ *      COMPATIBILITY NOTE (Bailsec #64):
+ *      When this contract is set as a strategy's `dragonRouter`, the
+ *      `enableBurning` loss-protection feature is effectively disabled --
+ *      `reportAndForward` redeems the forwarder's full share balance after every
+ *      report, so the dragon's balance at loss time is always zero and no shares
+ *      can be burned to absorb the loss. Operators who want `enableBurning = true`
+ *      must use a non-forwarder dragon (EOA, multisig, or a splitter that retains
+ *      balance between reports).
  */
 contract YieldForwarder is ReentrancyGuard {
     // ============================================
