@@ -364,6 +364,48 @@ contract UniswapV4SwapperAdapterTest is Test {
 
         assertFalse(pm.lastZeroForOne(), "tokenIn > tokenOut should be zeroForOne=false");
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // SWAP — PARTIAL FILL RESIDUE (bailsec #76)
+    // ═══════════════════════════════════════════════════════════
+
+    /// @notice When the pool consumes less than amountIn (liquidity exhausted
+    ///         at the tick limit), the adapter must take the surplus tokenIn
+    ///         delta back to the original caller. Without the fix,
+    ///         unlock reverts with CurrencyNotSettled and the surplus is
+    ///         stranded in the PoolManager singleton. Regression for bailsec #76.
+    function test_swap_partialFill_takesUnusedTokenInBack() public {
+        UniswapV4SwapperAdapter s = new UniswapV4SwapperAdapter(
+            address(pm),
+            FEE,
+            TICK_SPACING,
+            address(0),
+            address(0),
+            0,
+            0,
+            address(0)
+        );
+
+        uint256 amountIn = 1000e18;
+        tokenA.mint(address(this), amountIn);
+        tokenA.approve(address(s), amountIn);
+
+        // Simulate partial fill at 70% and 1:1 rate
+        pm.setConsumedBps(7000);
+        pm.setOutputToken(address(tokenB));
+
+        uint256 amountOut = s.swap(address(tokenA), address(tokenB), amountIn, 0, receiver);
+
+        uint256 consumed = (amountIn * 7000) / 10_000;
+        uint256 unused = amountIn - consumed;
+
+        assertEq(amountOut, consumed, "amountOut should equal consumed at 1:1 rate");
+        assertEq(tokenB.balanceOf(receiver), amountOut, "Receiver should get output");
+        assertEq(tokenA.balanceOf(address(s)), 0, "Adapter must hold zero tokenIn after swap");
+        assertEq(tokenA.balanceOf(address(this)), unused, "Caller must receive unused tokenIn");
+        // PoolManager ends up with exactly `consumed` (its share of the swap settlement)
+        assertEq(tokenA.balanceOf(address(pm)), consumed, "PoolManager keeps only the consumed amount");
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -375,6 +417,9 @@ contract UniswapV4SwapperAdapterTest is Test {
 contract MockV4PoolManager {
     address public outputToken;
     uint256 public outputRate = 1e18; // 1:1 by default (1e18 = 100%)
+    uint256 public consumedBps = 10_000; // default: full fill (100% of amountIn consumed)
+
+    uint256 internal constant BPS = 10_000;
 
     // Tracked for assertions
     uint24 public lastPoolFee;
@@ -388,6 +433,13 @@ contract MockV4PoolManager {
 
     function setOutputRate(uint256 _rate) external {
         outputRate = _rate;
+    }
+
+    /// @notice Control how much of amountSpecified the mock swap consumes.
+    ///         10_000 = full fill; below that simulates a shallow pool that
+    ///         reaches MIN/MAX tick with unconsumed input remaining.
+    function setConsumedBps(uint256 _bps) external {
+        consumedBps = _bps;
     }
 
     function resetSwapCallCount() external {
@@ -414,9 +466,10 @@ contract MockV4PoolManager {
         swapCallCount++;
 
         uint256 absAmountIn = uint256(-params.amountSpecified); // amountSpecified is negative for exactInput
-        uint256 amountOut = (absAmountIn * outputRate) / 1e18;
+        uint256 consumed = (absAmountIn * consumedBps) / BPS;
+        uint256 amountOut = (consumed * outputRate) / 1e18;
 
-        int128 inputDelta = -int128(int256(absAmountIn)); // negative: caller pays
+        int128 inputDelta = -int128(int256(consumed)); // negative: caller pays consumed
         int128 outputDelta = int128(int256(amountOut)); // positive: caller receives
 
         int128 d0;
@@ -441,9 +494,17 @@ contract MockV4PoolManager {
         return 0;
     }
 
-    /// @dev Mints output tokens to the recipient, simulating PM token release
-    function take(address /* currency */, address to, uint256 amount) external {
-        ERC20Mock(outputToken).mint(to, amount);
+    /// @dev Pays `amount` of `currency` to `to`. For the configured outputToken
+    ///      we mint (simulating release from the pool's reserves); for any
+    ///      other currency (e.g. tokenIn surplus on a partial fill) we
+    ///      transfer from this contract's balance, modelling the real PM
+    ///      releasing a positive delta from its reserves.
+    function take(address currency, address to, uint256 amount) external {
+        if (currency == outputToken) {
+            ERC20Mock(outputToken).mint(to, amount);
+        } else {
+            ERC20Mock(currency).transfer(to, amount);
+        }
     }
 }
 
