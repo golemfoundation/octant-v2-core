@@ -82,6 +82,16 @@ contract SparkStrategy is ERC4626Strategy {
      * - Transfers entire balance to dragon router
      * - Can be called by both keepers and management for operational flexibility
      * - Emits event for transparency
+     *
+     * @custom:operator-note (Bailsec #65) When `keeper` is a YieldForwarder,
+     *                      this function cannot be invoked by the keeper role
+     *                      (YieldForwarder exposes no strategy-API proxy). In
+     *                      that configuration `management` must retain a
+     *                      separate operational channel to call `sweepAirdrop`.
+     *                      If `dragonRouter` is also a YieldForwarder, follow
+     *                      the sweep with `YieldForwarder.forwardToken(_token)`
+     *                      so the swept balance is forwarded to the hardcoded
+     *                      receiver (see YieldForwarder NatSpec).
      */
     function sweepAirdrop(address _token) external onlyKeepers {
         // Safety checks: prevent sweeping critical tokens
