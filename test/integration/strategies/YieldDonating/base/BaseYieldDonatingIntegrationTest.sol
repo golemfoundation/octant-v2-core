@@ -421,8 +421,8 @@ abstract contract BaseYieldDonatingIntegrationTest is BaseIntegrationTest {
 
     // ========== HARVEST AND REPORT OVERFLOW TESTS ==========
 
-    /// @notice Test that _harvestAndReport returns type(uint256).max when vault convertToAssets overflows with idle
-    /// @dev Mocks convertToAssets on the compounder vault to return type(uint256).max, ensuring the
+    /// @notice Test that _harvestAndReport returns type(uint256).max when vault previewRedeem overflows with idle
+    /// @dev Mocks previewRedeem on the compounder vault to return type(uint256).max, ensuring the
     ///      overflow guard `if (vaultAssets > type(uint256).max - idleAssets) return type(uint256).max` is hit
     function _testHarvestOverflowFromVault() internal {
         uint256 depositAmount = 1000 * 10 ** uint256(_decimals());
@@ -441,11 +441,11 @@ abstract contract BaseYieldDonatingIntegrationTest is BaseIntegrationTest {
         // Airdrop idle assets to strategy so idleAssets > 0
         airdrop(ERC20(_asset()), address(vault), idleAmount);
 
-        // Mock convertToAssets on compounder vault to return type(uint256).max for any input
+        // Mock previewRedeem on compounder vault to return type(uint256).max for any input
         // This triggers the overflow guard: vaultAssets > type(uint256).max - idleAssets
         vm.mockCall(
             _compounderVault(),
-            abi.encodeWithSelector(IERC4626.convertToAssets.selector),
+            abi.encodeWithSelector(IERC4626.previewRedeem.selector),
             abi.encode(type(uint256).max)
         );
 

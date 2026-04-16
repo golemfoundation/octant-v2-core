@@ -173,7 +173,7 @@ contract SparkDonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         uint256 balanceOfSparkVault = IERC4626(_compounderVault()).balanceOf(address(strategy));
         vm.mockCall(
             address(IERC4626(_compounderVault())),
-            abi.encodeWithSelector(IERC4626.convertToAssets.selector, balanceOfSparkVault),
+            abi.encodeWithSelector(IERC4626.previewRedeem.selector, balanceOfSparkVault),
             abi.encode(depositAmount + profitAmount)
         );
 
@@ -500,7 +500,7 @@ contract SparkDonatingStrategyTest is BaseYieldDonatingIntegrationTest {
 
     // ========== HARVEST OVERFLOW TESTS ==========
 
-    /// @notice Test that _harvestAndReport caps at type(uint256).max when convertToAssets overflows with idle
+    /// @notice Test that _harvestAndReport caps at type(uint256).max when previewRedeem overflows with idle
     function testHarvestOverflowFromVaultSpark() public {
         _testHarvestOverflowFromVault();
     }

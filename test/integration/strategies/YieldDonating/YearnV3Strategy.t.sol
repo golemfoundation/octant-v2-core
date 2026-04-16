@@ -147,7 +147,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         uint256 balanceOfYearnVault = ITokenizedStrategy(_compounderVault()).balanceOf(address(strategy));
         vm.mockCall(
             _compounderVault(),
-            abi.encodeWithSelector(IERC4626.convertToAssets.selector, balanceOfYearnVault),
+            abi.encodeWithSelector(IERC4626.previewRedeem.selector, balanceOfYearnVault),
             abi.encode(depositAmount + profitAmount)
         );
 
@@ -256,7 +256,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         uint256 excessiveProfit = (depositAmount * 20) / 100; // 20% profit
         vm.mockCall(
             _compounderVault(),
-            abi.encodeWithSelector(IERC4626.convertToAssets.selector, balanceOfYearnVault),
+            abi.encodeWithSelector(IERC4626.previewRedeem.selector, balanceOfYearnVault),
             abi.encode(depositAmount + excessiveProfit)
         );
 
@@ -285,7 +285,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         uint256 loss = (depositAmount * 10) / 100; // 10% loss
         vm.mockCall(
             _compounderVault(),
-            abi.encodeWithSelector(IERC4626.convertToAssets.selector, balanceOfYearnVault),
+            abi.encodeWithSelector(IERC4626.previewRedeem.selector, balanceOfYearnVault),
             abi.encode(depositAmount - loss)
         );
 
@@ -317,7 +317,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         uint256 excessiveProfit = (depositAmount * 50) / 100; // 50% profit
         vm.mockCall(
             _compounderVault(),
-            abi.encodeWithSelector(IERC4626.convertToAssets.selector, balanceOfYearnVault),
+            abi.encodeWithSelector(IERC4626.previewRedeem.selector, balanceOfYearnVault),
             abi.encode(depositAmount + excessiveProfit)
         );
 
@@ -349,7 +349,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
 
         vm.mockCall(
             _compounderVault(),
-            abi.encodeWithSelector(IERC4626.convertToAssets.selector, yearnSharesBefore),
+            abi.encodeWithSelector(IERC4626.previewRedeem.selector, yearnSharesBefore),
             abi.encode(depositAmount + vaultProfit)
         );
 
@@ -572,7 +572,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
 
     // ========== HARVEST OVERFLOW TESTS ==========
 
-    /// @notice Test that _harvestAndReport caps at type(uint256).max when convertToAssets overflows with idle
+    /// @notice Test that _harvestAndReport caps at type(uint256).max when previewRedeem overflows with idle
     function testHarvestOverflowFromVaultYearn() public {
         _testHarvestOverflowFromVault();
     }
@@ -599,7 +599,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
 
         vm.mockCall(
             _compounderVault(),
-            abi.encodeWithSelector(IERC4626.convertToAssets.selector, yearnSharesBefore),
+            abi.encodeWithSelector(IERC4626.previewRedeem.selector, yearnSharesBefore),
             abi.encode(depositAmount - lossAmount)
         );
 
@@ -636,7 +636,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         uint256 yearnShares = ITokenizedStrategy(_compounderVault()).balanceOf(address(strategy));
         vm.mockCall(
             _compounderVault(),
-            abi.encodeWithSelector(IERC4626.convertToAssets.selector, yearnShares),
+            abi.encodeWithSelector(IERC4626.previewRedeem.selector, yearnShares),
             abi.encode(remainingValue)
         );
 
@@ -688,7 +688,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         uint256 yearnShares = ITokenizedStrategy(_compounderVault()).balanceOf(address(strategy));
         vm.mockCall(
             _compounderVault(),
-            abi.encodeWithSelector(IERC4626.convertToAssets.selector, yearnShares),
+            abi.encodeWithSelector(IERC4626.previewRedeem.selector, yearnShares),
             abi.encode(remainingValue)
         );
 
@@ -737,7 +737,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         uint256 yearnShares = ITokenizedStrategy(_compounderVault()).balanceOf(address(strategy));
         vm.mockCall(
             _compounderVault(),
-            abi.encodeWithSelector(IERC4626.convertToAssets.selector, yearnShares),
+            abi.encodeWithSelector(IERC4626.previewRedeem.selector, yearnShares),
             abi.encode(depositAmount - lossAmount)
         );
 
@@ -774,7 +774,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         uint256 yearnShares = ITokenizedStrategy(_compounderVault()).balanceOf(address(strategy));
         vm.mockCall(
             _compounderVault(),
-            abi.encodeWithSelector(IERC4626.convertToAssets.selector, yearnShares),
+            abi.encodeWithSelector(IERC4626.previewRedeem.selector, yearnShares),
             abi.encode(remainingValue)
         );
 
