@@ -3,8 +3,9 @@ pragma solidity ^0.8.25;
 
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { ISwapper } from "./interfaces/ISwapper.sol";
-import { YieldForwarder, IRedeemable, IReportable } from "./YieldForwarder.sol";
+import { YieldForwarder, IRedeemable, IReportable, IMaxRedeem } from "./YieldForwarder.sol";
 
 /// @notice Minimal ERC4626 interface to read a strategy's underlying asset
 interface IERC4626Asset {
@@ -131,7 +132,13 @@ contract SwappingYieldForwarder is YieldForwarder {
 
         IReportable(strategy).report();
 
-        uint256 shares = IERC20(strategy).balanceOf(address(this));
+        uint256 balance = IERC20(strategy).balanceOf(address(this));
+        if (balance == 0) return 0;
+
+        // Bailsec #62: mirror reportAndForward's maxRedeem cap so the inner redeem
+        // cannot revert when external vault liquidity tightens below the forwarder's
+        // share balance. Residual shares stay at the forwarder until headroom recovers.
+        uint256 shares = Math.min(balance, IMaxRedeem(strategy).maxRedeem(address(this)));
         if (shares == 0) return 0;
 
         // Redeem to this contract (not receiver) so we can swap first
