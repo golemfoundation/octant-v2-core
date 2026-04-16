@@ -88,6 +88,7 @@ contract UniswapV3SwapperAdapter is ISwapper {
     ) external override returns (uint256 amountOut) {
         if (tokenIn == address(0) || tokenOut == address(0)) revert InvalidToken();
 
+        IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
         IERC20(tokenIn).forceApprove(router, amountIn);
 
         if (base == address(0) || tokenIn == base || tokenOut == base) {

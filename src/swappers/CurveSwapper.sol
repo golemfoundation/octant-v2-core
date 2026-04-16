@@ -124,6 +124,7 @@ contract CurveSwapper is ISwapper {
     ) external override returns (uint256 amountOut) {
         if (_tokenIn != tokenIn || _tokenOut != tokenOut) revert InvalidToken();
 
+        IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
         IERC20(tokenIn).forceApprove(pool, amountIn);
 
         uint256 balBefore = IERC20(tokenOut).balanceOf(address(this));

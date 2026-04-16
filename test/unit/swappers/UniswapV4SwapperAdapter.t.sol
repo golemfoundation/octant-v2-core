@@ -183,7 +183,8 @@ contract UniswapV4SwapperAdapterTest is Test {
         );
 
         uint256 amountIn = 1000e18;
-        tokenA.mint(address(s), amountIn);
+        tokenA.mint(address(this), amountIn);
+        tokenA.approve(address(s), amountIn);
 
         pm.setOutputToken(address(tokenB));
 
@@ -210,7 +211,8 @@ contract UniswapV4SwapperAdapterTest is Test {
         );
 
         uint256 amountIn = 500e18;
-        tokenA.mint(address(s), amountIn);
+        tokenA.mint(address(this), amountIn);
+        tokenA.approve(address(s), amountIn);
         pm.setOutputToken(address(baseToken));
 
         uint256 amountOut = s.swap(address(tokenA), address(baseToken), amountIn, 0, receiver);
@@ -239,7 +241,8 @@ contract UniswapV4SwapperAdapterTest is Test {
         );
 
         uint256 amountIn = 500e18;
-        baseToken.mint(address(s), amountIn);
+        baseToken.mint(address(this), amountIn);
+        baseToken.approve(address(s), amountIn);
         pm.setOutputToken(address(tokenB));
 
         uint256 amountOut = s.swap(address(baseToken), address(tokenB), amountIn, 0, receiver);
@@ -268,7 +271,8 @@ contract UniswapV4SwapperAdapterTest is Test {
         );
 
         uint256 amountIn = 1000e18;
-        tokenA.mint(address(s), amountIn);
+        tokenA.mint(address(this), amountIn);
+        tokenA.approve(address(s), amountIn);
         pm.setOutputToken(address(tokenB));
 
         uint256 amountOut = s.swap(address(tokenA), address(tokenB), amountIn, 0, receiver);
@@ -295,7 +299,8 @@ contract UniswapV4SwapperAdapterTest is Test {
         );
 
         uint256 amountIn = 1000e18;
-        tokenA.mint(address(s), amountIn);
+        tokenA.mint(address(this), amountIn);
+        tokenA.approve(address(s), amountIn);
         pm.setOutputToken(address(tokenB));
         pm.setOutputRate(5e17); // 50% output rate
 
@@ -325,7 +330,8 @@ contract UniswapV4SwapperAdapterTest is Test {
         address low = address(tokenA) < address(tokenB) ? address(tokenA) : address(tokenB);
         address high = address(tokenA) < address(tokenB) ? address(tokenB) : address(tokenA);
 
-        ERC20Mock(low).mint(address(s), amountIn);
+        ERC20Mock(low).mint(address(this), amountIn);
+        ERC20Mock(low).approve(address(s), amountIn);
         pm.setOutputToken(high);
 
         s.swap(low, high, amountIn, 0, receiver);
@@ -350,7 +356,8 @@ contract UniswapV4SwapperAdapterTest is Test {
         address low = address(tokenA) < address(tokenB) ? address(tokenA) : address(tokenB);
         address high = address(tokenA) < address(tokenB) ? address(tokenB) : address(tokenA);
 
-        ERC20Mock(high).mint(address(s), amountIn);
+        ERC20Mock(high).mint(address(this), amountIn);
+        ERC20Mock(high).approve(address(s), amountIn);
         pm.setOutputToken(low);
 
         s.swap(high, low, amountIn, 0, receiver);

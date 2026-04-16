@@ -102,7 +102,8 @@ contract CurveSwapperTest is Test {
         CurveSwapper s = new CurveSwapper(address(pool), INDEX_IN, INDEX_OUT, address(tokenIn), address(tokenOut));
 
         uint256 amountIn = 1000e18;
-        tokenIn.mint(address(s), amountIn);
+        tokenIn.mint(address(this), amountIn);
+        tokenIn.approve(address(s), amountIn);
 
         uint256 amountOut = s.swap(address(tokenIn), address(tokenOut), amountIn, 0, receiver);
 
@@ -114,7 +115,8 @@ contract CurveSwapperTest is Test {
         CurveSwapper s = new CurveSwapper(address(pool), INDEX_IN, INDEX_OUT, address(tokenIn), address(tokenOut));
 
         uint256 amountIn = 1000e18;
-        tokenIn.mint(address(s), amountIn);
+        tokenIn.mint(address(this), amountIn);
+        tokenIn.approve(address(s), amountIn);
 
         // Pool enforces minAmountOut via the mock
         pool.setSlippage(50); // 50% output
@@ -131,7 +133,8 @@ contract CurveSwapperTest is Test {
         amountIn = bound(amountIn, 1, 1e30);
         CurveSwapper s = new CurveSwapper(address(pool), INDEX_IN, INDEX_OUT, address(tokenIn), address(tokenOut));
 
-        tokenIn.mint(address(s), amountIn);
+        tokenIn.mint(address(this), amountIn);
+        tokenIn.approve(address(s), amountIn);
         uint256 amountOut = s.swap(address(tokenIn), address(tokenOut), amountIn, 0, receiver);
 
         assertEq(amountOut, amountIn, "1:1 mock output");

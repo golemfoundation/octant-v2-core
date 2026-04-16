@@ -174,6 +174,8 @@ contract UniswapV4SwapperAdapter is ISwapper {
     ) external override returns (uint256 amountOut) {
         if (tokenIn == address(0) || tokenOut == address(0)) revert InvalidToken();
 
+        IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
+
         bytes memory result = IV4PoolManager(poolManager).unlock(
             abi.encode(tokenIn, tokenOut, amountIn, minAmountOut, receiver)
         );

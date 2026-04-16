@@ -164,7 +164,7 @@ contract UniswapV3MultiHopTest is Test {
         );
 
         deal(USDC, address(this), SWAP_AMOUNT_USDC);
-        IERC20(USDC).transfer(address(adapter), SWAP_AMOUNT_USDC);
+        IERC20(USDC).approve(address(adapter), SWAP_AMOUNT_USDC);
 
         uint256 amountOut = adapter.swap(USDC, DAI, SWAP_AMOUNT_USDC, 0, swapReceiver);
 
@@ -183,7 +183,7 @@ contract UniswapV3MultiHopTest is Test {
         );
 
         deal(USDC, address(this), SWAP_AMOUNT_USDC);
-        IERC20(USDC).transfer(address(adapter), SWAP_AMOUNT_USDC);
+        IERC20(USDC).approve(address(adapter), SWAP_AMOUNT_USDC);
 
         // Unreasonably high minAmountOut should revert
         vm.expectRevert();
@@ -220,7 +220,7 @@ contract UniswapV3MultiHopTest is Test {
         );
 
         deal(USDC, address(this), SWAP_AMOUNT_USDC);
-        IERC20(USDC).transfer(address(adapter), SWAP_AMOUNT_USDC);
+        IERC20(USDC).approve(address(adapter), SWAP_AMOUNT_USDC);
 
         uint256 amountOut = adapter.swap(USDC, WETH, SWAP_AMOUNT_USDC, 0, swapReceiver);
 
@@ -243,7 +243,7 @@ contract UniswapV3MultiHopTest is Test {
         );
 
         deal(WETH, address(this), SWAP_AMOUNT_WETH);
-        IERC20(WETH).transfer(address(adapter), SWAP_AMOUNT_WETH);
+        IERC20(WETH).approve(address(adapter), SWAP_AMOUNT_WETH);
 
         uint256 amountOut = adapter.swap(WETH, DAI, SWAP_AMOUNT_WETH, 0, swapReceiver);
 
@@ -264,7 +264,7 @@ contract UniswapV3MultiHopTest is Test {
         );
 
         deal(WETH, address(this), SWAP_AMOUNT_WETH);
-        IERC20(WETH).transfer(address(adapter), SWAP_AMOUNT_WETH);
+        IERC20(WETH).approve(address(adapter), SWAP_AMOUNT_WETH);
 
         // Should succeed because it uses feeOut (3000), not fee (10000)
         uint256 amountOut = adapter.swap(WETH, DAI, SWAP_AMOUNT_WETH, 0, swapReceiver);

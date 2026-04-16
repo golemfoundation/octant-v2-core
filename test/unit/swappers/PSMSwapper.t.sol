@@ -102,7 +102,8 @@ contract PSMSwapperTest is Test {
         PSMSwapper s = new PSMSwapper(address(mockPSM), PSMSwapper.Route.SELL_GEM, address(gem), address(dai), 0);
 
         uint256 amountIn = 1000e18;
-        gem.mint(address(s), amountIn);
+        gem.mint(address(this), amountIn);
+        gem.approve(address(s), amountIn);
 
         uint256 amountOut = s.swap(address(gem), address(dai), amountIn, 0, receiver);
 
@@ -123,7 +124,8 @@ contract PSMSwapperTest is Test {
         );
 
         uint256 amountIn = 1000e18;
-        dai.mint(address(s), amountIn);
+        dai.mint(address(this), amountIn);
+        dai.approve(address(s), amountIn);
 
         uint256 amountOut = s.swap(address(dai), address(gem), amountIn, 0, receiver);
 
@@ -147,7 +149,8 @@ contract PSMSwapperTest is Test {
         );
 
         uint256 amountIn = 1000e18;
-        dai.mint(address(s), amountIn);
+        dai.mint(address(this), amountIn);
+        dai.approve(address(s), amountIn);
 
         uint256 amountOut = s.swap(address(dai), address(gem), amountIn, 0, receiver);
 
@@ -167,7 +170,8 @@ contract PSMSwapperTest is Test {
         );
 
         uint256 amountIn = 1000e18;
-        dai.mint(address(s), amountIn);
+        dai.mint(address(this), amountIn);
+        dai.approve(address(s), amountIn);
 
         // minAmountOut = amountIn: 1:1 conversion, exact output enforced internally
         uint256 amountOut = s.swap(address(dai), address(usds), amountIn, amountIn, receiver);
@@ -187,7 +191,8 @@ contract PSMSwapperTest is Test {
         );
 
         uint256 amountIn = 1000e18;
-        usds.mint(address(s), amountIn);
+        usds.mint(address(this), amountIn);
+        usds.approve(address(s), amountIn);
 
         // minAmountOut = amountIn: 1:1 conversion, exact output enforced internally
         uint256 amountOut = s.swap(address(usds), address(dai), amountIn, amountIn, receiver);
@@ -209,7 +214,8 @@ contract PSMSwapperTest is Test {
         );
 
         uint256 amountIn = 1000e18;
-        dai.mint(address(s), amountIn);
+        dai.mint(address(this), amountIn);
+        dai.approve(address(s), amountIn);
 
         // Expected gem = 1000e6, require more
         uint256 tooHigh = 2000e6;
@@ -231,7 +237,8 @@ contract PSMSwapperTest is Test {
 
         // amountIn too small: 999 wei of DAI with 1e12 conversion = gemAmt truncates to 0
         uint256 tinyAmount = CONVERSION_FACTOR - 1;
-        dai.mint(address(s), tinyAmount);
+        dai.mint(address(this), tinyAmount);
+        dai.approve(address(s), tinyAmount);
 
         vm.expectRevert(abi.encodeWithSelector(PSMSwapper.InsufficientOutput.selector, 1, 0));
         s.swap(address(dai), address(gem), tinyAmount, 0, receiver);
@@ -248,7 +255,8 @@ contract PSMSwapperTest is Test {
         );
 
         uint256 amountIn = 1000e18;
-        dai.mint(address(s), amountIn);
+        dai.mint(address(this), amountIn);
+        dai.approve(address(s), amountIn);
 
         // Caller passes 0 as minAmountOut, but contract enforces amountIn internally
         uint256 amountOut = s.swap(address(dai), address(usds), amountIn, 0, receiver);
@@ -266,7 +274,8 @@ contract PSMSwapperTest is Test {
         );
 
         uint256 amountIn = 1000e18;
-        usds.mint(address(s), amountIn);
+        usds.mint(address(this), amountIn);
+        usds.approve(address(s), amountIn);
 
         // Caller passes 0 as minAmountOut, but contract enforces amountIn internally
         uint256 amountOut = s.swap(address(usds), address(dai), amountIn, 0, receiver);
@@ -289,7 +298,8 @@ contract PSMSwapperTest is Test {
         );
 
         uint256 amountIn = 1000e18;
-        dai.mint(address(s), amountIn);
+        dai.mint(address(this), amountIn);
+        dai.approve(address(s), amountIn);
 
         vm.expectRevert(abi.encodeWithSelector(PSMSwapper.NonOneToOneConversion.selector, amountIn, amountIn - 1));
         s.swap(address(dai), address(usds), amountIn, 0, receiver);
@@ -307,7 +317,8 @@ contract PSMSwapperTest is Test {
         );
 
         uint256 amountIn = 1000e18;
-        usds.mint(address(s), amountIn);
+        usds.mint(address(this), amountIn);
+        usds.approve(address(s), amountIn);
 
         vm.expectRevert(abi.encodeWithSelector(PSMSwapper.NonOneToOneConversion.selector, amountIn, amountIn - 1));
         s.swap(address(usds), address(dai), amountIn, 0, receiver);

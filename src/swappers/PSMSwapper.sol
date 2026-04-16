@@ -128,6 +128,8 @@ contract PSMSwapper is ISwapper {
     ) external override returns (uint256 amountOut) {
         if (_tokenIn != tokenIn || _tokenOut != tokenOut) revert InvalidToken();
 
+        IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
+
         if (route == Route.SELL_GEM) {
             amountOut = _sellGem(amountIn, receiver);
         } else if (route == Route.BUY_GEM) {

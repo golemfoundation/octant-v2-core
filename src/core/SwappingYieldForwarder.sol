@@ -143,8 +143,9 @@ contract SwappingYieldForwarder is YieldForwarder {
 
         address assetIn = IERC4626Asset(strategy).asset();
 
-        // Transfer underlying to swapper, then execute swap to receiver
-        IERC20(assetIn).safeTransfer(address(swapper), assetsIn);
+        // Approve swapper and execute swap to receiver. The swapper pulls
+        // via transferFrom and returns any unused tokenIn before returning.
+        IERC20(assetIn).forceApprove(address(swapper), assetsIn);
         assetsOut = swapper.swap(assetIn, targetAsset, assetsIn, minAmountOut, receiver);
 
         emit YieldSwappedAndForwarded(strategy, receiver, shares, assetsIn, assetsOut);

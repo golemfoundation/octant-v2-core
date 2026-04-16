@@ -78,7 +78,8 @@ contract UniswapV3SwapperAdapterTest is Test {
         UniswapV3SwapperAdapter s = new UniswapV3SwapperAdapter(address(router), FEE, address(0), 0);
 
         uint256 amountIn = 1000e18;
-        tokenA.mint(address(s), amountIn);
+        tokenA.mint(address(this), amountIn);
+        tokenA.approve(address(s), amountIn);
 
         router.setOutputToken(address(tokenB));
 
@@ -97,7 +98,8 @@ contract UniswapV3SwapperAdapterTest is Test {
         UniswapV3SwapperAdapter s = new UniswapV3SwapperAdapter(address(router), FEE, address(baseToken), FEE_OUT);
 
         uint256 amountIn = 500e18;
-        tokenA.mint(address(s), amountIn);
+        tokenA.mint(address(this), amountIn);
+        tokenA.approve(address(s), amountIn);
         router.setOutputToken(address(baseToken));
 
         uint256 amountOut = s.swap(address(tokenA), address(baseToken), amountIn, 0, receiver);
@@ -117,7 +119,8 @@ contract UniswapV3SwapperAdapterTest is Test {
         UniswapV3SwapperAdapter s = new UniswapV3SwapperAdapter(address(router), FEE, address(baseToken), FEE_OUT);
 
         uint256 amountIn = 500e18;
-        baseToken.mint(address(s), amountIn);
+        baseToken.mint(address(this), amountIn);
+        baseToken.approve(address(s), amountIn);
         router.setOutputToken(address(tokenB));
 
         uint256 amountOut = s.swap(address(baseToken), address(tokenB), amountIn, 0, receiver);
@@ -136,7 +139,8 @@ contract UniswapV3SwapperAdapterTest is Test {
         UniswapV3SwapperAdapter s = new UniswapV3SwapperAdapter(address(router), FEE, address(baseToken), FEE_OUT);
 
         uint256 amountIn = 1000e18;
-        tokenA.mint(address(s), amountIn);
+        tokenA.mint(address(this), amountIn);
+        tokenA.approve(address(s), amountIn);
         router.setOutputToken(address(tokenB));
 
         uint256 amountOut = s.swap(address(tokenA), address(tokenB), amountIn, 0, receiver);
