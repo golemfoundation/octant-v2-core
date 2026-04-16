@@ -134,5 +134,15 @@ contract CurveSwapper is ISwapper {
         IERC20(tokenIn).forceApprove(pool, 0);
 
         IERC20(tokenOut).safeTransfer(receiver, amountOut);
+
+        // Zero-residue invariant (cantina #1): Curve pools normally pull
+        // the full `amountIn`, but any tokenIn that ended up here — whether
+        // from an unusual pool implementation or a donation — is returned
+        // to the caller so the adapter upholds its stateless-between-calls
+        // contract on every path.
+        uint256 leftover = IERC20(tokenIn).balanceOf(address(this));
+        if (leftover != 0) {
+            IERC20(tokenIn).safeTransfer(msg.sender, leftover);
+        }
     }
 }
