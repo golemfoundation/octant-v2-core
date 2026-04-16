@@ -97,6 +97,10 @@ contract YearnV3Strategy is BaseHealthCheck {
         // the maxDeposit value may be inflated when the underlying chain reaches vaults with duplicate
         // markets in their supplyQueue (like SteakHouse USDC). This could cause temporary DoS for deposits
         uint256 vaultLimit = ITokenizedStrategy(yearnVault).maxDeposit(address(this));
+        // Preserve the ERC-4626 "infinite capacity" sentinel so TokenizedStrategy._maxMint short-circuits
+        // the _convertToShares call; subtracting the idle balance would clobber the sentinel and cause
+        // maxMint() to overflow in the mulDiv when share price != 1.
+        if (vaultLimit == type(uint256).max) return type(uint256).max;
         uint256 idleBalance = IERC20(asset).balanceOf(address(this));
         return vaultLimit > idleBalance ? vaultLimit - idleBalance : 0;
     }
