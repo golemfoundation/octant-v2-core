@@ -85,6 +85,12 @@ contract ERC4626Strategy is BaseHealthCheck {
      */
     function availableDepositLimit(address /*_owner*/) public view override returns (uint256) {
         uint256 vaultLimit = IERC4626(targetVault).maxDeposit(address(this));
+        // Preserve the ERC-4626 "infinite capacity" sentinel; subtracting the
+        // idle balance would clobber `type(uint256).max` into `uint256.max - idle`,
+        // which `TokenizedStrategy._maxMint` no longer recognises as unbounded
+        // and routes through `_convertToShares` (risking mulDiv overflow off
+        // 1:1 PPS).
+        if (vaultLimit == type(uint256).max) return type(uint256).max;
         uint256 idleBalance = IERC20(asset).balanceOf(address(this));
         return vaultLimit > idleBalance ? vaultLimit - idleBalance : 0;
     }

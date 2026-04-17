@@ -101,6 +101,12 @@ contract MorphoCompounderStrategy is BaseHealthCheck {
         // This is because maxDeposit chains through: this strategy → Morpho Steakhouse → SteakHouse USDC,
         // and SteakHouse USDC's maxDeposit may overstate capacity when duplicate markets exist.
         uint256 vaultLimit = ITokenizedStrategy(compounderVault).maxDeposit(address(this));
+        // Preserve the ERC-4626 "infinite capacity" sentinel; subtracting the
+        // idle balance would clobber `type(uint256).max` into `uint256.max - idle`,
+        // which `TokenizedStrategy._maxMint` no longer recognises as unbounded
+        // and routes through `_convertToShares` (risking mulDiv overflow off
+        // 1:1 PPS).
+        if (vaultLimit == type(uint256).max) return type(uint256).max;
         uint256 idleBalance = IERC20(asset).balanceOf(address(this));
         return vaultLimit > idleBalance ? vaultLimit - idleBalance : 0;
     }

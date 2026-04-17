@@ -251,9 +251,18 @@ contract KpkERC4626StrategyTest is BaseYieldDonatingIntegrationTest {
 
         assertEq(idleBalance, idleAmount, "Strategy should have idle assets");
 
-        uint256 expectedLimit = kpkLimit > idleAmount ? kpkLimit - idleAmount : 0;
-        assertEq(limit, expectedLimit, "Available deposit limit should account for idle assets");
-        assertLt(limit, kpkLimit, "Available deposit limit should be less than KPK limit when idle assets exist");
+        // When the underlying vault advertises the ERC-4626 unbounded-capacity
+        // sentinel (e.g. Gearbox V3 PoolV3, KPK ETH Prime), `availableDepositLimit`
+        // must return `type(uint256).max` unchanged so `TokenizedStrategy._maxMint`
+        // keeps its sentinel-based fast path; subtracting the idle balance would
+        // clobber the sentinel and route through `_convertToShares`.
+        if (kpkLimit == type(uint256).max) {
+            assertEq(limit, type(uint256).max, "Sentinel must be preserved when KPK limit is unbounded");
+        } else {
+            uint256 expectedLimit = kpkLimit > idleAmount ? kpkLimit - idleAmount : 0;
+            assertEq(limit, expectedLimit, "Available deposit limit should account for idle assets");
+            assertLt(limit, kpkLimit, "Available deposit limit should be less than KPK limit when idle assets exist");
+        }
     }
 
     /// @notice Test deposit cap handling

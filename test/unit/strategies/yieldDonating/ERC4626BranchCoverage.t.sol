@@ -57,6 +57,12 @@ contract UnboundedVaultMock {
 ///            settles the allowance back to zero. No standing max allowance
 ///            against the external (upgradeable) target vault is left over
 ///            from construction.
+///         2. `availableDepositLimit` short-circuits when the target vault
+///            advertises `type(uint256).max`, preserving the ERC-4626
+///            "infinite capacity" sentinel that `TokenizedStrategy._maxMint`
+///            keys off (the pre-fix subtraction clobbered the sentinel into
+///            `uint256.max - idle`, routing through `_convertToShares` and
+///            risking a mulDiv overflow once PPS drifts off 1:1).
 contract ERC4626BranchCoverageTest is Test {
     ERC20Mock internal asset;
     YieldDonatingTokenizedStrategy internal implementation;
@@ -69,6 +75,7 @@ contract ERC4626BranchCoverageTest is Test {
     address internal user = address(0xBEEF);
 
     uint256 internal constant DEPOSIT_AMOUNT = 1_000 ether;
+    uint256 internal constant IDLE_SEED = 1 ether;
 
     function setUp() public {
         asset = new ERC20Mock();
@@ -135,6 +142,24 @@ contract ERC4626BranchCoverageTest is Test {
         );
     }
 
+    function _assertMaxMintSentinel(address strategyAddr) internal {
+        // Seed a non-zero idle balance so we exercise the subtraction branch;
+        // without this the pre-fix code path would coincidentally return the
+        // sentinel because `max - 0 == max`.
+        asset.mint(strategyAddr, IDLE_SEED);
+
+        assertEq(
+            ITokenizedStrategy(strategyAddr).maxMint(user),
+            type(uint256).max,
+            "maxMint sentinel clobbered by idle-balance subtraction on unbounded vault"
+        );
+        assertEq(
+            ITokenizedStrategy(strategyAddr).maxDeposit(user),
+            type(uint256).max,
+            "maxDeposit sentinel clobbered by idle-balance subtraction on unbounded vault"
+        );
+    }
+
     // ─── Exact-amount approval in `_deployFunds` ──────────────────────
 
     /// @notice ERC4626Strategy._deployFunds approves exactly `_amount`; no standing allowance.
@@ -145,5 +170,17 @@ contract ERC4626BranchCoverageTest is Test {
     /// @notice MorphoCompounderStrategy._deployFunds approves exactly `_amount`; no standing allowance.
     function test_morphoCompounder_deployFunds_usesExactApproval() public {
         _assertExactApprovalLifecycle(address(_deployMorphoStrategy()));
+    }
+
+    // ─── Unbounded-capacity sentinel in `availableDepositLimit` ───────
+
+    /// @notice ERC4626Strategy.availableDepositLimit preserves the unbounded-capacity sentinel.
+    function test_erc4626_availableDepositLimit_preservesUnboundedSentinel() public {
+        _assertMaxMintSentinel(address(_deployERC4626Strategy()));
+    }
+
+    /// @notice MorphoCompounderStrategy.availableDepositLimit preserves the unbounded-capacity sentinel.
+    function test_morphoCompounder_availableDepositLimit_preservesUnboundedSentinel() public {
+        _assertMaxMintSentinel(address(_deployMorphoStrategy()));
     }
 }
