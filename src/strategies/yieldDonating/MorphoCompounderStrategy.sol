@@ -40,7 +40,10 @@ contract MorphoCompounderStrategy is BaseHealthCheck {
 
     /**
      * @notice Initializes the Morpho compounder strategy
-     * @dev Validates asset matches Morpho vault's asset and approves max allowance
+     * @dev Validates asset matches Morpho vault's asset. The approval is issued
+     *      per-deposit inside {_deployFunds} rather than at construction time,
+     *      so no standing allowance against the external (upgradeable) compounder
+     *      vault exists between calls.
      * @param _compounderVault Address of the Morpho compounder vault to deposit into
      * @param _asset Address of the underlying asset (must match compounder vault's asset)
      * @param _name Strategy display name (e.g., "Octant Morpho USDC Strategy")
@@ -78,7 +81,6 @@ contract MorphoCompounderStrategy is BaseHealthCheck {
     {
         // make sure asset is Morpho's asset
         require(ITokenizedStrategy(_compounderVault).asset() == _asset, "Asset mismatch with compounder vault");
-        IERC20(_asset).forceApprove(_compounderVault, type(uint256).max);
         compounderVault = _compounderVault;
     }
 
@@ -120,6 +122,7 @@ contract MorphoCompounderStrategy is BaseHealthCheck {
      * @param _amount Amount of assets to deploy in asset base units
      */
     function _deployFunds(uint256 _amount) internal override {
+        IERC20(asset).forceApprove(compounderVault, _amount);
         ITokenizedStrategy(compounderVault).deposit(_amount, address(this));
     }
 

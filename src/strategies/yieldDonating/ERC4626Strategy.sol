@@ -34,7 +34,10 @@ contract ERC4626Strategy is BaseHealthCheck {
 
     /**
      * @notice Initializes the ERC4626 strategy
-     * @dev Validates asset matches target vault's asset and approves max allowance
+     * @dev Validates asset matches target vault's asset. The approval is issued
+     *      per-deposit inside {_deployFunds} rather than at construction time,
+     *      so no standing allowance against the external (upgradeable) target
+     *      vault exists between calls.
      * @param _targetVault Address of the ERC4626 vault this strategy deposits into
      * @param _asset Address of the underlying asset (must match target vault's asset)
      * @param _name Strategy display name (e.g., "Octant ERC4626 Strategy")
@@ -72,7 +75,6 @@ contract ERC4626Strategy is BaseHealthCheck {
     {
         // make sure asset is target vault's asset
         require(IERC4626(_targetVault).asset() == _asset, "Asset mismatch with target vault");
-        IERC20(_asset).forceApprove(_targetVault, type(uint256).max);
         targetVault = _targetVault;
     }
 
@@ -104,6 +106,7 @@ contract ERC4626Strategy is BaseHealthCheck {
      * @param _amount Amount of assets to deploy in asset base units
      */
     function _deployFunds(uint256 _amount) internal override {
+        IERC20(asset).forceApprove(targetVault, _amount);
         IERC4626(targetVault).deposit(_amount, address(this));
     }
 
