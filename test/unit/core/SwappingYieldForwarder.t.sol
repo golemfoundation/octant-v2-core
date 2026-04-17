@@ -532,9 +532,7 @@ contract SwappingYieldForwarderTest is Test {
         // Pre-fix floor (raw, no scaling) = 1e6 * 9_900 / 10_000 = 990_000 — so
         // minAmountOut = 1e17 sits between the two and distinguishes the fix.
         vm.prank(keeperEOA);
-        vm.expectRevert(
-            abi.encodeWithSelector(SwappingYieldForwarder.SlippageFloorTooLoose.selector, 9.9e17, 1e17)
-        );
+        vm.expectRevert(abi.encodeWithSelector(SwappingYieldForwarder.SlippageFloorTooLoose.selector, 9.9e17, 1e17));
         fwd.reportSwapAndForward(address(strat), 10_000, 1e17);
     }
 
@@ -598,13 +596,7 @@ contract SwappingYieldForwarderTest is Test {
         uint256 baseNonce = vm.getNonce(address(this));
         address predictedStrat = vm.computeCreateAddress(address(this), baseNonce + 1);
 
-        fwd = new SwappingYieldForwarder(
-            receiver,
-            keeperEOA,
-            address(targetMix),
-            address(mixSwapper),
-            predictedStrat
-        );
+        fwd = new SwappingYieldForwarder(receiver, keeperEOA, address(targetMix), address(mixSwapper), predictedStrat);
 
         strat = IMockStrategy(
             address(
