@@ -129,7 +129,11 @@ contract MorphoCompounderStrategy is BaseHealthCheck {
      */
     function _deployFunds(uint256 _amount) internal override {
         IERC20(asset).forceApprove(compounderVault, _amount);
-        ITokenizedStrategy(compounderVault).deposit(_amount, address(this));
+        // Assert the target vault credited shares. A zero-share outcome (e.g., high PPS combined
+        // with a tiny deposit, or a misbehaving downstream vault) would consume the asset without
+        // recognising a position, silently stranding funds.
+        uint256 shares = ITokenizedStrategy(compounderVault).deposit(_amount, address(this));
+        require(shares > 0, "MorphoCompounderStrategy: zero shares minted");
     }
 
     /**
