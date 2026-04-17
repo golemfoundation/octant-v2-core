@@ -157,7 +157,7 @@ contract KpkERC4626StrategyTest is BaseYieldDonatingIntegrationTest {
         uint256 balanceOfKpkVault = IERC4626(_compounderVault()).balanceOf(address(strategy));
         vm.mockCall(
             address(IERC4626(_compounderVault())),
-            abi.encodeWithSelector(IERC4626.convertToAssets.selector, balanceOfKpkVault),
+            abi.encodeWithSelector(IERC4626.previewRedeem.selector, balanceOfKpkVault),
             abi.encode(depositAmount + profitAmount)
         );
 

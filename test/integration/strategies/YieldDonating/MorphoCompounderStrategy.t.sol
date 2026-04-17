@@ -140,7 +140,7 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
         uint256 balanceOfMorphoVault = IERC4626(_compounderVault()).balanceOf(address(strategy));
         vm.mockCall(
             address(IERC4626(_compounderVault())),
-            abi.encodeWithSelector(IERC4626.convertToAssets.selector, balanceOfMorphoVault),
+            abi.encodeWithSelector(IERC4626.previewRedeem.selector, balanceOfMorphoVault),
             abi.encode(depositAmount + profitAmount)
         );
 
@@ -273,7 +273,7 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
 
     // ========== HARVEST OVERFLOW TESTS ==========
 
-    /// @notice Test that _harvestAndReport caps at type(uint256).max when convertToAssets overflows with idle
+    /// @notice Test that _harvestAndReport caps at type(uint256).max when previewRedeem overflows with idle
     function testHarvestOverflowFromVaultMorpho() public {
         _testHarvestOverflowFromVault();
     }
@@ -355,7 +355,7 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
 
         vm.mockCall(
             address(_compounderVault()),
-            abi.encodeWithSelector(IERC4626.convertToAssets.selector, morphoSharesBefore),
+            abi.encodeWithSelector(IERC4626.previewRedeem.selector, morphoSharesBefore),
             abi.encode(depositAmount + vaultProfit)
         );
 
