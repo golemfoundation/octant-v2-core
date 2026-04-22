@@ -342,8 +342,9 @@ contract SparkSUsdsDonatingStrategyTest is BaseYieldDonatingIntegrationTest {
     // ========== SSR ACCRUAL (sUSDS-SPECIFIC) ==========
 
     /// @notice Verify that warping time accrues Sky Savings Rate (SSR) yield on the strategy's
-    ///         sUSDS position. Uses the vault's own drip() if present, otherwise relies on
-    ///         convertToAssets being time-sensitive on the live contract.
+    ///         sUSDS position. Requires drip() to succeed (sUSDS exposes it), then asserts the
+    ///         share-value monotonicity invariant unconditionally so the test never passes
+    ///         vacuously.
     function testSUsdsSSRAccrual() public {
         uint256 depositAmount = _ssrTestDeposit();
 
@@ -361,12 +362,15 @@ contract SparkSUsdsDonatingStrategyTest is BaseYieldDonatingIntegrationTest {
 
         vm.warp(block.timestamp + 365 days);
 
-        // Poke the rate accumulator if the vault exposes drip(); ignore if it doesn't.
+        // sUSDS exposes drip() to fold accumulated rate into chi. Require success so a
+        // future rename/removal is caught here rather than silently skipping the accrual check.
         (bool success, ) = _compounderVault().call(abi.encodeWithSignature("drip()"));
-        if (success) {
-            uint256 assetsAfter = IERC4626(_compounderVault()).convertToAssets(shares);
-            assertGe(assetsAfter, assetsBefore, "sUSDS should accrue SSR yield over time");
-        }
+        assertTrue(success, "sUSDS drip() must succeed - vault interface changed");
+
+        uint256 assetsAfter = IERC4626(_compounderVault()).convertToAssets(shares);
+        // Unconditional invariant: share value is monotonic non-decreasing. Equality is
+        // acceptable (SSR can be paused at 0); any decrease is a critical invariant break.
+        assertGe(assetsAfter, assetsBefore, "sUSDS share value must never decrease over time");
     }
 
     /// @notice Fast-forward + keeper report should surface SSR-accrued yield as donation shares
@@ -389,7 +393,7 @@ contract SparkSUsdsDonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         // Warp a year and drip the vault so the SSR has something to accumulate into.
         vm.warp(block.timestamp + 365 days);
         (bool dripOk, ) = _compounderVault().call(abi.encodeWithSignature("drip()"));
-        dripOk; // ignored: drip() is a no-op / absent on some vault versions
+        assertTrue(dripOk, "sUSDS drip() must succeed - vault interface changed");
 
         vm.startPrank(keeper);
         (uint256 profit, uint256 loss) = vault.report();
