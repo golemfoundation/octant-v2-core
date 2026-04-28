@@ -84,6 +84,13 @@ abstract contract TokenizedStrategy {
     event StrategyShutdown();
 
     /**
+     * @notice Emitted when an emergency withdrawal is processed after shutdown.
+     * @param caller Address that initiated the emergency withdrawal
+     * @param requestedAssets Amount of assets requested to be withdrawn
+     */
+    event EmergencyWithdraw(address indexed caller, uint256 requestedAssets);
+
+    /**
      * @notice Emitted on the initialization of any new `strategy` that uses `asset`
      * with this specific `apiVersion`.
      */
@@ -1242,6 +1249,8 @@ abstract contract TokenizedStrategy {
 
         // Withdraw from the yield source.
         IBaseStrategy(address(this)).shutdownWithdraw(amount);
+
+        emit EmergencyWithdraw(msg.sender, amount);
     }
 
     /*//////////////////////////////////////////////////////////////

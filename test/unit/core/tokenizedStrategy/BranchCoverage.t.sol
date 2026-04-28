@@ -7,6 +7,7 @@ import { MockYieldSource } from "test/mocks/core/MockYieldSource.sol";
 import { MockStrategy as MockBaseStrategy } from "test/mocks/core/MockBaseStrategy.sol";
 import { MockIlliquidStrategy } from "test/mocks/core/tokenized-strategies/MockIlliquidStrategy.sol";
 import { MockTokenizedStrategyWithLoss } from "test/mocks/core/MockTokenizedStrategyWithLoss.sol";
+import { TokenizedStrategy } from "src/core/TokenizedStrategy.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 import { ITokenizedStrategy } from "src/core/interfaces/ITokenizedStrategy.sol";
 import { TokenizedStrategy__InvalidSigner } from "src/errors.sol";
@@ -212,7 +213,10 @@ contract TokenizedStrategyBranchCoverageTest is Test {
 
     function test_emergencyWithdraw_afterShutdown_succeeds() public {
         ITokenizedStrategy(address(strategy)).shutdownStrategy();
-        // Should not revert
+
+        vm.expectEmit(true, false, false, true, address(strategy));
+        emit TokenizedStrategy.EmergencyWithdraw(address(this), 0);
+
         ITokenizedStrategy(address(strategy)).emergencyWithdraw(0);
     }
 
@@ -1167,10 +1171,15 @@ contract TokenizedStrategyBranchCoverageTest is Test {
     // --- emergencyAdmin can emergency withdraw ---
 
     function test_emergencyWithdraw_byEmergencyAdmin() public {
-        ITokenizedStrategy(address(strategy)).setEmergencyAdmin(address(0x55));
+        address newEmergencyAdmin = address(0x55);
+
+        ITokenizedStrategy(address(strategy)).setEmergencyAdmin(newEmergencyAdmin);
         ITokenizedStrategy(address(strategy)).shutdownStrategy();
 
-        vm.prank(address(0x55));
+        vm.expectEmit(true, false, false, true, address(strategy));
+        emit TokenizedStrategy.EmergencyWithdraw(newEmergencyAdmin, 0);
+
+        vm.prank(newEmergencyAdmin);
         ITokenizedStrategy(address(strategy)).emergencyWithdraw(0);
     }
 

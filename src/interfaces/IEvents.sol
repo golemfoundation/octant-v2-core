@@ -18,6 +18,13 @@ interface IEvents {
     event StrategyShutdown();
 
     /**
+     * @notice Emitted when an emergency withdrawal is processed after shutdown
+     * @param caller Address that initiated the emergency withdrawal
+     * @param requestedAssets Amount of assets requested to be withdrawn
+     */
+    event EmergencyWithdraw(address indexed caller, uint256 requestedAssets);
+
+    /**
      * @notice Emitted on the initialization of any new strategy
      * @param strategy Address of the newly initialized strategy
      * @param asset Address of the underlying asset
