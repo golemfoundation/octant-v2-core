@@ -98,9 +98,9 @@ contract BurningToggleTest is Setup {
         vm.prank(user);
         strategy.transfer(donationAddress, 20e18);
 
-        // Disable burning mid-lifecycle
+        // Sync and disable burning mid-lifecycle
         vm.prank(management);
-        YieldDonatingTokenizedStrategy(address(strategy)).setEnableBurning(false);
+        YieldDonatingTokenizedStrategy(address(strategy)).reportAndDisableBurning();
 
         // Simulate a loss
         uint256 loss = 10e18;
@@ -174,7 +174,7 @@ contract BurningToggleTest is Setup {
         vm.startPrank(management);
         YieldDonatingTokenizedStrategy(address(strategy)).setEnableBurning(false);
         YieldDonatingTokenizedStrategy(address(strategy)).setEnableBurning(true);
-        YieldDonatingTokenizedStrategy(address(strategy)).setEnableBurning(false);
+        YieldDonatingTokenizedStrategy(address(strategy)).reportAndDisableBurning();
         vm.stopPrank();
 
         // Simulate loss while burning is disabled (final state)
@@ -241,5 +241,42 @@ contract BurningToggleTest is Setup {
             // No burning: dragon shares unchanged
             assertEq(strategy.balanceOf(donationAddress), dragonBalBefore, "dragon shares should not change");
         }
+    }
+
+    function test_bailsec31_disableBurningWithDragonSharesRevertsUntilReported() public {
+        vm.prank(management);
+        YieldDonatingTokenizedStrategy(address(strategy)).setEnableBurning(true);
+
+        uint256 amount = 100e18;
+        mintAndDepositIntoStrategy(strategy, user, amount);
+
+        asset.mint(address(yieldSource), 20e18);
+        vm.prank(keeper);
+        strategy.report();
+
+        uint256 dragonBalBefore = strategy.balanceOf(donationAddress);
+        assertGt(dragonBalBefore, 0, "dragon should have profit shares");
+
+        yieldSource.simulateLoss(10e18);
+
+        vm.prank(management);
+        vm.expectRevert("report before disabling burning");
+        YieldDonatingTokenizedStrategy(address(strategy)).setEnableBurning(false);
+
+        vm.prank(management);
+        (uint256 profit, uint256 loss) = YieldDonatingTokenizedStrategy(address(strategy)).reportAndDisableBurning();
+
+        assertEq(profit, 0, "no profit");
+        assertEq(loss, 10e18, "loss should be reported");
+        assertLt(strategy.balanceOf(donationAddress), dragonBalBefore, "dragon shares should be burned");
+        assertFalse(strategy.enableBurning(), "burning disabled atomically");
+    }
+
+    function test_reportAndDisableBurning_byNonManagement_reverts(address _caller) public {
+        vm.assume(_caller != management);
+
+        vm.prank(_caller);
+        vm.expectRevert("!management");
+        YieldDonatingTokenizedStrategy(address(strategy)).reportAndDisableBurning();
     }
 }

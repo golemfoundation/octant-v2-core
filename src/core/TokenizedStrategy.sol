@@ -1496,7 +1496,7 @@ abstract contract TokenizedStrategy {
      * @param _enableBurning Whether to enable the burning mechanism.
      * @custom:security Only callable by the current `management`
      */
-    function setEnableBurning(bool _enableBurning) external onlyManagement {
+    function setEnableBurning(bool _enableBurning) external virtual onlyManagement {
         _strategyStorage().enableBurning = _enableBurning;
         emit UpdateBurningMechanism(_enableBurning);
     }
