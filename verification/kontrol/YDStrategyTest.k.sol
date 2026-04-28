@@ -17,11 +17,13 @@ struct YDProofState {
 /**
  * @title YDStrategyTest
  * @notice Kontrol formal verification proofs for YieldDonatingTokenizedStrategy
- * @dev Inherits 7 common proofs from StrategyBaseTest and adds 4 YD-specific proofs:
- *      - testReportProfit: shares minted to dragon, PPS non-decreasing
+ * @dev Inherits 7 common proofs from StrategyBaseTest and adds 5 YD-specific proofs:
+ *      - testReportProfit: virtual-offset shares minted to dragon, virtual PPS non-decreasing
  *      - testReportLossInsufficientDragon: partial burn, PPS impact bounded
  *      - testSharesRedeemableAfterDepositYD: deposit produces redeemable shares
  *      - testConversionConsistencyYD: round-trip does not create value
+ *      - testDustLossRecoveryFlowMintsDragonAndBlocksFinalDustBurn:
+ *          recovery from totalAssets=0,totalSupply=1 mints dragon shares and traps dust
  */
 contract YDStrategyTest is StrategyBaseTest, YDSetup {
     YDProofState private preState;
@@ -100,9 +102,15 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
                     INVARIANTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice PPS does not decrease: totalAssets_new * totalSupply_old >= totalAssets_old * totalSupply_new
+    /// @notice Virtual PPS does not decrease:
+    ///         (totalAssets_new + 1) * (totalSupply_old + 1)
+    ///         >= (totalAssets_old + 1) * (totalSupply_new + 1)
     function ppsNonDecreasingInvariant(Mode mode) internal view {
-        _establish(mode, postState.totalAssets * preState.totalSupply >= preState.totalAssets * postState.totalSupply);
+        _establish(
+            mode,
+            (postState.totalAssets + 1) * (preState.totalSupply + 1) >=
+                (preState.totalAssets + 1) * (postState.totalSupply + 1)
+        );
     }
 
     /// @notice totalAssets updated to the expected value
@@ -120,7 +128,7 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice When report harvests a profit, shares are minted to dragon router
-    ///         and PPS is preserved (non-decreasing) for regular holders
+    ///         and virtual PPS is preserved (non-decreasing) for regular holders
     function testReportProfit() public {
         _assumeNonReentrant();
 
@@ -139,12 +147,14 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
         vm.assume(newTotalAssets > preState.totalAssets);
         _storeUInt256(address(strategy), MOCK_NEXT_TOTAL_ASSETS_SLOT, newTotalAssets);
 
-        // Avoid overflow in sharesToMint = profit * totalSupply / totalAssets
+        // Avoid overflow in sharesToMint = profit * (totalSupply + 1) / (totalAssets + 1)
         uint256 profit = newTotalAssets - preState.totalAssets;
-        _assumeNoOverflow(profit, preState.totalSupply);
+        uint256 virtualSupply = preState.totalSupply + 1;
+        uint256 virtualAssets = preState.totalAssets + 1;
+        _assumeNoOverflow(profit, virtualSupply);
 
         // Avoid overflow in totalSupply + sharesToMint
-        uint256 sharesToMint = (profit * preState.totalSupply) / preState.totalAssets;
+        uint256 sharesToMint = (profit * virtualSupply) / virtualAssets;
         _assumeNoOverflow(preState.totalSupply, sharesToMint);
 
         // Avoid overflow in dragonBalance + sharesToMint
@@ -197,8 +207,10 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
         _storeUInt256(address(strategy), MOCK_NEXT_TOTAL_ASSETS_SLOT, newTotalAssets);
 
         uint256 loss = preState.totalAssets - newTotalAssets;
-        _assumeNoOverflow(loss, preState.totalSupply);
-        uint256 sharesToBurn = Math.ceilDiv(loss * preState.totalSupply, preState.totalAssets);
+        uint256 virtualSupply = preState.totalSupply + 1;
+        uint256 virtualAssets = preState.totalAssets + 1;
+        _assumeNoOverflow(loss, virtualSupply);
+        uint256 sharesToBurn = Math.mulDiv(loss, virtualSupply, virtualAssets, Math.Rounding.Floor);
         vm.assume(sharesToBurn > preState.dragonBalance);
 
         vm.startPrank(_keeper);
@@ -234,8 +246,10 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
         vm.assume(totalAssets > 0);
         vm.assume(totalSupply > 0);
 
-        _assumeNoOverflow(assets, totalSupply);
-        uint256 expectedShares = (assets * totalSupply) / totalAssets;
+        uint256 virtualSupply = totalSupply + 1;
+        uint256 virtualAssets = totalAssets + 1;
+        _assumeNoOverflow(assets, virtualSupply);
+        uint256 expectedShares = (assets * virtualSupply) / virtualAssets;
         vm.assume(expectedShares > 0);
         _assumeNoOverflow(totalSupply, expectedShares);
         _assumeNoOverflow(totalAssets, assets);
@@ -288,5 +302,43 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
         _assumeNoOverflow(amount, totalAssets);
 
         _assertConversionConsistency(amount);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    YD-SPECIFIC: DUST LOSS RECOVERY FLOW
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice Regression for the Bailsec dust-loss-recovery chain.
+    ///         From totalAssets=0,totalSupply=1, any positive recovery report
+    ///         mints dragon shares through the virtual-offset converter, and
+    ///         the original dust share cannot withdraw 1 wei afterward.
+    function testDustLossRecoveryFlowMintsDragonAndBlocksFinalDustBurn(uint256 recoveredAssets) public {
+        _assumeNonReentrant();
+
+        address stratAddr = getStrategyAddr();
+        address dustHolder = makeAddr("DUST_HOLDER");
+
+        _storeData(stratAddr, HC_SLOT, HC_DO_HEALTH_CHECK_OFFSET, HC_DO_HEALTH_CHECK_WIDTH, 0);
+        _storeData(stratAddr, TS_FLAGS_SLOT, TS_SHUTDOWN_OFFSET, TS_SHUTDOWN_WIDTH, 0);
+        _storeData(stratAddr, TS_FLAGS_SLOT, TS_ENABLE_BURNING_OFFSET, TS_ENABLE_BURNING_WIDTH, 0);
+
+        vm.assume(recoveredAssets > 0);
+        vm.assume(recoveredAssets < ETH_UPPER_BOUND / 2);
+
+        _storeUInt256(stratAddr, TS_TOTAL_ASSETS_SLOT, 0);
+        _storeUInt256(stratAddr, TS_TOTAL_SUPPLY_SLOT, 1);
+        _storeMappingUInt256(stratAddr, TS_BALANCES_SLOT, uint256(uint160(dustHolder)), 0, 1);
+        _storeMappingUInt256(stratAddr, TS_BALANCES_SLOT, uint256(uint160(_dragonRouter)), 0, 0);
+        _storeUInt256(stratAddr, MOCK_NEXT_TOTAL_ASSETS_SLOT, recoveredAssets);
+
+        vm.startPrank(_keeper);
+        iStrategy.report();
+        vm.stopPrank();
+
+        uint256 expectedDragonShares = recoveredAssets * 2;
+        assertEq(iStrategy.totalAssets(), recoveredAssets);
+        assertEq(iStrategy.balanceOf(_dragonRouter), expectedDragonShares);
+        assertEq(iStrategy.totalSupply(), expectedDragonShares + 1);
+        assertEq(iStrategy.maxWithdraw(dustHolder), 0);
     }
 }

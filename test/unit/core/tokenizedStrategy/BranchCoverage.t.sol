@@ -711,7 +711,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         lossImpl.redeem(5e18, user, user, 10000);
     }
 
-    // --- Mint zero assets => ZERO_ASSETS (line 685, branch 0) ---
+    // --- Mint zero shares => ZERO_ASSETS (line 685, branch 0) ---
 
     function test_mint_zeroAssets_reverts() public {
         MockTokenizedStrategyWithLoss lossImpl = _freshLossImpl();
@@ -726,17 +726,14 @@ contract TokenizedStrategyBranchCoverageTest is Test {
             false
         );
 
-        // totalSupply > 0 but totalAssets == 0 => _convertToAssets returns 0
-        lossImpl.mintShares(user, 10e18);
-
         vm.prank(user);
         vm.expectRevert("ZERO_ASSETS");
-        lossImpl.mint(1e18, user);
+        lossImpl.mint(0, user);
     }
 
-    // --- _convertToShares when totalAssets == 0 (line 961, branch 0) ---
+    // --- _convertToShares when totalAssets == 0 uses the virtual offset ---
 
-    function test_convertToShares_totalAssetsZero_returnsZero() public {
+    function test_convertToShares_totalAssetsZero_usesVirtualOffset() public {
         MockTokenizedStrategyWithLoss lossImpl = _freshLossImpl();
         lossImpl.initialize(
             address(asset),
@@ -752,7 +749,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         lossImpl.mintShares(user, 10e18);
 
         uint256 shares = lossImpl.convertToShares(1e18);
-        assertEq(shares, 0, "convertToShares should return 0 when totalAssets == 0");
+        assertEq(shares, 1e18 * (10e18 + 1), "convertToShares should use virtual assets and shares");
     }
 
     // --- maxMint with limited deposit (line 995, branch 0) ---
