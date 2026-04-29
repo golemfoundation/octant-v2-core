@@ -148,7 +148,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         vm.mockCall(
             _compounderVault(),
             abi.encodeWithSelector(IERC4626.previewRedeem.selector, balanceOfYearnVault),
-            abi.encode(depositAmount + profitAmount)
+            abi.encode(totalAssetsBefore + profitAmount)
         );
 
         vm.startPrank(keeper);
@@ -249,6 +249,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         IERC4626(address(vault)).deposit(depositAmount, user);
         vm.stopPrank();
 
+        uint256 totalAssetsBefore = IERC4626(address(vault)).totalAssets();
         vm.prank(management);
         strategy.setProfitLimitRatio(1000); // 10%
 
@@ -257,7 +258,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         vm.mockCall(
             _compounderVault(),
             abi.encodeWithSelector(IERC4626.previewRedeem.selector, balanceOfYearnVault),
-            abi.encode(depositAmount + excessiveProfit)
+            abi.encode(totalAssetsBefore + excessiveProfit)
         );
 
         vm.expectRevert("healthCheck");
@@ -281,12 +282,13 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         vm.prank(management);
         strategy.setLossLimitRatio(500); // 5%
 
+        uint256 totalAssetsBefore = IERC4626(address(vault)).totalAssets();
         uint256 balanceOfYearnVault = ITokenizedStrategy(_compounderVault()).balanceOf(address(strategy));
         uint256 loss = (depositAmount * 10) / 100; // 10% loss
         vm.mockCall(
             _compounderVault(),
             abi.encodeWithSelector(IERC4626.previewRedeem.selector, balanceOfYearnVault),
-            abi.encode(depositAmount - loss)
+            abi.encode(totalAssetsBefore - loss)
         );
 
         vm.expectRevert("healthCheck");
@@ -313,12 +315,13 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         strategy.setDoHealthCheck(false);
         vm.stopPrank();
 
+        uint256 totalAssetsBefore = IERC4626(address(vault)).totalAssets();
         uint256 balanceOfYearnVault = ITokenizedStrategy(_compounderVault()).balanceOf(address(strategy));
         uint256 excessiveProfit = (depositAmount * 50) / 100; // 50% profit
         vm.mockCall(
             _compounderVault(),
             abi.encodeWithSelector(IERC4626.previewRedeem.selector, balanceOfYearnVault),
-            abi.encode(depositAmount + excessiveProfit)
+            abi.encode(totalAssetsBefore + excessiveProfit)
         );
 
         vm.prank(keeper);
@@ -350,7 +353,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         vm.mockCall(
             _compounderVault(),
             abi.encodeWithSelector(IERC4626.previewRedeem.selector, yearnSharesBefore),
-            abi.encode(depositAmount + vaultProfit)
+            abi.encode(IERC4626(address(vault)).totalAssets() + vaultProfit)
         );
 
         airdrop(ERC20(_asset()), address(strategy), idleProfit);
@@ -398,6 +401,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         depositAmount2 = bound(depositAmount2, _minDeposit(), _maxDeposit() / 2);
 
         address user2 = address(0x5678);
+        uint256 initialTotalAssets = IERC4626(address(strategy)).totalAssets();
 
         if (ERC20(_asset()).balanceOf(user) < depositAmount1) {
             airdrop(ERC20(_asset()), user, depositAmount1);
@@ -418,19 +422,22 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
 
         assertEq(
             IERC4626(address(strategy)).totalAssets(),
-            depositAmount1 + depositAmount2,
+            initialTotalAssets + depositAmount1 + depositAmount2,
             "Total assets should equal deposits"
         );
 
         // Add some profit to test fair distribution (but keep it reasonable to avoid health check issues)
         uint256 profit = 1000e6;
         uint256 totalDeposits = depositAmount1 + depositAmount2;
+        uint256 retainedAssets = initialTotalAssets;
 
         if (profit <= totalDeposits) {
             airdrop(ERC20(_asset()), address(strategy), profit);
 
             vm.prank(keeper);
             IMockStrategy(address(strategy)).report();
+
+            retainedAssets += profit;
         }
 
         if (shouldUser1Withdraw && shares1 > 0) {
@@ -456,10 +463,11 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         }
 
         if (shouldUser1Withdraw && shouldUser2Withdraw) {
-            assertLt(
+            assertApproxEqAbs(
                 IERC4626(address(strategy)).totalAssets(),
-                1000e6,
-                "Strategy should be nearly empty after all withdrawals"
+                retainedAssets,
+                10,
+                "Strategy should retain only seed and donated profit after all user withdrawals"
             );
         }
     }
@@ -474,13 +482,14 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         IERC4626(address(vault)).deposit(depositAmount, user);
         vm.stopPrank();
 
+        uint256 seededBaseline = IERC4626(address(vault)).totalAssets() - depositAmount;
         uint256 limit = strategy.availableWithdrawLimit(user);
 
         assertApproxEqRel(
             limit,
-            depositAmount,
+            seededBaseline + depositAmount,
             0.001e16,
-            "Withdraw limit should be approximately equal to deposited amount"
+            "Withdraw limit should be approximately equal to seed plus deposited amount"
         );
 
         uint256 idleBalance = ERC20(_asset()).balanceOf(address(strategy));
@@ -600,7 +609,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         vm.mockCall(
             _compounderVault(),
             abi.encodeWithSelector(IERC4626.previewRedeem.selector, yearnSharesBefore),
-            abi.encode(depositAmount - lossAmount)
+            abi.encode(totalAssetsBefore - lossAmount)
         );
 
         vm.prank(keeper);
@@ -630,8 +639,9 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         vm.prank(management);
         strategy.setLossLimitRatio(2000); // 20%
 
+        uint256 totalAssetsBefore = IERC4626(address(vault)).totalAssets();
         uint256 lossAmount = (depositAmount * lossPercentage) / 100;
-        uint256 remainingValue = depositAmount - lossAmount;
+        uint256 remainingValue = totalAssetsBefore - lossAmount;
 
         uint256 yearnShares = ITokenizedStrategy(_compounderVault()).balanceOf(address(strategy));
         vm.mockCall(
@@ -652,7 +662,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         assertLt(assetsReceived, depositAmount, "User should receive less than deposited");
         assertApproxEqRel(
             assetsReceived,
-            remainingValue,
+            (depositAmount * remainingValue) / totalAssetsBefore,
             0.001e16,
             "User should receive proportional share after loss"
         );
@@ -682,8 +692,9 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         vm.prank(management);
         strategy.setLossLimitRatio(1500); // 15%
 
+        uint256 totalAssetsBefore = IERC4626(address(strategy)).totalAssets();
         uint256 totalLoss = (totalDeposits * lossPercentage) / 100;
-        uint256 remainingValue = totalDeposits - totalLoss;
+        uint256 remainingValue = totalAssetsBefore - totalLoss;
 
         uint256 yearnShares = ITokenizedStrategy(_compounderVault()).balanceOf(address(strategy));
         vm.mockCall(
@@ -703,17 +714,17 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         vm.prank(user2);
         uint256 assets2 = IERC4626(address(strategy)).redeem(shares2, user2, user2);
 
-        uint256 expectedAssets1 = depositAmount1 - (depositAmount1 * lossPercentage) / 100;
-        uint256 expectedAssets2 = depositAmount2 - (depositAmount2 * lossPercentage) / 100;
+        uint256 expectedAssets1 = (depositAmount1 * remainingValue) / totalAssetsBefore;
+        uint256 expectedAssets2 = (depositAmount2 * remainingValue) / totalAssetsBefore;
 
         assertApproxEqRel(assets1, expectedAssets1, 0.01e18, "User1 should receive proportional share after loss");
         assertApproxEqRel(assets2, expectedAssets2, 0.01e18, "User2 should receive proportional share after loss");
 
         assertApproxEqRel(
             assets1 + assets2,
-            remainingValue,
+            expectedAssets1 + expectedAssets2,
             0.01e18,
-            "Total withdrawn should equal remaining value after loss"
+            "Total withdrawn should equal users' proportional remaining value after loss"
         );
     }
 
@@ -734,11 +745,12 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
 
         uint256 donationBalanceBefore = ERC20(address(vault)).balanceOf(donationAddress);
 
+        uint256 totalAssetsBefore = IERC4626(address(vault)).totalAssets();
         uint256 yearnShares = ITokenizedStrategy(_compounderVault()).balanceOf(address(strategy));
         vm.mockCall(
             _compounderVault(),
             abi.encodeWithSelector(IERC4626.previewRedeem.selector, yearnShares),
-            abi.encode(depositAmount - lossAmount)
+            abi.encode(totalAssetsBefore - lossAmount)
         );
 
         vm.prank(keeper);
@@ -768,8 +780,9 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         vm.prank(management);
         strategy.setLossLimitRatio(5000); // 50%
 
+        uint256 totalAssetsBefore = IERC4626(address(vault)).totalAssets();
         uint256 lossAmount = (depositAmount * lossPercentage) / 100;
-        uint256 remainingValue = depositAmount - lossAmount;
+        uint256 remainingValue = totalAssetsBefore - lossAmount;
 
         uint256 yearnShares = ITokenizedStrategy(_compounderVault()).balanceOf(address(strategy));
         vm.mockCall(
@@ -787,7 +800,7 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         assertEq(loss, lossAmount, "Should report correct loss");
 
         uint256 assetsPerShare = IERC4626(address(vault)).convertToAssets(1e18);
-        uint256 expectedAssetsPerShare = (1e18 * remainingValue) / depositAmount;
+        uint256 expectedAssetsPerShare = (1e18 * remainingValue) / totalAssetsBefore;
         assertApproxEqRel(
             assetsPerShare,
             expectedAssetsPerShare,
@@ -797,7 +810,12 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
 
         vm.prank(user);
         uint256 withdrawnAssets = IERC4626(address(vault)).redeem(shares, user, user);
-        assertApproxEqRel(withdrawnAssets, remainingValue, 0.01e18, "User should be able to withdraw remaining value");
+        assertApproxEqRel(
+            withdrawnAssets,
+            (depositAmount * remainingValue) / totalAssetsBefore,
+            0.01e18,
+            "User should be able to withdraw proportional remaining value"
+        );
     }
 
     /// @notice Test that _freeFunds uses maxLoss=10_000 (100%) to handle insufficient funds

@@ -184,7 +184,7 @@ contract SparkSUsdsDonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         vm.mockCall(
             address(IERC4626(_compounderVault())),
             abi.encodeWithSelector(IERC4626.previewRedeem.selector, balanceOfSUsdsVault),
-            abi.encode(depositAmount + profitAmount)
+            abi.encode(totalAssetsBefore + profitAmount)
         );
 
         vm.startPrank(keeper);

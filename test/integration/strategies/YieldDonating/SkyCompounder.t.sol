@@ -1060,7 +1060,7 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         assertEq(stakedAfter, 0, "All staked funds should have been withdrawn");
 
         uint256 idleAfter = strategy.balanceOfAsset();
-        assertEq(idleAfter, depositAmount, "Idle should equal original deposit");
+        assertEq(idleAfter, MINIMUM_PROTOCOL_POSITION + depositAmount, "Idle should equal seed plus deposit");
     }
 
     /// @notice Test harvest skips deploy when staking is paused (not shutdown path)

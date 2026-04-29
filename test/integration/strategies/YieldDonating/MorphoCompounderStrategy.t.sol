@@ -141,7 +141,7 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
         vm.mockCall(
             address(IERC4626(_compounderVault())),
             abi.encodeWithSelector(IERC4626.previewRedeem.selector, balanceOfMorphoVault),
-            abi.encode(depositAmount + profitAmount)
+            abi.encode(totalAssetsBefore + profitAmount)
         );
 
         vm.startPrank(keeper);
@@ -356,7 +356,7 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
         vm.mockCall(
             address(_compounderVault()),
             abi.encodeWithSelector(IERC4626.previewRedeem.selector, morphoSharesBefore),
-            abi.encode(depositAmount + vaultProfit)
+            abi.encode(initialTotalAssets + vaultProfit)
         );
 
         airdrop(ERC20(_asset()), address(strategy), idleProfit);
@@ -416,6 +416,7 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
         depositAmount2 = bound(depositAmount2, _minDeposit(), _maxDeposit() / 2);
 
         address user2 = address(0x5678);
+        uint256 initialTotalAssets = IERC4626(address(strategy)).totalAssets();
 
         if (ERC20(_asset()).balanceOf(user) < depositAmount1) {
             airdrop(ERC20(_asset()), user, depositAmount1);
@@ -436,7 +437,7 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
 
         assertEq(
             IERC4626(address(strategy)).totalAssets(),
-            depositAmount1 + depositAmount2,
+            initialTotalAssets + depositAmount1 + depositAmount2,
             "Total assets should equal deposits"
         );
 
@@ -454,10 +455,11 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
         }
 
         if (shouldUser1Withdraw && shouldUser2Withdraw) {
-            assertLt(
+            assertApproxEqAbs(
                 IERC4626(address(strategy)).totalAssets(),
+                initialTotalAssets,
                 10,
-                "Strategy should be nearly empty after all withdrawals"
+                "Strategy should return to the seeded baseline after all user withdrawals"
             );
         }
     }

@@ -156,7 +156,7 @@ contract AaveV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         vm.mockCall(
             AaveV3TestConfig.AUSDC_V3,
             abi.encodeWithSelector(IERC20.balanceOf.selector, address(strategy)),
-            abi.encode(depositAmount + profitAmount)
+            abi.encode(totalAssetsBefore + profitAmount)
         );
 
         vm.startPrank(keeper);
@@ -370,7 +370,7 @@ contract AaveV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         vm.mockCall(
             AaveV3TestConfig.AUSDC_V3,
             abi.encodeWithSelector(IERC20.balanceOf.selector, address(strategy)),
-            abi.encode(depositAmount + aTokenProfit)
+            abi.encode(initialTotalAssets + aTokenProfit)
         );
 
         airdrop(ERC20(_asset()), address(strategy), idleProfit);
@@ -432,6 +432,7 @@ contract AaveV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         depositAmount2 = bound(depositAmount2, _minDeposit(), _maxDeposit() / 2);
 
         address user2 = address(0x5678);
+        uint256 initialTotalAssets = IERC4626(address(strategy)).totalAssets();
 
         if (ERC20(_asset()).balanceOf(user) < depositAmount1) {
             airdrop(ERC20(_asset()), user, depositAmount1);
@@ -452,7 +453,7 @@ contract AaveV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
 
         assertEq(
             IERC4626(address(strategy)).totalAssets(),
-            depositAmount1 + depositAmount2,
+            initialTotalAssets + depositAmount1 + depositAmount2,
             "Total assets should equal deposits"
         );
 
@@ -470,10 +471,11 @@ contract AaveV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         }
 
         if (shouldUser1Withdraw && shouldUser2Withdraw) {
-            assertLt(
+            assertApproxEqAbs(
                 IERC4626(address(strategy)).totalAssets(),
+                initialTotalAssets,
                 10,
-                "Strategy should be nearly empty after all withdrawals"
+                "Strategy should return to the seeded baseline after all user withdrawals"
             );
         }
     }
@@ -604,7 +606,12 @@ contract AaveV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         uint256 depositAmount = 10000e6;
 
         uint256 initialLimit = strategy.availableWithdrawLimit(user);
-        assertEq(initialLimit, 0, "Initial withdraw limit should be 0");
+        assertApproxEqAbs(
+            initialLimit,
+            MINIMUM_PROTOCOL_POSITION,
+            10,
+            "Initial withdraw limit should reflect the locked seed"
+        );
 
         airdrop(ERC20(_asset()), user, depositAmount);
         vm.startPrank(user);
