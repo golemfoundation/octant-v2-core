@@ -4,8 +4,7 @@ pragma solidity >=0.8.18;
 import { Setup } from "./utils/Setup.sol";
 
 contract VirtualOffsetTest is Setup {
-    uint256 internal constant TS_BASE =
-        uint256(0x4df8983d84042631e7325fb5ba31b73b056fa9890e796c4c95fbf1e6d76eba00);
+    uint256 internal constant TS_BASE = uint256(0x4df8983d84042631e7325fb5ba31b73b056fa9890e796c4c95fbf1e6d76eba00);
     uint256 internal constant TS_TOTAL_SUPPLY_SLOT = TS_BASE + 8;
     uint256 internal constant TS_TOTAL_ASSETS_SLOT = TS_BASE + 9;
 
