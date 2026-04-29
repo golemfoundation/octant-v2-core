@@ -23,8 +23,8 @@ contract MultiUserTest is Setup {
         mintAndDepositIntoStrategy(strategy, user, _amount);
         mintAndDepositIntoStrategy(strategy, user2, _amount);
 
-        assertEq(strategy.balanceOf(user), _amount, "user1 shares");
-        assertEq(strategy.balanceOf(user2), _amount, "user2 shares");
+        assertEq(strategy.balanceOf(user), sharesForAssets(_amount), "user1 shares");
+        assertEq(strategy.balanceOf(user2), sharesForAssets(_amount), "user2 shares");
         assertEq(strategy.pricePerShare(), wad, "PPS should be 1:1");
 
         // Generate profit
@@ -62,7 +62,7 @@ contract MultiUserTest is Setup {
         mintAndDepositIntoStrategy(strategy, user2, _amount);
 
         // User2 should get shares at the same 1:1 rate
-        assertEq(strategy.balanceOf(user2), _amount, "user2 should get 1:1 shares");
+        assertEq(strategy.balanceOf(user2), sharesForAssets(_amount), "user2 should get scaled 1:1 shares");
         assertEq(strategy.pricePerShare(), wad, "PPS should still be 1:1");
     }
 
@@ -137,7 +137,7 @@ contract MultiUserTest is Setup {
 
         // Give dragon some shares via transfer from user
         vm.prank(user);
-        strategy.transfer(donationAddress, 10e18);
+        strategy.transfer(donationAddress, sharesForAssets(10e18));
 
         // Loss of 20e18; dragon has 10 shares that get burned, leaving 10 residual loss
         uint256 loss = 20e18;
@@ -182,8 +182,8 @@ contract MultiUserTest is Setup {
         uint256 user1Shares = strategy.balanceOf(user);
         uint256 user2Shares = strategy.balanceOf(user2);
 
-        assertEq(user1Shares, smallAmount, "small depositor shares");
-        assertEq(user2Shares, largeAmount, "large depositor shares");
+        assertEq(user1Shares, sharesForAssets(smallAmount), "small depositor shares");
+        assertEq(user2Shares, sharesForAssets(largeAmount), "large depositor shares");
 
         // Both can redeem for their original amount
         vm.prank(user);
@@ -220,9 +220,9 @@ contract MultiUserTest is Setup {
         mintAndDepositIntoStrategy(strategy, user3, amount);
 
         // All users should have the same PPS since yield donating keeps PPS at 1:1
-        assertEq(strategy.balanceOf(user), amount, "user1 shares");
-        assertEq(strategy.balanceOf(user2), amount, "user2 shares");
-        assertEq(strategy.balanceOf(user3), amount, "user3 shares");
+        assertEq(strategy.balanceOf(user), sharesForAssets(amount), "user1 shares");
+        assertEq(strategy.balanceOf(user2), sharesForAssets(amount), "user2 shares");
+        assertEq(strategy.balanceOf(user3), sharesForAssets(amount), "user3 shares");
         assertEq(strategy.pricePerShare(), wad, "PPS should be 1:1");
 
         // Dragon router should have accumulated profit shares from both reports
