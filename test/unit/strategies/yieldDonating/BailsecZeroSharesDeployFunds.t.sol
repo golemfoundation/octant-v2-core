@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.25;
 
-import { Test } from "forge-std/Test.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 
@@ -10,24 +9,31 @@ import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/Yie
 import { ERC4626Strategy } from "src/strategies/yieldDonating/ERC4626Strategy.sol";
 import { YearnV3Strategy } from "src/strategies/yieldDonating/YearnV3Strategy.sol";
 import { MorphoCompounderStrategy } from "src/strategies/yieldDonating/MorphoCompounderStrategy.sol";
+import { SeedHelpers } from "./utils/SeedHelpers.sol";
 
 /// @notice Minimal 4626-shaped vault that always credits zero shares on deposit.
 /// @dev Simulates the "downstream vault rounds minted shares to zero" regime
 ///      (high PPS + tiny deposit) without having to stage the inflation manually.
 contract ZeroSharesVaultMock {
     address public immutable asset;
+    bool public zeroShares;
 
     constructor(address underlying) {
         asset = underlying;
     }
 
-    function deposit(uint256 assets, address /*receiver*/) external returns (uint256) {
-        IERC20(asset).transferFrom(msg.sender, address(this), assets);
-        return 0;
+    function setZeroShares(bool _zeroShares) external {
+        zeroShares = _zeroShares;
     }
 
-    function balanceOf(address) external pure returns (uint256) {
-        return 0;
+    function deposit(uint256 assets, address /*receiver*/) external returns (uint256 shares) {
+        IERC20(asset).transferFrom(msg.sender, address(this), assets);
+        if (zeroShares) return 0;
+        return assets;
+    }
+
+    function balanceOf(address owner) external view returns (uint256) {
+        return owner == address(0) ? 0 : IERC20(asset).balanceOf(address(this));
     }
 
     function maxDeposit(address) external pure returns (uint256) {
@@ -38,12 +44,12 @@ contract ZeroSharesVaultMock {
         return 0;
     }
 
-    function previewRedeem(uint256) external pure returns (uint256) {
-        return 0;
+    function previewRedeem(uint256 shares) external pure returns (uint256) {
+        return shares;
     }
 
-    function convertToAssets(uint256) external pure returns (uint256) {
-        return 0;
+    function convertToAssets(uint256 shares) external pure returns (uint256) {
+        return shares;
     }
 }
 
@@ -55,7 +61,7 @@ contract ZeroSharesVaultMock {
 ///         `MorphoCompounderStrategy`; `SparkStrategy` inherits the fix from `ERC4626Strategy`.
 ///         For #57's withdraw leg, `_freeFunds` relies on `TokenizedStrategy._withdraw` balance-diff
 ///         accounting because target `withdraw` returns shares burned rather than assets received.
-contract BailsecZeroSharesDeployFundsTest is Test {
+contract BailsecZeroSharesDeployFundsTest is SeedHelpers {
     ERC20Mock internal asset;
     YieldDonatingTokenizedStrategy internal implementation;
     ZeroSharesVaultMock internal targetVault;
@@ -75,6 +81,9 @@ contract BailsecZeroSharesDeployFundsTest is Test {
     }
 
     function _expectDepositReverts(address strategyAddr, string memory reason) internal {
+        _seedMinimumPosition(strategyAddr, asset, management);
+        targetVault.setZeroShares(true);
+
         asset.mint(user, DEPOSIT_AMOUNT);
         vm.startPrank(user);
         asset.approve(strategyAddr, DEPOSIT_AMOUNT);

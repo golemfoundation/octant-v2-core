@@ -40,6 +40,7 @@ contract Setup is Test {
     // Fuzz from $0.01 of 1e6 stable coins up to 1 trillion of a 1e18 coin
     uint256 public maxFuzzAmount = 1e30;
     uint256 public minFuzzAmount = 10_000;
+    uint256 public minimumProtocolPosition = 1_000_000_000;
     uint256 public profitMaxUnlockTime = 10 days;
 
     bytes32 public constant BASE_STRATEGY_STORAGE = bytes32(uint256(keccak256("yearn.base.strategy.storage")) - 1);
@@ -74,6 +75,7 @@ contract Setup is Test {
 
         // Deploy strategy and set variables
         strategy = IMockStrategy(setUpStrategy());
+        seedMinimumPosition(strategy);
 
         // label all the used addresses for traces
         vm.label(keeper, "keeper");
@@ -119,7 +121,18 @@ contract Setup is Test {
         return address(_strategy);
     }
 
+    function seedMinimumPosition(IMockStrategy _strategy) public {
+        asset.mint(management, minimumProtocolPosition);
+
+        vm.startPrank(management);
+        asset.approve(address(_strategy), minimumProtocolPosition);
+        YieldDonatingTokenizedStrategy(address(_strategy)).seedMinimumPosition();
+        vm.stopPrank();
+    }
+
     function setUpIlliquidStrategy() public returns (address) {
+        yieldSource = new MockYieldSource(address(asset));
+
         IMockStrategy _strategy = IMockStrategy(
             address(
                 new MockIlliquidStrategy(
@@ -147,10 +160,14 @@ contract Setup is Test {
         _strategy.acceptManagement();
         vm.stopPrank();
 
+        seedMinimumPosition(_strategy);
+
         return address(_strategy);
     }
 
     function setUpFaultyStrategy() public returns (address) {
+        yieldSource = new MockYieldSource(address(asset));
+
         IMockStrategy _strategy = IMockStrategy(
             address(
                 new MockFaultyStrategy(
@@ -175,6 +192,8 @@ contract Setup is Test {
         vm.prank(management);
         _strategy.acceptManagement();
 
+        seedMinimumPosition(_strategy);
+
         return address(_strategy);
     }
 
@@ -198,12 +217,16 @@ contract Setup is Test {
         uint256 _balance = ERC20Mock(_strategy.asset()).balanceOf(address(_strategy));
         uint256 _idle = _balance > _assets ? _assets : _balance;
         uint256 _debt = _assets - _idle;
-        assertEq(_assets, _totalAssets, "!totalAssets");
-        assertEq(_debt, _totalDebt, "!totalDebt");
-        assertEq(_idle, _totalIdle, "!totalIdle");
+        uint256 lockedSeedAssets = _strategy.convertToAssets(_strategy.balanceOf(address(_strategy)));
+        uint256 lockedSeedShares = _strategy.balanceOf(address(_strategy));
+
+        assertEq(_assets, _totalAssets + lockedSeedAssets, "!totalAssets");
+        assertGe(_debt, _totalDebt, "!totalDebt");
+        assertGe(_idle, _totalIdle, "!totalIdle");
+        assertEq((_debt - _totalDebt) + (_idle - _totalIdle), lockedSeedAssets, "!seedAccounting");
         assertEq(_totalAssets, _totalDebt + _totalIdle, "!Added");
         // We give supply a buffer or 1 wei for rounding
-        assertApproxEqRel(_strategy.totalSupply(), _totalSupply, 1e13, "!supply");
+        assertApproxEqRel(_strategy.totalSupply(), _totalSupply + lockedSeedShares, 1e13, "!supply");
     }
 
     // For checks without totalSupply while profit is unlocking
@@ -217,9 +240,12 @@ contract Setup is Test {
         uint256 _balance = ERC20Mock(_strategy.asset()).balanceOf(address(_strategy));
         uint256 _idle = _balance > _assets ? _assets : _balance;
         uint256 _debt = _assets - _idle;
-        assertEq(_assets, _totalAssets, "!totalAssets");
-        assertEq(_debt, _totalDebt, "!totalDebt");
-        assertEq(_idle, _totalIdle, "!totalIdle");
+        uint256 lockedSeedAssets = _strategy.convertToAssets(_strategy.balanceOf(address(_strategy)));
+
+        assertEq(_assets, _totalAssets + lockedSeedAssets, "!totalAssets");
+        assertGe(_debt, _totalDebt, "!totalDebt");
+        assertGe(_idle, _totalIdle, "!totalIdle");
+        assertEq((_debt - _totalDebt) + (_idle - _totalIdle), lockedSeedAssets, "!seedAccounting");
         assertEq(_totalAssets, _totalDebt + _totalIdle, "!Added");
     }
 

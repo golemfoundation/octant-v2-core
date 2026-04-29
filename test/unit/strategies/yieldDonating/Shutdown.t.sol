@@ -123,7 +123,7 @@ contract ShutdownTest is Setup {
 
         // Funds should be pulled from yield source to strategy
         assertEq(asset.balanceOf(address(strategy)), _amount, "funds should be in strategy");
-        assertEq(asset.balanceOf(address(yieldSource)), 0, "yield source should be empty");
+        assertEq(asset.balanceOf(address(yieldSource)), minimumProtocolPosition, "yield source should keep seed");
     }
 
     function test_emergencyWithdraw_byEmergencyAdmin(uint256 _amount) public {
@@ -190,7 +190,7 @@ contract ShutdownTest is Setup {
         (, uint256 reportedLoss) = strategy.report();
 
         assertEq(reportedLoss, loss, "loss mismatch");
-        assertEq(strategy.totalAssets(), amount - loss, "total assets should reflect loss");
+        assertEq(strategy.totalAssets(), amount - loss + minimumProtocolPosition, "total assets should reflect loss");
         // Burning should still work after shutdown
         assertLt(strategy.balanceOf(donationAddress), 20e18, "dragon shares should be partially burned");
     }

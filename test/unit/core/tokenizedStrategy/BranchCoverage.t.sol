@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.25;
 
-import { Test } from "forge-std/Test.sol";
 import { MockERC20 } from "test/mocks/MockERC20.sol";
 import { MockYieldSource } from "test/mocks/core/MockYieldSource.sol";
 import { MockStrategy as MockBaseStrategy } from "test/mocks/core/MockBaseStrategy.sol";
@@ -10,10 +9,11 @@ import { MockTokenizedStrategyWithLoss } from "test/mocks/core/MockTokenizedStra
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 import { ITokenizedStrategy } from "src/core/interfaces/ITokenizedStrategy.sol";
 import { TokenizedStrategy__InvalidSigner } from "src/errors.sol";
+import { SeedHelpers } from "test/unit/strategies/yieldDonating/utils/SeedHelpers.sol";
 
 /// @title TokenizedStrategy Branch Coverage Tests
 /// @notice Covers untested branches in TokenizedStrategy
-contract TokenizedStrategyBranchCoverageTest is Test {
+contract TokenizedStrategyBranchCoverageTest is SeedHelpers {
     MockBaseStrategy strategy;
     MockERC20 asset;
     MockYieldSource yieldSource;
@@ -34,6 +34,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         yieldSource = new MockYieldSource(address(asset));
         implementation = new YieldDonatingTokenizedStrategy();
         strategy = new MockBaseStrategy(address(asset), address(yieldSource), address(implementation));
+        _seedMinimumPosition(address(strategy), asset, management);
 
         // Give user some assets
         asset.mint(user, 100e18);
@@ -789,6 +790,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
             address(0x99),
             address(implementation)
         );
+        _seedMinimumPosition(address(illiqStrat), asset, address(this));
 
         asset.mint(user, 10e18);
         vm.startPrank(user);
@@ -815,6 +817,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
             address(0x99),
             address(implementation)
         );
+        _seedMinimumPosition(address(illiqStrat), asset, address(this));
 
         asset.mint(user, 10e18);
         vm.startPrank(user);
@@ -841,6 +844,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
             address(0x99),
             address(implementation)
         );
+        _seedMinimumPosition(address(illiqStrat), asset, address(this));
 
         asset.mint(user, 10e18);
         vm.startPrank(user);
@@ -1110,7 +1114,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         ITokenizedStrategy(address(strategy)).report();
 
         uint256 ta = ITokenizedStrategy(address(strategy)).totalAssets();
-        assertEq(ta, 10e18, "Total assets should remain unchanged");
+        assertEq(ta, 10e18 + MINIMUM_PROTOCOL_POSITION, "Total assets should remain unchanged");
     }
 
     // --- Withdraw where idle >= assets (no freeFunds needed, line 1096 false) ---

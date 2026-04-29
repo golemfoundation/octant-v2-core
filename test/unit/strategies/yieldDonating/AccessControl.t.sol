@@ -144,13 +144,13 @@ contract AccessControlTest is Setup {
         vm.expectRevert(BaseStrategy.NotSelf.selector);
         strategy.deployFunds(_amount);
 
-        assertEq(asset.balanceOf(address(yieldSource)), 0);
+        assertEq(asset.balanceOf(address(yieldSource)), minimumProtocolPosition);
 
         vm.prank(address(strategy));
         strategy.deployFunds(_amount);
 
         // make sure we deposited into the funds
-        assertEq(asset.balanceOf(address(yieldSource)), _amount, "!out");
+        assertEq(asset.balanceOf(address(yieldSource)), _amount + minimumProtocolPosition, "!out");
     }
 
     function test_accessControl_freeFunds(address _address, uint256 _amount) public {
@@ -161,7 +161,7 @@ contract AccessControlTest is Setup {
         mintAndDepositIntoStrategy(strategy, user, _amount);
 
         // assure the deposit worked correctly
-        assertEq(asset.balanceOf(address(yieldSource)), _amount);
+        assertEq(asset.balanceOf(address(yieldSource)), _amount + minimumProtocolPosition);
         assertEq(asset.balanceOf(address(strategy)), 0);
 
         // doesn't work from random address
@@ -180,7 +180,7 @@ contract AccessControlTest is Setup {
         vm.prank(address(strategy));
         strategy.freeFunds(_amount);
 
-        assertEq(asset.balanceOf(address(yieldSource)), 0);
+        assertEq(asset.balanceOf(address(yieldSource)), minimumProtocolPosition);
         assertEq(asset.balanceOf(address(strategy)), _amount, "!out");
     }
 
@@ -192,7 +192,7 @@ contract AccessControlTest is Setup {
         mintAndDepositIntoStrategy(strategy, user, _amount);
 
         // assure the deposit worked correctly
-        assertEq(asset.balanceOf(address(yieldSource)), _amount);
+        assertEq(asset.balanceOf(address(yieldSource)), _amount + minimumProtocolPosition);
         assertEq(asset.balanceOf(address(strategy)), 0);
 
         // doesn't work from random address
@@ -208,7 +208,7 @@ contract AccessControlTest is Setup {
         vm.prank(address(strategy));
         uint256 amountOut = strategy.harvestAndReport();
 
-        assertEq(amountOut, _amount, "!out");
+        assertEq(amountOut, _amount + minimumProtocolPosition, "!out");
     }
 
     function test_accessControl_tendThis(address _address, uint256 _amount) public {

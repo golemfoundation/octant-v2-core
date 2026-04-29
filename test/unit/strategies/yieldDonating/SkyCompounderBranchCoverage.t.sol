@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import { Test } from "forge-std/Test.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { SkyCompounderStrategy } from "src/strategies/yieldDonating/SkyCompounderStrategy.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 import { ITokenizedStrategy } from "src/core/interfaces/ITokenizedStrategy.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { SeedHelpers } from "./utils/SeedHelpers.sol";
 
 /// @title Inline mock staking contract for SkyCompounder tests
 contract MockStaking is ERC20 {
@@ -42,7 +42,7 @@ contract MockStaking is ERC20 {
 
 /// @title SkyCompounderStrategy branch coverage tests
 /// @notice Covers 4 uncovered branches + 1 uncovered function (setMinAmountOut)
-contract SkyCompounderBranchCoverageTest is Test {
+contract SkyCompounderBranchCoverageTest is SeedHelpers {
     // USDS address hardcoded in SkyCompounderStrategy
     address constant USDS = 0xdC035D45d973E3EC169d2276DDab16f1e407384F;
 
@@ -146,6 +146,7 @@ contract SkyCompounderBranchCoverageTest is Test {
     /// @notice _harvestAndReport when isShutdown() == true takes the shutdown path (line 256)
     function test_harvestAndReport_shutdownPath() public {
         SkyCompounderStrategy strategy = _deployStrategy();
+        _seedMinimumPosition(address(strategy), ERC20Mock(USDS), management);
 
         // Mint USDS to deposit
         ERC20Mock(USDS).mint(address(this), 100e18);

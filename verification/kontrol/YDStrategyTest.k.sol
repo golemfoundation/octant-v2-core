@@ -213,6 +213,8 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
         assertEq(postState.dragonBalance, 0);
         // totalSupply decreased by exactly the dragon balance
         assertEq(postState.totalSupply, preState.totalSupply - preState.dragonBalance);
+        // The strategy-owned seed remains locked, so burning dragon shares cannot reset supply to zero.
+        assertGe(postState.totalSupply, implementation.MINIMUM_PROTOCOL_POSITION());
     }
 
     /*//////////////////////////////////////////////////////////////

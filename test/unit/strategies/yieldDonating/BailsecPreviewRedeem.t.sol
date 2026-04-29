@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.25;
 
-import { Test } from "forge-std/Test.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { ERC4626 } from "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
@@ -13,6 +12,7 @@ import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/Yie
 import { ERC4626Strategy } from "src/strategies/yieldDonating/ERC4626Strategy.sol";
 import { YearnV3Strategy } from "src/strategies/yieldDonating/YearnV3Strategy.sol";
 import { MorphoCompounderStrategy } from "src/strategies/yieldDonating/MorphoCompounderStrategy.sol";
+import { SeedHelpers } from "./utils/SeedHelpers.sol";
 
 /// @notice ERC4626 target vault that charges an exit fee, so `previewRedeem(shares)` < `convertToAssets(shares)`.
 /// @dev Uses OpenZeppelin's docs-level ERC4626Fees reference to keep fee accounting EIP-4626 compliant.
@@ -43,7 +43,7 @@ contract ExitFeeVaultMock is ERC4626Fees {
 ///         Post-fix they use `previewRedeem`, the EIP-4626 view required to reflect any exit-fee
 ///         policy. Exercised across `ERC4626Strategy`, `YearnV3Strategy`, and
 ///         `MorphoCompounderStrategy`; `SparkStrategy` inherits the fix from `ERC4626Strategy`.
-contract BailsecPreviewRedeemTest is Test {
+contract BailsecPreviewRedeemTest is SeedHelpers {
     ERC20Mock internal asset;
     YieldDonatingTokenizedStrategy internal implementation;
     ExitFeeVaultMock internal targetVault;
@@ -64,6 +64,8 @@ contract BailsecPreviewRedeemTest is Test {
     }
 
     function _depositThenReport(address strategyAddr) internal {
+        _seedMinimumPosition(strategyAddr, asset, management);
+
         asset.mint(user, DEPOSIT_AMOUNT);
         vm.startPrank(user);
         asset.approve(strategyAddr, DEPOSIT_AMOUNT);

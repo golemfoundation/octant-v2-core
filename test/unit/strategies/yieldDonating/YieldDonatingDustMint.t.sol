@@ -27,6 +27,7 @@ contract YieldDonatingDustMintTest is Setup {
 
     function setUp() public override {
         super.setUp();
+        yieldSource.simulateLoss(minimumProtocolPosition);
     }
 
     /// @notice Direct write to the strategy's namespaced storage. Used to construct a

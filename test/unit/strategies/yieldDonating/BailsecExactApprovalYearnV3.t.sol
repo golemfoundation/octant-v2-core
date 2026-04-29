@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.25;
 
-import { Test } from "forge-std/Test.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 
 import { ITokenizedStrategy } from "src/core/interfaces/ITokenizedStrategy.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 import { YearnV3Strategy } from "src/strategies/yieldDonating/YearnV3Strategy.sol";
+import { SeedHelpers } from "./utils/SeedHelpers.sol";
 
 /// @notice Minimal Yearn-v3-shaped vault that mints 1:1 shares and pulls exactly `assets`.
 /// @dev Exposes just enough `ITokenizedStrategy` surface for the constructor + deposit + deploy
@@ -54,19 +54,19 @@ contract PassthroughVaultMock {
 ///      residual approval after the call.
 contract UnderPullVaultMock {
     address public immutable asset;
-    uint256 public immutable pullAmount;
+    uint256 public immutable pullBps;
 
     mapping(address => uint256) private _shares;
 
-    constructor(address underlying, uint256 _pullAmount) {
+    constructor(address underlying, uint256 _pullBps) {
         asset = underlying;
-        pullAmount = _pullAmount;
+        pullBps = _pullBps;
     }
 
-    function deposit(uint256, address receiver) external returns (uint256) {
-        IERC20(asset).transferFrom(msg.sender, address(this), pullAmount);
-        _shares[receiver] += pullAmount;
-        return pullAmount;
+    function deposit(uint256 assets, address receiver) external returns (uint256 shares) {
+        shares = (assets * pullBps) / 10_000;
+        IERC20(asset).transferFrom(msg.sender, address(this), shares);
+        _shares[receiver] += shares;
     }
 
     function balanceOf(address owner) external view returns (uint256) {
@@ -95,7 +95,7 @@ contract UnderPullVaultMock {
 ///         exposing the full idle balance to any hostile upgrade of the (upgradeable-proxy) vault.
 ///         Post-fix the allowance is granted per-deploy in `_deployFunds` and explicitly cleared
 ///         after the vault call, even if the target under-pulls.
-contract BailsecExactApprovalYearnV3Test is Test {
+contract BailsecExactApprovalYearnV3Test is SeedHelpers {
     ERC20Mock internal asset;
     YieldDonatingTokenizedStrategy internal implementation;
     PassthroughVaultMock internal yearnVault;
@@ -138,6 +138,8 @@ contract BailsecExactApprovalYearnV3Test is Test {
     }
 
     function test_bailsec_60_deployFundsLeavesZeroAllowance() public {
+        _seedMinimumPosition(address(strategy), asset, management);
+
         asset.mint(user, DEPOSIT_AMOUNT);
         vm.startPrank(user);
         asset.approve(address(strategy), DEPOSIT_AMOUNT);
@@ -155,8 +157,8 @@ contract BailsecExactApprovalYearnV3Test is Test {
     }
 
     function test_bailsec_60_deployFundsClearsResidualAllowanceIfVaultUnderPulls() public {
-        uint256 pulled = DEPOSIT_AMOUNT / 2;
-        UnderPullVaultMock underPullVault = new UnderPullVaultMock(address(asset), pulled);
+        uint256 pullBps = 5_000;
+        UnderPullVaultMock underPullVault = new UnderPullVaultMock(address(asset), pullBps);
         YearnV3Strategy underPullStrategy = new YearnV3Strategy(
             address(underPullVault),
             address(asset),
@@ -169,6 +171,7 @@ contract BailsecExactApprovalYearnV3Test is Test {
             false,
             address(implementation)
         );
+        _seedMinimumPosition(address(underPullStrategy), asset, management);
 
         asset.mint(user, DEPOSIT_AMOUNT);
         vm.startPrank(user);
@@ -183,7 +186,7 @@ contract BailsecExactApprovalYearnV3Test is Test {
         );
         assertEq(
             asset.balanceOf(address(underPullStrategy)),
-            DEPOSIT_AMOUNT - pulled,
+            (DEPOSIT_AMOUNT + MINIMUM_PROTOCOL_POSITION / 2) / 2,
             "mock invariant: unpulled assets remain idle on the strategy"
         );
     }

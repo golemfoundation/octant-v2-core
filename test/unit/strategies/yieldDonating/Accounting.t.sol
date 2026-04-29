@@ -41,7 +41,7 @@ contract AccountingTest is Setup {
         // should have pulled out just the deposited amount leaving the rest deployed.
         assertEq(asset.balanceOf(_address), beforeBalance + _amount);
         assertEq(asset.balanceOf(address(strategy)), 0);
-        assertEq(asset.balanceOf(address(yieldSource)), toAirdrop);
+        assertEq(asset.balanceOf(address(yieldSource)), toAirdrop + minimumProtocolPosition);
         checkStrategyTotals(strategy, 0, 0, 0, 0);
     }
 
@@ -153,7 +153,7 @@ contract AccountingTest is Setup {
 
         // should have pulled out just the deposit amount
         assertEq(asset.balanceOf(_address), beforeBalance + _amount);
-        assertEq(asset.balanceOf(address(yieldSource)), toAirdrop);
+        assertEq(asset.balanceOf(address(yieldSource)), toAirdrop + minimumProtocolPosition);
         checkStrategyTotals(strategy, 0, 0, 0, 0);
     }
 
@@ -184,7 +184,7 @@ contract AccountingTest is Setup {
         // airdrop to strategy
         uint256 toAirdrop = (_amount * _profitFactor) / MAX_BPS;
         asset.mint(address(yieldSource), toAirdrop);
-        assertEq(asset.balanceOf(address(yieldSource)), _amount + toAirdrop, "!yieldSource");
+        assertEq(asset.balanceOf(address(yieldSource)), _amount + toAirdrop + minimumProtocolPosition, "!yieldSource");
 
         // nothing should change
         assertEq(strategy.pricePerShare(), pricePerShare);
@@ -265,7 +265,7 @@ contract AccountingTest is Setup {
 
         // Should have deposited the toAirdrop amount but no other changes
         checkStrategyTotals(strategy, _amount, _amount, 0);
-        assertEq(asset.balanceOf(address(yieldSource)), _amount + toAirdrop, "!yieldSource");
+        assertEq(asset.balanceOf(address(yieldSource)), _amount + toAirdrop + minimumProtocolPosition, "!yieldSource");
         assertEq(strategy.pricePerShare(), wad, "!pps");
 
         // Make sure we now report the profit correctly
@@ -314,14 +314,18 @@ contract AccountingTest is Setup {
         uint256 expectedDeposit = _amount / 2;
         checkStrategyTotals(strategy, _amount, expectedDeposit, _amount - expectedDeposit, _amount);
 
-        assertEq(asset.balanceOf(address(yieldSource)), expectedDeposit, "!yieldSource");
+        uint256 expectedYieldSourceBalance = (minimumProtocolPosition / 2) +
+            ((_amount + minimumProtocolPosition / 2) / 2);
+        uint256 expectedIdleBalance = _amount + minimumProtocolPosition - expectedYieldSourceBalance;
+
+        assertEq(asset.balanceOf(address(yieldSource)), expectedYieldSourceBalance, "!yieldSource");
         // should still be 1
         assertEq(strategy.pricePerShare(), wad);
 
         // airdrop to strategy to simulate a harvesting of rewards
         uint256 toAirdrop = (_amount * _profitFactor) / MAX_BPS;
         asset.mint(address(strategy), toAirdrop);
-        assertEq(asset.balanceOf(address(strategy)), _amount - expectedDeposit + toAirdrop);
+        assertEq(asset.balanceOf(address(strategy)), expectedIdleBalance + toAirdrop);
 
         vm.prank(keeper);
         strategy.tend();
@@ -329,7 +333,7 @@ contract AccountingTest is Setup {
         // Should have withdrawn all the funds from the yield source
         checkStrategyTotals(strategy, _amount, 0, _amount, _amount);
         assertEq(asset.balanceOf(address(yieldSource)), 0, "!yieldSource");
-        assertEq(asset.balanceOf(address(strategy)), _amount + toAirdrop);
+        assertEq(asset.balanceOf(address(strategy)), _amount + toAirdrop + minimumProtocolPosition);
         assertEq(strategy.pricePerShare(), wad, "!pps");
 
         // Make sure we now report the profit correctly
@@ -342,7 +346,7 @@ contract AccountingTest is Setup {
             (_amount + toAirdrop) / 2,
             (_amount + toAirdrop) - ((_amount + toAirdrop) / 2)
         );
-        assertEq(asset.balanceOf(address(yieldSource)), (_amount + toAirdrop) / 2);
+        assertEq(asset.balanceOf(address(yieldSource)), (_amount + toAirdrop + minimumProtocolPosition) / 2);
 
         skip(profitMaxUnlockTime);
 
@@ -363,6 +367,7 @@ contract AccountingTest is Setup {
         mintAndDepositIntoStrategy(strategy, _address, _amount);
 
         uint256 toLose = (_amount * _lossFactor) / MAX_BPS;
+        vm.assume(toLose > minimumProtocolPosition);
         // Simulate a loss.
         vm.prank(address(yieldSource));
         asset.transfer(address(69), toLose);
@@ -385,7 +390,8 @@ contract AccountingTest is Setup {
         asset.transfer(address(69), toLose);
 
         uint256 beforeBalance = asset.balanceOf(_address);
-        uint256 expectedOut = _amount - toLose;
+        uint256 userLoss = toLose > minimumProtocolPosition ? toLose - minimumProtocolPosition : 0;
+        uint256 expectedOut = _amount - userLoss;
         // Withdraw the full amount before the loss is reported.
         vm.prank(_address);
         strategy.withdraw(_amount, _address, _address, _lossFactor);
@@ -410,7 +416,8 @@ contract AccountingTest is Setup {
         asset.transfer(address(69), toLose);
 
         uint256 beforeBalance = asset.balanceOf(_address);
-        uint256 expectedOut = _amount - toLose;
+        uint256 userLoss = toLose > minimumProtocolPosition ? toLose - minimumProtocolPosition : 0;
+        uint256 expectedOut = _amount - userLoss;
         // Withdraw the full amount before the loss is reported.
         vm.prank(_address);
         strategy.redeem(_amount, _address, _address);
@@ -434,6 +441,7 @@ contract AccountingTest is Setup {
         mintAndDepositIntoStrategy(strategy, _address, _amount);
 
         uint256 toLose = (_amount * _lossFactor) / MAX_BPS;
+        vm.assume(toLose > minimumProtocolPosition);
         // Simulate a loss.
         vm.prank(address(yieldSource));
         asset.transfer(address(69), toLose);
@@ -451,21 +459,25 @@ contract AccountingTest is Setup {
         mintAndDepositIntoStrategy(strategy, _address, _amount);
 
         uint256 toLose = (_amount * _lossFactor) / MAX_BPS;
+        vm.assume(toLose > minimumProtocolPosition);
         // Simulate a loss.
         vm.prank(address(yieldSource));
         asset.transfer(address(69), toLose);
 
         uint256 beforeBalance = asset.balanceOf(_address);
-        uint256 expectedOut = _amount - toLose;
+        uint256 userLoss = toLose - minimumProtocolPosition;
+        uint256 expectedOut = _amount - userLoss;
+        uint256 effectiveMaxLoss = (userLoss * MAX_BPS + _amount - 1) / _amount;
+        vm.assume(effectiveMaxLoss > 0);
 
         // First set it to just under the expected loss.
         vm.expectRevert("too much loss");
         vm.prank(_address);
-        strategy.redeem(_amount, _address, _address, _lossFactor - 1);
+        strategy.redeem(_amount, _address, _address, effectiveMaxLoss - 1);
 
         // Now redeem with the correct loss.
         vm.prank(_address);
-        strategy.redeem(_amount, _address, _address, _lossFactor);
+        strategy.redeem(_amount, _address, _address, effectiveMaxLoss);
 
         uint256 afterBalance = asset.balanceOf(_address);
 
@@ -495,7 +507,7 @@ contract AccountingTest is Setup {
         assertEq(strategy.balanceOf(_address), _amount);
         assertEq(asset.balanceOf(address(strategy)), 0);
 
-        assertEq(asset.balanceOf(address(yieldSource)), _amount);
+        assertEq(asset.balanceOf(address(yieldSource)), _amount + minimumProtocolPosition);
     }
 
     // ===== BURN CONVERSION TESTS =====
@@ -535,15 +547,15 @@ contract AccountingTest is Setup {
         assertEq(strategy.balanceOf(donationAddress), 0, "All dragon shares should be burned");
 
         // 2. Shares reduced by burned amount only
-        assertEq(strategy.totalSupply(), 80e18, "Should have 80 shares (100 - 20 burned)");
+        assertEq(strategy.totalSupply(), 80e18 + minimumProtocolPosition, "Should have 80 shares plus seed");
 
         // 3. Assets reduced by full loss amount
-        assertEq(strategy.totalAssets(), 75e18, "Should have 75 assets (100 - 25 loss)");
+        assertEq(strategy.totalAssets(), 75e18 + minimumProtocolPosition, "Should have 75 assets plus seed");
 
         // 4. User gets fair share of remaining assets
         uint256 userShares = strategy.balanceOf(user);
         uint256 userAssetValue = strategy.convertToAssets(userShares);
-        assertEq(userAssetValue, 75e18, "User should get fair share of 75 remaining assets");
+        assertApproxEqAbs(userAssetValue, 75e18, minimumProtocolPosition, "User should get fair share");
     }
 
     /**
@@ -568,8 +580,8 @@ contract AccountingTest is Setup {
 
         // Should only burn 20 shares to cover 20 token loss
         assertEq(strategy.balanceOf(donationAddress), 10e18, "10 dragon shares should remain");
-        assertEq(strategy.totalSupply(), 80e18, "Should have 80 total shares (100 - 20 burned)");
-        assertEq(strategy.totalAssets(), 80e18, "Should have 80 total assets (100 - 20 loss)");
+        assertEq(strategy.totalSupply(), 80e18 + minimumProtocolPosition, "Should have 80 shares plus seed");
+        assertEq(strategy.totalAssets(), 80e18 + minimumProtocolPosition, "Should have 80 assets plus seed");
 
         // Scenario 2: Minimal dragon shares, large loss
         vm.startPrank(user);
@@ -582,8 +594,8 @@ contract AccountingTest is Setup {
 
         // Should burn all 19 dragon shares, covering 19 tokens
         assertEq(strategy.balanceOf(donationAddress), 0, "All dragon shares should be burned");
-        assertEq(strategy.totalSupply(), 61e18, "Should have 61 total shares (80 - 19)");
-        assertEq(strategy.totalAssets(), 30e18, "Should have 30 total assets (80 - 50)");
+        assertEq(strategy.totalSupply(), 61e18 + minimumProtocolPosition, "Should have 61 shares plus seed");
+        assertEq(strategy.totalAssets(), 30e18 + minimumProtocolPosition, "Should have 30 assets plus seed");
     }
 
     /**
@@ -621,8 +633,8 @@ contract AccountingTest is Setup {
         );
 
         // Verify assets reduced but shares unchanged
-        assertEq(strategy.totalAssets(), 75e18, "Total assets should be 75 after loss");
-        assertEq(strategy.totalSupply(), 100e18, "Total shares should remain 100");
+        assertEq(strategy.totalAssets(), 75e18 + minimumProtocolPosition, "Total assets should include seed");
+        assertEq(strategy.totalSupply(), 100e18 + minimumProtocolPosition, "Total shares should include seed");
     }
 
     /**
@@ -653,8 +665,8 @@ contract AccountingTest is Setup {
         // totalAssets = 120, totalSupply = 150, PPS = 120/150 = 0.8
         uint256 totalAssets = strategy.totalAssets();
         uint256 totalSupply = strategy.totalSupply();
-        assertEq(totalAssets, 120e18, "Should have 120 assets after 30 loss");
-        assertEq(totalSupply, 150e18, "Supply unchanged when burning disabled");
+        assertEq(totalAssets, 120e18 + minimumProtocolPosition, "Should have 120 assets plus seed");
+        assertEq(totalSupply, 150e18 + minimumProtocolPosition, "Supply should include seed");
 
         // Step 3: Enable burning and trigger a small loss with non-zero remainder
         vm.prank(management);
@@ -720,7 +732,7 @@ contract AccountingTest is Setup {
         strategy.report();
 
         // After the fix, the 20 burned shares should have covered exactly 20 assets of loss
-        assertEq(strategy.totalAssets(), 75e18, "Should have 75 assets (100 - 25 loss)");
-        assertEq(strategy.totalSupply(), 80e18, "Should have 80 shares (100 - 20 burned)");
+        assertEq(strategy.totalAssets(), 75e18 + minimumProtocolPosition, "Should have 75 assets plus seed");
+        assertEq(strategy.totalSupply(), 80e18 + minimumProtocolPosition, "Should have 80 shares plus seed");
     }
 }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.25;
 
-import { Test, Vm } from "forge-std/Test.sol";
+import { Vm } from "forge-std/Test.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 
@@ -12,8 +12,9 @@ import { MockFactory } from "test/mocks/MockFactory.sol";
 import { MockStrategy } from "test/mocks/core/tokenized-strategies/MockStrategy.sol";
 import { MockYieldSource } from "test/mocks/core/tokenized-strategies/MockYieldSource.sol";
 import { IMockStrategy } from "test/mocks/core/IMockStrategy.sol";
+import { SeedHelpers } from "test/unit/strategies/yieldDonating/utils/SeedHelpers.sol";
 
-contract YieldForwarderTest is Test {
+contract YieldForwarderTest is SeedHelpers {
     YieldForwarder public forwarder;
     ERC20Mock public asset;
     IMockStrategy public strategy;
@@ -66,6 +67,7 @@ contract YieldForwarderTest is Test {
         strategy.setPendingManagement(management);
         strategy.acceptManagement();
         vm.stopPrank();
+        _seedMinimumPosition(address(strategy), asset, management);
 
         // Labels
         vm.label(receiver, "Receiver");
@@ -260,6 +262,7 @@ contract YieldForwarderTest is Test {
         strategy2.setPendingManagement(management);
         strategy2.acceptManagement();
         vm.stopPrank();
+        _seedMinimumPosition(address(strategy2), asset2, management);
 
         // Deposit into both strategies
         _depositIntoStrategy(user, DEPOSIT_AMOUNT);

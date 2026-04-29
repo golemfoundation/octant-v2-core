@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.25;
 
-import { Test } from "forge-std/Test.sol";
 import { MockERC20 } from "test/mocks/MockERC20.sol";
 import { MockYieldSource } from "test/mocks/core/MockYieldSource.sol";
 import { MockStrategy as MockBaseStrategy } from "test/mocks/core/MockBaseStrategy.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 import { ITokenizedStrategy } from "src/core/interfaces/ITokenizedStrategy.sol";
 import { BaseStrategy } from "src/core/BaseStrategy.sol";
+import { SeedHelpers } from "test/unit/strategies/yieldDonating/utils/SeedHelpers.sol";
 
 /// @title BaseStrategy Branch Coverage Tests
 /// @notice Covers untested branches in BaseStrategy (onlySelf, hook functions, view defaults)
-contract BaseStrategyBranchCoverageTest is Test {
+contract BaseStrategyBranchCoverageTest is SeedHelpers {
     MockBaseStrategy strategy;
     MockERC20 asset;
     MockYieldSource yieldSource;
@@ -25,6 +25,7 @@ contract BaseStrategyBranchCoverageTest is Test {
         yieldSource = new MockYieldSource(address(asset));
         implementation = new YieldDonatingTokenizedStrategy();
         strategy = new MockBaseStrategy(address(asset), address(yieldSource), address(implementation));
+        _seedMinimumPosition(address(strategy), asset, management);
     }
 
     // --- onlySelf modifier: external calls revert ---
@@ -188,7 +189,7 @@ contract MockStrategyDefaultTend is BaseStrategy {
 }
 
 /// @title Tests for the default _tendTrigger implementation in BaseStrategy
-contract BaseStrategyDefaultTendTriggerTest is Test {
+contract BaseStrategyDefaultTendTriggerTest is SeedHelpers {
     MockStrategyDefaultTend strategyDefaultTend;
     MockERC20 asset2;
     YieldDonatingTokenizedStrategy implementation2;

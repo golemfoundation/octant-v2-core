@@ -3,6 +3,8 @@ pragma solidity >=0.8.25;
 
 import { TokenizedStrategy, Math } from "src/core/TokenizedStrategy.sol";
 import { IBaseStrategy } from "src/core/interfaces/IBaseStrategy.sol";
+import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 /**
  * @title YieldDonatingTokenizedStrategy
  * @author [Golem Foundation](https://golem.foundation)
@@ -39,6 +41,10 @@ import { IBaseStrategy } from "src/core/interfaces/IBaseStrategy.sol";
 
 contract YieldDonatingTokenizedStrategy is TokenizedStrategy {
     using Math for uint256;
+    using SafeERC20 for ERC20;
+
+    /// @notice Strategy-owned seed that keeps supply non-zero after user exits.
+    uint256 public constant MINIMUM_PROTOCOL_POSITION = 1_000_000_000;
 
     /// @notice Emitted when profit shares are minted to dragon router
     /// @param dragonRouter Address receiving minted donation shares
@@ -49,6 +55,37 @@ contract YieldDonatingTokenizedStrategy is TokenizedStrategy {
     /// @param dragonRouter Address whose shares are burned
     /// @param amount Amount of shares burned in share base units
     event DonationBurned(address indexed dragonRouter, uint256 amount);
+
+    /// @notice Emitted when the strategy-owned minimum position is funded and locked.
+    /// @param funder Address that supplied the underlying asset seed
+    /// @param amount Amount of underlying assets locked as the minimum position
+    event MinimumProtocolPositionSeeded(address indexed funder, uint256 amount);
+
+    /**
+     * @notice Funds and locks the protocol minimum position.
+     * @dev This must be called once by the operator before public deposits are enabled.
+     *      The minted shares are held by the strategy itself, so users cannot redeem or
+     *      transfer them away. This keeps `totalSupply` non-zero even if all external
+     *      holders exit after a loss-report sequence.
+     * @return shares Amount of locked shares minted to the strategy
+     */
+    function seedMinimumPosition() external virtual nonReentrant onlyManagement returns (uint256 shares) {
+        StrategyData storage S = super._strategyStorage();
+
+        require(_totalSupply(S) == 0 && _totalAssets(S) == 0, "MINIMUM_POSITION_LATE");
+        require(_balanceOf(S, address(this)) == 0, "MINIMUM_POSITION_SEEDED");
+
+        shares = MINIMUM_PROTOCOL_POSITION;
+        S.asset.safeTransferFrom(msg.sender, address(this), shares);
+
+        IBaseStrategy(address(this)).deployFunds(shares);
+
+        S.totalAssets = shares;
+        _mint(S, address(this), shares);
+
+        emit MinimumProtocolPositionSeeded(msg.sender, shares);
+    }
+
     /**
      * @notice Reports strategy performance and distributes profits as donations
      * @dev Mints profit-derived shares to dragon router when newTotalAssets > oldTotalAssets; on loss, attempts
@@ -118,6 +155,20 @@ contract YieldDonatingTokenizedStrategy is TokenizedStrategy {
         emit Reported(profit, loss);
     }
 
+    /// @inheritdoc TokenizedStrategy
+    function maxDeposit(address receiver) public view virtual override returns (uint256) {
+        StrategyData storage S = super._strategyStorage();
+        if (!_minimumPositionSeeded(S)) return 0;
+        return super.maxDeposit(receiver);
+    }
+
+    /// @inheritdoc TokenizedStrategy
+    function maxMint(address receiver) public view virtual override returns (uint256) {
+        StrategyData storage S = super._strategyStorage();
+        if (!_minimumPositionSeeded(S)) return 0;
+        return super.maxMint(receiver);
+    }
+
     /**
      * @dev Internal function to handle loss protection for dragon principal
      * @param S Storage struct pointer to access strategy's storage variables
@@ -143,5 +194,19 @@ contract YieldDonatingTokenizedStrategy is TokenizedStrategy {
                 emit DonationBurned(S.dragonRouter, sharesBurned);
             }
         }
+    }
+
+    function _deposit(
+        StrategyData storage S,
+        address receiver,
+        uint256 assets,
+        uint256 shares
+    ) internal virtual override {
+        require(_minimumPositionSeeded(S), "MINIMUM_POSITION_UNSEEDED");
+        super._deposit(S, receiver, assets, shares);
+    }
+
+    function _minimumPositionSeeded(StrategyData storage S) internal view returns (bool) {
+        return _balanceOf(S, address(this)) >= MINIMUM_PROTOCOL_POSITION;
     }
 }

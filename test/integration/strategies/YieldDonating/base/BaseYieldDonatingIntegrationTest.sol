@@ -22,6 +22,9 @@ abstract contract BaseYieldDonatingIntegrationTest is BaseIntegrationTest {
     /// @notice Implementation of YieldDonatingTokenizedStrategy
     YieldDonatingTokenizedStrategy public implementation;
 
+    /// @notice Strategy-owned seed used by YieldDonatingTokenizedStrategy.
+    uint256 internal constant MINIMUM_PROTOCOL_POSITION = 1_000_000_000;
+
     // ========== ABSTRACT METHODS ==========
 
     /// @notice Returns the compounder/staking vault address for mocking
@@ -35,6 +38,26 @@ abstract contract BaseYieldDonatingIntegrationTest is BaseIntegrationTest {
 
     /// @notice Returns the maximum deposit amount for fuzz tests
     function _maxDeposit() internal view virtual returns (uint256);
+
+    function _baseSetUp() internal virtual override {
+        _setupFork();
+        _setupRoles();
+        address strategyAddr = _deployStrategy();
+        vault = ITokenizedStrategy(strategyAddr);
+        _seedMinimumProtocolPosition(strategyAddr);
+        _labelAddresses();
+        _airdropInitialAssets();
+        _approveStrategy();
+    }
+
+    function _seedMinimumProtocolPosition(address strategyAddr) internal {
+        airdrop(ERC20(_asset()), management, MINIMUM_PROTOCOL_POSITION);
+
+        vm.startPrank(management);
+        ERC20(_asset()).approve(strategyAddr, MINIMUM_PROTOCOL_POSITION);
+        YieldDonatingTokenizedStrategy(strategyAddr).seedMinimumPosition();
+        vm.stopPrank();
+    }
 
     // ========== SHARED TEST IMPLEMENTATIONS ==========
 

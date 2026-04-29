@@ -78,11 +78,13 @@ contract YDSetup is KontrolTest {
         _storeAddress(address(strategy), TS_EMERGENCY_ADMIN_SLOT, _emergencyAdmin);
         _storeAddress(address(strategy), TS_DRAGON_ROUTER_SLOT, _dragonRouter);
 
-        // Symbolic totalSupply and totalAssets
-        uint256 totalSupply = freshUInt256Bounded();
+        // Symbolic totalSupply and totalAssets, preserving the locked protocol seed.
+        uint256 seedBalance = implementation.MINIMUM_PROTOCOL_POSITION();
+        uint256 totalSupply = seedBalance + freshUInt256Bounded();
         _storeUInt256(address(strategy), TS_TOTAL_SUPPLY_SLOT, totalSupply);
         uint256 totalAssets = freshUInt256Bounded();
         _storeUInt256(address(strategy), TS_TOTAL_ASSETS_SLOT, totalAssets);
+        _storeMappingUInt256(address(strategy), TS_BALANCES_SLOT, uint256(uint160(address(strategy))), 0, seedBalance);
 
         // Flags: decimals=18, entered=NOT_ENTERED(1), shutdown=false(0), enableBurning=true(1)
         _storeData(address(strategy), TS_FLAGS_SLOT, TS_DECIMALS_OFFSET, TS_DECIMALS_WIDTH, 18);
@@ -95,6 +97,7 @@ contract YDSetup is KontrolTest {
 
         // Symbolic dragon router balance
         uint256 dragonBalance = freshUInt256Bounded();
+        vm.assume(dragonBalance <= totalSupply - seedBalance);
         _storeMappingUInt256(address(strategy), TS_BALANCES_SLOT, uint256(uint160(_dragonRouter)), 0, dragonBalance);
 
         // Warp to a later timestamp

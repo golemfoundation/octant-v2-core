@@ -142,7 +142,11 @@ contract ReportLifecycleTest is Setup {
         assertEq(reportedLoss, loss, "loss mismatch");
         assertEq(strategy.balanceOf(donationAddress), 0, "all dragon shares should be burned");
         // Remaining loss affects all holders via PPS reduction
-        assertEq(strategy.totalAssets(), amount - loss, "total assets should reflect full loss");
+        assertEq(
+            strategy.totalAssets(),
+            amount - loss + minimumProtocolPosition,
+            "total assets should reflect full loss"
+        );
     }
 
     function test_reportLoss_burningEnabled_emitsDonationBurned() public {
@@ -195,7 +199,7 @@ contract ReportLifecycleTest is Setup {
         assertEq(strategy.balanceOf(donationAddress), dragonBalBefore, "dragon shares should not change");
         assertEq(strategy.totalSupply(), totalSupplyBefore, "total supply should not change");
         // PPS drops for all holders
-        assertEq(strategy.totalAssets(), amount - loss, "total assets should reflect loss");
+        assertEq(strategy.totalAssets(), amount - loss + minimumProtocolPosition, "total assets should reflect loss");
     }
 
     // ==================== Report with Zero Change ====================
@@ -317,7 +321,11 @@ contract ReportLifecycleTest is Setup {
         assertEq(reportedProfit, _profit, "profit mismatch");
         assertEq(reportedLoss, 0, "should be zero loss");
         assertEq(strategy.pricePerShare(), ppsBefore, "PPS should not change");
-        assertEq(strategy.totalAssets(), _amount + _profit, "totalAssets should include profit");
+        assertEq(
+            strategy.totalAssets(),
+            _amount + _profit + minimumProtocolPosition,
+            "totalAssets should include profit"
+        );
         assertGt(strategy.balanceOf(donationAddress), 0, "dragon should get shares");
     }
 

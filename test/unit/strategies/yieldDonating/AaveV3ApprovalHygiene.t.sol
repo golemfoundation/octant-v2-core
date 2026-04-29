@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity ^0.8.25;
 
-import { Test } from "forge-std/Test.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import { AaveV3Strategy } from "src/strategies/yieldDonating/AaveV3Strategy.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 import { IMockStrategy } from "test/mocks/core/IMockStrategy.sol";
+import { SeedHelpers } from "./utils/SeedHelpers.sol";
 
 /// @title MockPool that pulls funds via transferFrom (so the allowance check is meaningful)
 contract PullingMockPool {
@@ -81,7 +81,7 @@ contract MockAddressesProvider {
 ///         hostile upgrade pull every idle token from the strategy at any time. The fix
 ///         removes the standing approval, approves exactly the deploy amount inside
 ///         `_deployFunds`, and clears the approval after `pool.supply`.
-contract AaveV3ApprovalHygieneTest is Test {
+contract AaveV3ApprovalHygieneTest is SeedHelpers {
     AaveV3Strategy internal strategy;
     ERC20Mock internal asset;
     PullingMockPool internal pool;
@@ -133,6 +133,8 @@ contract AaveV3ApprovalHygieneTest is Test {
     ///         `pool.supply`, leaving zero residual allowance.
     function test_deposit_leavesZeroAllowance() public {
         uint256 amount = 100 ether;
+        _seedMinimumPosition(address(strategy), asset, management);
+
         asset.mint(alice, amount);
 
         vm.startPrank(alice);
@@ -151,6 +153,8 @@ contract AaveV3ApprovalHygieneTest is Test {
     ///         the residual allowance after the external call.
     function test_deposit_clearsResidualAllowanceWhenPoolPullsLess() public {
         uint256 amount = 100 ether;
+        _seedMinimumPosition(address(strategy), asset, management);
+
         asset.mint(alice, amount);
         pool.setAmountToPull(amount - 1);
 

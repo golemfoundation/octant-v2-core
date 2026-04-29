@@ -1,21 +1,28 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.25;
 
-import { Test } from "forge-std/Test.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 
 import { ITokenizedStrategy } from "src/core/interfaces/ITokenizedStrategy.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 import { YearnV3Strategy } from "src/strategies/yieldDonating/YearnV3Strategy.sol";
+import { SeedHelpers } from "./utils/SeedHelpers.sol";
 
 /// @notice Minimal vault that always advertises `type(uint256).max` as `maxDeposit`.
 /// @dev Mirrors the ERC-4626 "infinite capacity" sentinel returned by unrestricted Yearn/Morpho/Spark vaults.
 contract InfiniteCapacityVaultMock {
     address public immutable asset;
+    mapping(address => uint256) public balanceOf;
 
     constructor(address underlying) {
         asset = underlying;
+    }
+
+    function deposit(uint256 assets, address receiver) external returns (uint256) {
+        IERC20(asset).transferFrom(msg.sender, address(this), assets);
+        balanceOf[receiver] += assets;
+        return assets;
     }
 
     function maxDeposit(address) external pure returns (uint256) {
@@ -26,16 +33,12 @@ contract InfiniteCapacityVaultMock {
         return 0;
     }
 
-    function balanceOf(address) external pure returns (uint256) {
-        return 0;
+    function convertToAssets(uint256 shares) external pure returns (uint256) {
+        return shares;
     }
 
-    function convertToAssets(uint256) external pure returns (uint256) {
-        return 0;
-    }
-
-    function previewRedeem(uint256) external pure returns (uint256) {
-        return 0;
+    function previewRedeem(uint256 shares) external pure returns (uint256) {
+        return shares;
     }
 }
 
@@ -44,7 +47,7 @@ contract InfiniteCapacityVaultMock {
 ///         becomes `uint256.max - idle`; `TokenizedStrategy._maxMint` then runs `_convertToShares` with
 ///         that near-max assets argument and overflows in `mulDiv` whenever share price != 1.
 ///         Post-fix the function returns the sentinel verbatim so `_maxMint` short-circuits.
-contract BailsecAvailableDepositLimitSentinelTest is Test {
+contract BailsecAvailableDepositLimitSentinelTest is SeedHelpers {
     ERC20Mock internal asset;
     YieldDonatingTokenizedStrategy internal implementation;
     InfiniteCapacityVaultMock internal yearnVault;
@@ -74,6 +77,7 @@ contract BailsecAvailableDepositLimitSentinelTest is Test {
             false,
             address(implementation)
         );
+        _seedMinimumPosition(address(strategy), asset, management);
 
         // Seed idle balance directly on the strategy so the pre-fix arithmetic clobbers the sentinel.
         asset.mint(address(strategy), IDLE_BALANCE);

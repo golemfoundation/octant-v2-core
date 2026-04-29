@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0
 pragma solidity >=0.8.25;
 
-import { Test } from "forge-std/Test.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 
@@ -9,6 +8,7 @@ import { ITokenizedStrategy } from "src/core/interfaces/ITokenizedStrategy.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 import { ERC4626Strategy } from "src/strategies/yieldDonating/ERC4626Strategy.sol";
 import { MorphoCompounderStrategy } from "src/strategies/yieldDonating/MorphoCompounderStrategy.sol";
+import { SeedHelpers } from "./utils/SeedHelpers.sol";
 
 /// @notice 4626-shaped vault used by the branch-coverage tests below.
 /// @dev    Implements only the surface exercised by `_deployFunds` and
@@ -69,7 +69,7 @@ contract UnboundedVaultMock {
 ///            keys off (the pre-fix subtraction clobbered the sentinel into
 ///            `uint256.max - idle`, routing through `_convertToShares` and
 ///            risking a mulDiv overflow once PPS drifts off 1:1).
-contract ERC4626BranchCoverageTest is Test {
+contract ERC4626BranchCoverageTest is SeedHelpers {
     ERC20Mock internal asset;
     YieldDonatingTokenizedStrategy internal implementation;
     UnboundedVaultMock internal targetVault;
@@ -132,6 +132,7 @@ contract ERC4626BranchCoverageTest is Test {
             0,
             "constructor leaked a standing allowance against the target vault"
         );
+        _seedMinimumPosition(strategyAddr, asset, management);
 
         // Deposit routes through `_deployFunds`, which approves exactly the
         // deposit amount and clears allowance after the vault call.
@@ -149,6 +150,7 @@ contract ERC4626BranchCoverageTest is Test {
     }
 
     function _assertResidualApprovalClearedOnUnderPull(address strategyAddr) internal {
+        _seedMinimumPosition(strategyAddr, asset, management);
         targetVault.setPullBps(5_000);
 
         asset.mint(user, DEPOSIT_AMOUNT);
@@ -170,6 +172,8 @@ contract ERC4626BranchCoverageTest is Test {
     }
 
     function _assertMaxMintSentinel(address strategyAddr) internal {
+        _seedMinimumPosition(strategyAddr, asset, management);
+
         // Seed a non-zero idle balance so we exercise the subtraction branch;
         // without this the pre-fix code path would coincidentally return the
         // sentinel because `max - 0 == max`.
