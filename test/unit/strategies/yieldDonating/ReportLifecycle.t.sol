@@ -99,10 +99,10 @@ contract ReportLifecycleTest is Setup {
 
         // Transfer shares to dragon router to simulate accumulated profit shares
         vm.prank(user);
-        strategy.transfer(donationAddress, sharesForAssets(20e18));
+        strategy.transfer(donationAddress, 20e18);
 
         uint256 dragonBalBefore = strategy.balanceOf(donationAddress);
-        assertEq(dragonBalBefore, sharesForAssets(20e18), "dragon should have 20 shares");
+        assertEq(dragonBalBefore, 20e18, "dragon should have 20 shares");
 
         // Simulate a loss smaller than dragon balance
         uint256 loss = 15e18;
@@ -130,7 +130,7 @@ contract ReportLifecycleTest is Setup {
 
         // Give dragon only 10 shares
         vm.prank(user);
-        strategy.transfer(donationAddress, sharesForAssets(10e18));
+        strategy.transfer(donationAddress, 10e18);
 
         // Simulate a loss larger than dragon holdings
         uint256 loss = 25e18;
@@ -156,7 +156,7 @@ contract ReportLifecycleTest is Setup {
         strategy.report();
 
         vm.prank(user);
-        strategy.transfer(donationAddress, sharesForAssets(20e18));
+        strategy.transfer(donationAddress, 20e18);
 
         uint256 loss = 15e18;
         yieldSource.simulateLoss(loss);
@@ -180,7 +180,7 @@ contract ReportLifecycleTest is Setup {
         strategy.report();
 
         vm.prank(user);
-        strategy.transfer(donationAddress, sharesForAssets(20e18));
+        strategy.transfer(donationAddress, 20e18);
 
         uint256 dragonBalBefore = strategy.balanceOf(donationAddress);
         uint256 totalSupplyBefore = strategy.totalSupply();

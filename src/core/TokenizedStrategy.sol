@@ -806,7 +806,7 @@ abstract contract TokenizedStrategy {
     /**
      * @notice Converts asset amount to equivalent shares
      * @dev Uses Floor rounding (conservative for conversions)
-     *      Formula: (assets * (totalSupply + 10 ** decimalsOffset)) / (totalAssets + 1)
+     *      Formula: (assets * totalSupply) / totalAssets
      * @param assets Amount of assets to convert
      * @return shares_ Equivalent amount of shares
      */
@@ -817,7 +817,7 @@ abstract contract TokenizedStrategy {
     /**
      * @notice Converts share amount to equivalent assets
      * @dev Uses Floor rounding (conservative for conversions)
-     *      Formula: (shares * (totalAssets + 1)) / (totalSupply + 10 ** decimalsOffset)
+     *      Formula: (shares * totalAssets) / totalSupply
      * @param shares Amount of shares to convert
      * @return assets_ Equivalent amount of assets
      */
@@ -945,21 +945,22 @@ abstract contract TokenizedStrategy {
         return S.totalSupply;
     }
 
-    /// @dev Extra share precision used by the ERC4626 virtual offset.
-    uint8 internal constant DECIMALS_OFFSET = 6;
-
-    /// @dev Mirrors OpenZeppelin ERC4626's decimals offset.
-    function _decimalsOffset() internal view virtual returns (uint8) {
-        return DECIMALS_OFFSET;
-    }
-
     /// @dev Internal implementation of {convertToShares}.
     function _convertToShares(
         StrategyData storage S,
         uint256 assets,
         Math.Rounding _rounding
     ) internal view virtual returns (uint256) {
-        return assets.mulDiv(_totalSupply(S) + 10 ** _decimalsOffset(), _totalAssets(S) + 1, _rounding);
+        // Saves an extra SLOAD if values are non-zero.
+        uint256 totalSupply_ = _totalSupply(S);
+        // If supply is 0, PPS = 1.
+        if (totalSupply_ == 0) return assets;
+
+        uint256 totalAssets_ = _totalAssets(S);
+        // If assets are 0 but supply is not PPS = 0.
+        if (totalAssets_ == 0) return 0;
+
+        return assets.mulDiv(totalSupply_, totalAssets_, _rounding);
     }
 
     /// @dev Internal implementation of {convertToAssets}.
@@ -971,7 +972,10 @@ abstract contract TokenizedStrategy {
         uint256 shares,
         Math.Rounding _rounding
     ) internal view virtual returns (uint256) {
-        return shares.mulDiv(_totalAssets(S) + 1, _totalSupply(S) + 10 ** _decimalsOffset(), _rounding);
+        // Saves an extra SLOAD if totalSupply() is non-zero.
+        uint256 supply = _totalSupply(S);
+
+        return supply == 0 ? shares : shares.mulDiv(_totalAssets(S), supply, _rounding);
     }
 
     /// @dev Internal implementation of {maxDeposit}.
@@ -1312,7 +1316,7 @@ abstract contract TokenizedStrategy {
      */
     function pricePerShare() public view returns (uint256) {
         StrategyData storage S = _strategyStorage();
-        return _convertToAssets(S, 10 ** (uint256(S.decimals) + _decimalsOffset()), Math.Rounding.Floor);
+        return _convertToAssets(S, 10 ** S.decimals, Math.Rounding.Floor);
     }
 
     /**
@@ -1492,7 +1496,7 @@ abstract contract TokenizedStrategy {
      * @return decimals_ Decimals used by strategy and asset
      */
     function decimals() external view returns (uint8) {
-        return _strategyStorage().decimals + _decimalsOffset();
+        return _strategyStorage().decimals;
     }
 
     /**

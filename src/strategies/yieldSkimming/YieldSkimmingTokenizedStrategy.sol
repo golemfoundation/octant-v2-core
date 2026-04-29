@@ -31,15 +31,6 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
     using WadRayMath for uint256;
     using SafeERC20 for ERC20;
 
-    /**
-     * @dev Yield-skimming shares are denominated directly in asset-value units.
-     *      The base virtual offset is for proportional ERC4626 share accounting;
-     *      applying it here would make share decimals diverge from value-debt units.
-     */
-    function _decimalsOffset() internal view virtual override returns (uint8) {
-        return 0;
-    }
-
     /// @dev Storage for yield skimming strategy
     struct YieldSkimmingStorage {
         uint256 totalDebtOwedToUserInAssetValue; // Track ETH value owed to users only

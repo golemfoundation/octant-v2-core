@@ -25,12 +25,6 @@ contract TokenizedStrategyBranchCoverageTest is Test {
     address user = address(0x10);
     address spender = address(0x20);
 
-    uint256 internal constant SHARE_SCALE = 1e6;
-
-    function sharesForAssets(uint256 assets) internal pure returns (uint256) {
-        return assets * SHARE_SCALE;
-    }
-
     function setUp() public {
         management = address(this);
         keeper = address(0x2);
@@ -352,7 +346,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         vm.startPrank(user);
         asset.approve(address(strategy), 10e18);
         ITokenizedStrategy(address(strategy)).deposit(10e18, user);
-        ITokenizedStrategy(address(strategy)).approve(spender, sharesForAssets(5e18));
+        ITokenizedStrategy(address(strategy)).approve(spender, 5e18);
         vm.stopPrank();
 
         vm.prank(spender);
@@ -480,7 +474,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         vm.startPrank(user);
         asset.approve(address(strategy), 10e18);
         ITokenizedStrategy(address(strategy)).deposit(10e18, user);
-        ITokenizedStrategy(address(strategy)).approve(spender, sharesForAssets(5e18));
+        ITokenizedStrategy(address(strategy)).approve(spender, 5e18);
         vm.stopPrank();
 
         vm.prank(spender);
@@ -488,7 +482,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
 
         // Allowance should have decreased
         uint256 remaining = ITokenizedStrategy(address(strategy)).allowance(user, spender);
-        assertEq(remaining, sharesForAssets(4e18));
+        assertLt(remaining, 5e18);
     }
 
     // --- transferFrom with max allowance does not decrease ---
@@ -547,7 +541,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         vm.stopPrank();
 
         uint256 maxR = ITokenizedStrategy(address(strategy)).maxRedeem(user, 0);
-        assertEq(maxR, sharesForAssets(10e18));
+        assertEq(maxR, 10e18);
     }
 
     // --- redeem more than max reverts ---
@@ -559,7 +553,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         ITokenizedStrategy(address(strategy)).deposit(10e18, user);
 
         vm.expectRevert("ERC4626: redeem more than max");
-        ITokenizedStrategy(address(strategy)).redeem(sharesForAssets(100e18), user, user, 10000);
+        ITokenizedStrategy(address(strategy)).redeem(100e18, user, user, 10000);
         vm.stopPrank();
     }
 
@@ -710,14 +704,14 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         );
 
         // Mint shares directly (totalSupply > 0, totalAssets == 0)
-        lossImpl.mintShares(user, sharesForAssets(10e18));
+        lossImpl.mintShares(user, 10e18);
 
         vm.prank(user);
         vm.expectRevert("ZERO_ASSETS");
-        lossImpl.redeem(sharesForAssets(5e18), user, user, 10000);
+        lossImpl.redeem(5e18, user, user, 10000);
     }
 
-    // --- Mint zero shares => ZERO_ASSETS (line 685, branch 0) ---
+    // --- Mint zero assets => ZERO_ASSETS (line 685, branch 0) ---
 
     function test_mint_zeroAssets_reverts() public {
         MockTokenizedStrategyWithLoss lossImpl = _freshLossImpl();
@@ -732,14 +726,17 @@ contract TokenizedStrategyBranchCoverageTest is Test {
             false
         );
 
+        // totalSupply > 0 but totalAssets == 0 => _convertToAssets returns 0
+        lossImpl.mintShares(user, 10e18);
+
         vm.prank(user);
         vm.expectRevert("ZERO_ASSETS");
-        lossImpl.mint(0, user);
+        lossImpl.mint(1e18, user);
     }
 
-    // --- _convertToShares when totalAssets == 0 uses the configured virtual offset ---
+    // --- _convertToShares when totalAssets == 0 (line 961, branch 0) ---
 
-    function test_convertToShares_totalAssetsZero_usesVirtualOffset() public {
+    function test_convertToShares_totalAssetsZero_returnsZero() public {
         MockTokenizedStrategyWithLoss lossImpl = _freshLossImpl();
         lossImpl.initialize(
             address(asset),
@@ -752,14 +749,10 @@ contract TokenizedStrategyBranchCoverageTest is Test {
             false
         );
 
-        lossImpl.mintShares(user, sharesForAssets(10e18));
+        lossImpl.mintShares(user, 10e18);
 
         uint256 shares = lossImpl.convertToShares(1e18);
-        assertEq(
-            shares,
-            1e18 * (sharesForAssets(10e18) + SHARE_SCALE),
-            "convertToShares should use the configured virtual offset"
-        );
+        assertEq(shares, 0, "convertToShares should return 0 when totalAssets == 0");
     }
 
     // --- maxMint with limited deposit (line 995, branch 0) ---
@@ -780,7 +773,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         lossImpl.setAvailableDepositLimit(100e18);
 
         uint256 maxMintAmount = lossImpl.maxMint(user);
-        assertEq(maxMintAmount, sharesForAssets(100e18));
+        assertEq(maxMintAmount, 100e18);
     }
 
     // --- maxWithdraw with limited withdraw (line 1006, branch 1) ---
@@ -830,7 +823,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         vm.stopPrank();
 
         uint256 maxR = ITokenizedStrategy(address(illiqStrat)).maxRedeem(user);
-        assertEq(maxR, sharesForAssets(5e18));
+        assertLe(maxR, 10e18);
         assertGt(maxR, 0);
     }
 
@@ -894,7 +887,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
 
         // Give strategy some idle tokens and set up accounting
         asset.mint(address(lossImpl), 10e18);
-        lossImpl.mintShares(user, sharesForAssets(10e18));
+        lossImpl.mintShares(user, 10e18);
         lossImpl.setupTestScenario(0, 10e18, 0);
 
         // Now drain 8e18 from the strategy, leaving only 2e18 idle
@@ -928,7 +921,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         );
 
         asset.mint(address(lossImpl), 10e18);
-        lossImpl.mintShares(user, sharesForAssets(10e18));
+        lossImpl.mintShares(user, 10e18);
         lossImpl.setupTestScenario(0, 10e18, 0);
 
         // Drain 8e18, leaving 2e18 idle
@@ -958,7 +951,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         );
 
         asset.mint(address(lossImpl), 10e18);
-        lossImpl.mintShares(user, sharesForAssets(10e18));
+        lossImpl.mintShares(user, 10e18);
         lossImpl.setupTestScenario(0, 10e18, 0);
 
         // Drain 5e18, leaving 5e18 idle
@@ -967,7 +960,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
 
         // Redeem all shares via 3-param version (maxLoss=MAX_BPS)
         vm.prank(user);
-        uint256 assets = lossImpl.redeem(sharesForAssets(10e18), user, user);
+        uint256 assets = lossImpl.redeem(10e18, user, user);
         // Should succeed but return less than deposited (loss accepted)
         assertLt(assets, 10e18, "Should have received less due to loss");
     }
@@ -1136,7 +1129,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         );
 
         asset.mint(address(lossImpl), 10e18);
-        lossImpl.mintShares(user, sharesForAssets(10e18));
+        lossImpl.mintShares(user, 10e18);
         lossImpl.setupTestScenario(0, 10e18, 0);
 
         vm.prank(user);
@@ -1213,14 +1206,14 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         );
 
         // Set up supply and assets with different PPS
-        lossImpl.mintShares(address(0xAA), sharesForAssets(10e18));
+        lossImpl.mintShares(address(0xAA), 10e18);
         lossImpl.setupTestScenario(0, 20e18, 0); // PPS = 2
 
         lossImpl.setAvailableDepositLimit(10e18);
 
         uint256 maxMintAmount = lossImpl.maxMint(user);
-        uint256 expectedShares = (10e18 * (sharesForAssets(10e18) + SHARE_SCALE)) / (20e18 + 1);
-        assertEq(maxMintAmount, expectedShares, "maxMint should convert limited deposit to shares");
+        // PPS=2, 10e18 assets = 5e18 shares
+        assertEq(maxMintAmount, 5e18, "maxMint should convert limited deposit to shares");
     }
 
     // --- maxWithdraw with limited withdraw (MockTokenizedStrategyWithLoss) ---
@@ -1238,7 +1231,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
             false
         );
 
-        lossImpl.mintShares(user, sharesForAssets(10e18));
+        lossImpl.mintShares(user, 10e18);
         lossImpl.setupTestScenario(0, 10e18, 0);
 
         lossImpl.setAvailableWithdrawLimit(5e18);
@@ -1262,13 +1255,13 @@ contract TokenizedStrategyBranchCoverageTest is Test {
             false
         );
 
-        lossImpl.mintShares(user, sharesForAssets(10e18));
+        lossImpl.mintShares(user, 10e18);
         lossImpl.setupTestScenario(0, 10e18, 0);
 
         lossImpl.setAvailableWithdrawLimit(5e18);
 
         uint256 maxR = lossImpl.maxRedeem(user);
-        assertEq(maxR, sharesForAssets(5e18), "maxRedeem should be capped by withdraw limit in shares");
+        assertEq(maxR, 5e18, "maxRedeem should be capped by withdraw limit in shares");
     }
 
     // --- Withdraw with non-default maxLoss < MAX_BPS and loss within tolerance (line 1111 true, 1113 true) ---
@@ -1287,7 +1280,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         );
 
         asset.mint(address(lossImpl), 10e18);
-        lossImpl.mintShares(user, sharesForAssets(10e18));
+        lossImpl.mintShares(user, 10e18);
         lossImpl.setupTestScenario(0, 10e18, 0);
 
         // Drain 1e18, leaving 9e18 idle

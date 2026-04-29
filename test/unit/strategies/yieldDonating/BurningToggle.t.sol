@@ -61,7 +61,7 @@ contract BurningToggleTest is Setup {
 
         // Give dragon some shares
         vm.prank(user);
-        strategy.transfer(donationAddress, sharesForAssets(20e18));
+        strategy.transfer(donationAddress, 20e18);
 
         // Enable burning mid-lifecycle
         vm.prank(management);
@@ -96,7 +96,7 @@ contract BurningToggleTest is Setup {
 
         // Give dragon some shares
         vm.prank(user);
-        strategy.transfer(donationAddress, sharesForAssets(20e18));
+        strategy.transfer(donationAddress, 20e18);
 
         // Disable burning mid-lifecycle
         vm.prank(management);
@@ -168,7 +168,7 @@ contract BurningToggleTest is Setup {
         strategy.report();
 
         vm.prank(user);
-        strategy.transfer(donationAddress, sharesForAssets(20e18));
+        strategy.transfer(donationAddress, 20e18);
 
         // Toggle burning off and on quickly
         vm.startPrank(management);

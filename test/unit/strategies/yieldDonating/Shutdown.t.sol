@@ -93,7 +93,7 @@ contract ShutdownTest is Setup {
 
         // Give dragon some shares
         vm.prank(user);
-        strategy.transfer(donationAddress, sharesForAssets(20e18));
+        strategy.transfer(donationAddress, 20e18);
 
         vm.prank(management);
         strategy.shutdownStrategy();
@@ -177,7 +177,7 @@ contract ShutdownTest is Setup {
 
         // Give dragon some shares
         vm.prank(user);
-        strategy.transfer(donationAddress, sharesForAssets(20e18));
+        strategy.transfer(donationAddress, 20e18);
 
         // Shutdown then simulate loss
         vm.prank(management);
@@ -192,7 +192,7 @@ contract ShutdownTest is Setup {
         assertEq(reportedLoss, loss, "loss mismatch");
         assertEq(strategy.totalAssets(), amount - loss, "total assets should reflect loss");
         // Burning should still work after shutdown
-        assertLt(strategy.balanceOf(donationAddress), sharesForAssets(20e18), "dragon shares should be partially burned");
+        assertLt(strategy.balanceOf(donationAddress), 20e18, "dragon shares should be partially burned");
     }
 
     // ==================== Shutdown + Full Withdrawal Flow ====================

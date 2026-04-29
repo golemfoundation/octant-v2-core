@@ -37,7 +37,6 @@ contract Setup is Test {
     uint256 public decimals = 18;
     uint256 public MAX_BPS = 10_000;
     uint256 public wad = 10 ** decimals;
-    uint256 public constant SHARE_SCALE = 1e6;
     // Fuzz from $0.01 of 1e6 stable coins up to 1 trillion of a 1e18 coin
     uint256 public maxFuzzAmount = 1e30;
     uint256 public minFuzzAmount = 10_000;
@@ -188,10 +187,6 @@ contract Setup is Test {
         _strategy.deposit(_amount, _user);
     }
 
-    function sharesForAssets(uint256 assets) public pure returns (uint256) {
-        return assets * SHARE_SCALE;
-    }
-
     function checkStrategyTotals(
         IMockStrategy _strategy,
         uint256 _totalAssets,
@@ -208,7 +203,7 @@ contract Setup is Test {
         assertEq(_idle, _totalIdle, "!totalIdle");
         assertEq(_totalAssets, _totalDebt + _totalIdle, "!Added");
         // We give supply a buffer or 1 wei for rounding
-        assertApproxEqRel(_strategy.totalSupply(), sharesForAssets(_totalSupply), 1e13, "!supply");
+        assertApproxEqRel(_strategy.totalSupply(), _totalSupply, 1e13, "!supply");
     }
 
     // For checks without totalSupply while profit is unlocking
