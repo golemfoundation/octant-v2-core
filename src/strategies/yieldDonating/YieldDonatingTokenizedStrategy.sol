@@ -90,6 +90,10 @@ contract YieldDonatingTokenizedStrategy is TokenizedStrategy {
             unchecked {
                 profit = newTotalAssets - oldTotalAssets;
             }
+
+            // If tracked assets were fully depleted, any later non-deposit recovery
+            // is yield for the dragon. The virtual-offset conversion mints enough
+            // shares that pre-existing dust has no redeemable claim on that recovery.
             uint256 sharesToMint = _convertToShares(S, profit, Math.Rounding.Floor);
 
             // Floor rounding can map dust profit to zero shares; skip the no-op mint and

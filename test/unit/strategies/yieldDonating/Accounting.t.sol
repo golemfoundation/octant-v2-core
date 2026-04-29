@@ -35,8 +35,9 @@ contract AccountingTest is Setup {
         checkStrategyTotals(strategy, _amount, _amount - toAirdrop, toAirdrop, _amount);
 
         uint256 beforeBalance = asset.balanceOf(_address);
+        uint256 shares = strategy.balanceOf(_address);
         vm.prank(_address);
-        strategy.redeem(_amount, _address, _address);
+        strategy.redeem(shares, _address, _address);
 
         // should have pulled out just the deposited amount leaving the rest deployed.
         assertEq(asset.balanceOf(_address), beforeBalance + _amount);
@@ -104,8 +105,9 @@ contract AccountingTest is Setup {
         checkStrategyTotals(strategy, _amount + toAirdrop, _amount, toAirdrop);
 
         uint256 beforeBalance = asset.balanceOf(_address);
+        uint256 shares = strategy.balanceOf(_address);
         vm.prank(_address);
-        strategy.redeem(_amount, _address, _address);
+        strategy.redeem(shares, _address, _address);
 
         // withdaw donation address shares
         uint256 donationShares = strategy.balanceOf(donationAddress);
@@ -148,8 +150,9 @@ contract AccountingTest is Setup {
         checkStrategyTotals(strategy, _amount, _amount, 0, _amount);
 
         uint256 beforeBalance = asset.balanceOf(_address);
+        uint256 shares = strategy.balanceOf(_address);
         vm.prank(_address);
-        strategy.redeem(_amount, _address, _address);
+        strategy.redeem(shares, _address, _address);
 
         // should have pulled out just the deposit amount
         assertEq(asset.balanceOf(_address), beforeBalance + _amount);
@@ -278,8 +281,9 @@ contract AccountingTest is Setup {
         assertEq(strategy.pricePerShare(), pricePerShare);
 
         uint256 beforeBalance = asset.balanceOf(user);
+        uint256 shares = strategy.balanceOf(user);
         vm.prank(user);
-        strategy.redeem(_amount, user, user);
+        strategy.redeem(shares, user, user);
 
         // withdaw donation address shares
         uint256 donationShares = strategy.balanceOf(donationAddress);
@@ -411,9 +415,10 @@ contract AccountingTest is Setup {
 
         uint256 beforeBalance = asset.balanceOf(_address);
         uint256 expectedOut = _amount - toLose;
+        uint256 shares = strategy.balanceOf(_address);
         // Withdraw the full amount before the loss is reported.
         vm.prank(_address);
-        strategy.redeem(_amount, _address, _address);
+        strategy.redeem(shares, _address, _address);
 
         uint256 afterBalance = asset.balanceOf(_address);
 
@@ -438,9 +443,10 @@ contract AccountingTest is Setup {
         vm.prank(address(yieldSource));
         asset.transfer(address(69), toLose);
 
+        uint256 shares = strategy.balanceOf(_address);
         vm.expectRevert("too much loss");
         vm.prank(_address);
-        strategy.redeem(_amount, _address, _address, 0);
+        strategy.redeem(shares, _address, _address, 0);
     }
 
     function test_redeemWithUnrealizedLoss_customMaxLoss(address _address, uint256 _amount, uint16 _lossFactor) public {
@@ -457,15 +463,16 @@ contract AccountingTest is Setup {
 
         uint256 beforeBalance = asset.balanceOf(_address);
         uint256 expectedOut = _amount - toLose;
+        uint256 shares = strategy.balanceOf(_address);
 
         // First set it to just under the expected loss.
         vm.expectRevert("too much loss");
         vm.prank(_address);
-        strategy.redeem(_amount, _address, _address, _lossFactor - 1);
+        strategy.redeem(shares, _address, _address, _lossFactor - 1);
 
         // Now redeem with the correct loss.
         vm.prank(_address);
-        strategy.redeem(_amount, _address, _address, _lossFactor);
+        strategy.redeem(shares, _address, _address, _lossFactor);
 
         uint256 afterBalance = asset.balanceOf(_address);
 
@@ -492,7 +499,7 @@ contract AccountingTest is Setup {
         checkStrategyTotals(strategy, _amount, _amount, 0, _amount);
 
         assertEq(asset.balanceOf(_address), 0);
-        assertEq(strategy.balanceOf(_address), _amount);
+        assertEq(strategy.balanceOf(_address), sharesForAssets(_amount));
         assertEq(asset.balanceOf(address(strategy)), 0);
 
         assertEq(asset.balanceOf(address(yieldSource)), _amount);
@@ -515,13 +522,13 @@ contract AccountingTest is Setup {
         strategy.report();
 
         vm.prank(user);
-        strategy.transfer(donationAddress, 20e18);
+        strategy.transfer(donationAddress, sharesForAssets(20e18));
 
         // Simulate 25 token loss
         yieldSource.simulateLoss(25e18);
 
         // Calculate what 20 shares are worth BEFORE burning (this is what the fix does)
-        uint256 shareValueBeforeBurn = strategy.convertToAssets(20e18);
+        uint256 shareValueBeforeBurn = strategy.convertToAssets(sharesForAssets(20e18));
         assertEq(shareValueBeforeBurn, 20e18, "20 shares should be worth 20 assets before burn");
 
         // Report the loss (triggers the fixed _handleDragonLossProtection)
@@ -535,7 +542,7 @@ contract AccountingTest is Setup {
         assertEq(strategy.balanceOf(donationAddress), 0, "All dragon shares should be burned");
 
         // 2. Shares reduced by burned amount only
-        assertEq(strategy.totalSupply(), 80e18, "Should have 80 shares (100 - 20 burned)");
+        assertEq(strategy.totalSupply(), sharesForAssets(80e18), "Should have 80 shares (100 - 20 burned)");
 
         // 3. Assets reduced by full loss amount
         assertEq(strategy.totalAssets(), 75e18, "Should have 75 assets (100 - 25 loss)");
@@ -560,20 +567,20 @@ contract AccountingTest is Setup {
         strategy.report();
 
         vm.prank(user);
-        strategy.transfer(donationAddress, 30e18);
+        strategy.transfer(donationAddress, sharesForAssets(30e18));
 
         yieldSource.simulateLoss(20e18);
         vm.prank(keeper);
         strategy.report();
 
         // Should only burn 20 shares to cover 20 token loss
-        assertEq(strategy.balanceOf(donationAddress), 10e18, "10 dragon shares should remain");
-        assertEq(strategy.totalSupply(), 80e18, "Should have 80 total shares (100 - 20 burned)");
+        assertEq(strategy.balanceOf(donationAddress), sharesForAssets(10e18), "10 dragon shares should remain");
+        assertEq(strategy.totalSupply(), sharesForAssets(80e18), "Should have 80 total shares (100 - 20 burned)");
         assertEq(strategy.totalAssets(), 80e18, "Should have 80 total assets (100 - 20 loss)");
 
         // Scenario 2: Minimal dragon shares, large loss
         vm.startPrank(user);
-        strategy.transfer(donationAddress, 9e18); // Dragon router now has 19 total shares
+        strategy.transfer(donationAddress, sharesForAssets(9e18)); // Dragon router now has 19 total shares
         vm.stopPrank();
 
         yieldSource.simulateLoss(50e18);
@@ -582,7 +589,7 @@ contract AccountingTest is Setup {
 
         // Should burn all 19 dragon shares, covering 19 tokens
         assertEq(strategy.balanceOf(donationAddress), 0, "All dragon shares should be burned");
-        assertEq(strategy.totalSupply(), 61e18, "Should have 61 total shares (80 - 19)");
+        assertEq(strategy.totalSupply(), sharesForAssets(61e18), "Should have 61 total shares (80 - 19)");
         assertEq(strategy.totalAssets(), 30e18, "Should have 30 total assets (80 - 50)");
     }
 
@@ -600,7 +607,7 @@ contract AccountingTest is Setup {
 
         // Transfer shares to dragon
         vm.prank(user);
-        strategy.transfer(donationAddress, 30e18);
+        strategy.transfer(donationAddress, sharesForAssets(30e18));
 
         // Simulate loss
         yieldSource.simulateLoss(25e18);
@@ -622,7 +629,7 @@ contract AccountingTest is Setup {
 
         // Verify assets reduced but shares unchanged
         assertEq(strategy.totalAssets(), 75e18, "Total assets should be 75 after loss");
-        assertEq(strategy.totalSupply(), 100e18, "Total shares should remain 100");
+        assertEq(strategy.totalSupply(), sharesForAssets(100e18), "Total shares should remain 100");
     }
 
     /**
@@ -654,33 +661,25 @@ contract AccountingTest is Setup {
         uint256 totalAssets = strategy.totalAssets();
         uint256 totalSupply = strategy.totalSupply();
         assertEq(totalAssets, 120e18, "Should have 120 assets after 30 loss");
-        assertEq(totalSupply, 150e18, "Supply unchanged when burning disabled");
+        assertEq(totalSupply, sharesForAssets(150e18), "Supply unchanged when burning disabled");
 
         // Step 3: Enable burning and trigger a small loss with non-zero remainder
         vm.prank(management);
         YieldDonatingTokenizedStrategy(address(strategy)).setEnableBurning(true);
 
-        // With totalSupply = 150e18 and totalAssets = 120e18, a loss of 7e18 gives:
-        //   loss * totalSupply / totalAssets = 7 * 150 / 120 = 1050 / 120 = 8.75
-        // At 1e18 precision this is exactly 8.75e18, so (7e18 * 150e18) % 120e18 == 0 (no remainder).
-        // For this test we specifically need a non-zero remainder:
-        //   (loss * totalSupply) % totalAssets != 0
-        // to exercise the floor-vs-ceil behavior when converting loss to shares.
-        //
-        // Taking loss = 7e18 + 1 breaks exact divisibility:
-        //   (7e18 + 1) * 150e18 % 120e18 != 0
-        // so the integer division loss * totalSupply / totalAssets has a truncated fractional part.
+        // Use a non-round loss to exercise floor-vs-ceil behavior through the
+        // virtual-offset conversion.
         uint256 loss = 7e18 + 1;
         yieldSource.simulateLoss(loss);
 
         uint256 dragonSharesBefore = strategy.balanceOf(donationAddress);
 
-        // Compute expected floor shares: loss * totalSupply / totalAssets (integer division = floor)
-        uint256 floorShares = (loss * totalSupply) / totalAssets;
+        // Compute expected floor shares with the same virtual-offset formula as the strategy.
+        uint256 floorShares = (loss * (totalSupply + SHARE_SCALE)) / (totalAssets + 1);
         uint256 ceilShares = floorShares + 1; // ceil adds 1 when remainder != 0
 
         // Verify our test parameters actually produce a remainder
-        assertGt((loss * totalSupply) % totalAssets, 0, "Test setup: must have non-zero remainder");
+        assertGt((loss * (totalSupply + SHARE_SCALE)) % (totalAssets + 1), 0, "Test setup: must have non-zero remainder");
         assertGt(ceilShares, floorShares, "Test setup: ceil must differ from floor");
 
         vm.prank(keeper);
@@ -708,10 +707,10 @@ contract AccountingTest is Setup {
 
         // Transfer 20 shares to dragon
         vm.prank(user);
-        strategy.transfer(donationAddress, 20e18);
+        strategy.transfer(donationAddress, sharesForAssets(20e18));
 
         // Calculate value of 20 shares BEFORE any loss/burn
-        uint256 shareValue = strategy.convertToAssets(20e18);
+        uint256 shareValue = strategy.convertToAssets(sharesForAssets(20e18));
         assertEq(shareValue, 20e18, "20 shares should be worth 20 assets at 1:1");
 
         // Simulate loss and report
@@ -721,6 +720,6 @@ contract AccountingTest is Setup {
 
         // After the fix, the 20 burned shares should have covered exactly 20 assets of loss
         assertEq(strategy.totalAssets(), 75e18, "Should have 75 assets (100 - 25 loss)");
-        assertEq(strategy.totalSupply(), 80e18, "Should have 80 shares (100 - 20 burned)");
+        assertEq(strategy.totalSupply(), sharesForAssets(80e18), "Should have 80 shares (100 - 20 burned)");
     }
 }

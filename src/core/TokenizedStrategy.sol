@@ -817,7 +817,7 @@ abstract contract TokenizedStrategy {
     /**
      * @notice Converts asset amount to equivalent shares
      * @dev Uses Floor rounding (conservative for conversions)
-     *      Formula: (assets * (totalSupply + virtualShares)) / (totalAssets + virtualAssets)
+     *      Formula: (assets * (totalSupply + 10 ** decimalsOffset)) / (totalAssets + 1)
      * @param assets Amount of assets to convert
      * @return shares_ Equivalent amount of shares
      */
@@ -828,7 +828,7 @@ abstract contract TokenizedStrategy {
     /**
      * @notice Converts share amount to equivalent assets
      * @dev Uses Floor rounding (conservative for conversions)
-     *      Formula: (shares * (totalAssets + virtualAssets)) / (totalSupply + virtualShares)
+     *      Formula: (shares * (totalAssets + 1)) / (totalSupply + 10 ** decimalsOffset)
      * @param shares Amount of shares to convert
      * @return assets_ Equivalent amount of assets
      */
@@ -962,9 +962,12 @@ abstract contract TokenizedStrategy {
         return S.totalSupply;
     }
 
-    /// @dev Offset between asset decimals and share decimals.
+    /// @dev Extra share precision used by the ERC4626 virtual offset.
+    uint8 internal constant DECIMALS_OFFSET = 6;
+
+    /// @dev Mirrors OpenZeppelin ERC4626's decimals offset.
     function _decimalsOffset() internal view virtual returns (uint8) {
-        return 0;
+        return DECIMALS_OFFSET;
     }
 
     /// @dev Internal implementation of {convertToShares}.
@@ -1328,7 +1331,7 @@ abstract contract TokenizedStrategy {
      */
     function pricePerShare() public view returns (uint256) {
         StrategyData storage S = _strategyStorage();
-        return _convertToAssets(S, 10 ** (S.decimals + _decimalsOffset()), Math.Rounding.Floor);
+        return _convertToAssets(S, 10 ** (uint256(S.decimals) + _decimalsOffset()), Math.Rounding.Floor);
     }
 
     /**

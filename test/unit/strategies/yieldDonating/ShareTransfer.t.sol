@@ -18,12 +18,14 @@ contract ShareTransferTest is Setup {
         _transferAmount = bound(_transferAmount, 1, _amount);
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
+        uint256 userShares = strategy.balanceOf(user);
+        _transferAmount = bound(_transferAmount, 1, userShares);
 
         vm.prank(user);
         bool success = strategy.transfer(user2, _transferAmount);
 
         assertTrue(success, "transfer should return true");
-        assertEq(strategy.balanceOf(user), _amount - _transferAmount, "sender balance");
+        assertEq(strategy.balanceOf(user), userShares - _transferAmount, "sender balance");
         assertEq(strategy.balanceOf(user2), _transferAmount, "receiver balance");
     }
 
@@ -31,22 +33,24 @@ contract ShareTransferTest is Setup {
         _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
+        uint256 userShares = strategy.balanceOf(user);
 
         vm.prank(user);
-        strategy.transfer(user2, _amount);
+        strategy.transfer(user2, userShares);
 
         assertEq(strategy.balanceOf(user), 0, "sender should have 0");
-        assertEq(strategy.balanceOf(user2), _amount, "receiver should have full amount");
+        assertEq(strategy.balanceOf(user2), userShares, "receiver should have full amount");
     }
 
     function test_transfer_moreThanBalance_reverts(uint256 _amount) public {
         _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
+        uint256 userShares = strategy.balanceOf(user);
 
         vm.prank(user);
         vm.expectRevert();
-        strategy.transfer(user2, _amount + 1);
+        strategy.transfer(user2, userShares + 1);
     }
 
     // ==================== Transfer to Dragon Router ====================
@@ -55,11 +59,12 @@ contract ShareTransferTest is Setup {
         _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
+        uint256 transferShares = sharesForAssets(_amount / 2);
 
         vm.prank(user);
-        strategy.transfer(donationAddress, _amount / 2);
+        strategy.transfer(donationAddress, transferShares);
 
-        assertEq(strategy.balanceOf(donationAddress), _amount / 2, "dragon should receive shares");
+        assertEq(strategy.balanceOf(donationAddress), transferShares, "dragon should receive shares");
     }
 
     function test_dragonRouter_transfersSharesOut(uint256 _amount) public {
@@ -90,6 +95,8 @@ contract ShareTransferTest is Setup {
         _transferAmount = bound(_transferAmount, 1, _amount);
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
+        uint256 userShares = strategy.balanceOf(user);
+        _transferAmount = bound(_transferAmount, 1, userShares);
 
         // User approves user2
         vm.prank(user);
@@ -102,7 +109,7 @@ contract ShareTransferTest is Setup {
         bool success = strategy.transferFrom(user, user2, _transferAmount);
 
         assertTrue(success, "transferFrom should return true");
-        assertEq(strategy.balanceOf(user), _amount - _transferAmount, "sender balance");
+        assertEq(strategy.balanceOf(user), userShares - _transferAmount, "sender balance");
         assertEq(strategy.balanceOf(user2), _transferAmount, "receiver balance");
         assertEq(strategy.allowance(user, user2), 0, "allowance should be consumed");
     }
@@ -121,14 +128,15 @@ contract ShareTransferTest is Setup {
         _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
+        uint256 userShares = strategy.balanceOf(user);
 
         // Approve less than transfer amount
         vm.prank(user);
-        strategy.approve(user2, _amount / 2);
+        strategy.approve(user2, userShares / 2);
 
         vm.prank(user2);
         vm.expectRevert("ERC20: insufficient allowance");
-        strategy.transferFrom(user, user2, _amount);
+        strategy.transferFrom(user, user2, userShares);
     }
 
     // ==================== Approve ====================
@@ -147,6 +155,7 @@ contract ShareTransferTest is Setup {
         _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
+        uint256 userShares = strategy.balanceOf(user);
 
         // Set infinite approval
         vm.prank(user);
@@ -154,7 +163,7 @@ contract ShareTransferTest is Setup {
 
         // Transfer some
         vm.prank(user2);
-        strategy.transferFrom(user, user2, _amount / 2);
+        strategy.transferFrom(user, user2, userShares / 2);
 
         // Allowance should still be max
         assertEq(strategy.allowance(user, user2), type(uint256).max, "infinite allowance should not decrease");
@@ -178,29 +187,32 @@ contract ShareTransferTest is Setup {
 
     function test_transfer_toZeroAddress_reverts() public {
         mintAndDepositIntoStrategy(strategy, user, 1e18);
+        uint256 userShares = strategy.balanceOf(user);
 
         vm.prank(user);
         vm.expectRevert("ERC20: transfer to the zero address");
-        strategy.transfer(address(0), 1e18);
+        strategy.transfer(address(0), userShares);
     }
 
     function test_transfer_toStrategyAddress_reverts() public {
         mintAndDepositIntoStrategy(strategy, user, 1e18);
+        uint256 userShares = strategy.balanceOf(user);
 
         vm.prank(user);
         vm.expectRevert("ERC20 transfer to strategy");
-        strategy.transfer(address(strategy), 1e18);
+        strategy.transfer(address(strategy), userShares);
     }
 
     function test_transfer_zeroAmount(uint256 _amount) public {
         _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
+        uint256 userShares = strategy.balanceOf(user);
 
         vm.prank(user);
         strategy.transfer(user2, 0);
 
-        assertEq(strategy.balanceOf(user), _amount, "sender balance unchanged");
+        assertEq(strategy.balanceOf(user), userShares, "sender balance unchanged");
         assertEq(strategy.balanceOf(user2), 0, "receiver balance still 0");
     }
 
@@ -209,19 +221,21 @@ contract ShareTransferTest is Setup {
     function test_allowance_consumedCorrectly_multipleTransfers() public {
         uint256 amount = 100e18;
         mintAndDepositIntoStrategy(strategy, user, amount);
+        uint256 approvedShares = sharesForAssets(60e18);
+        uint256 transferShares = sharesForAssets(30e18);
 
         // Approve 60 tokens
         vm.prank(user);
-        strategy.approve(user2, 60e18);
+        strategy.approve(user2, approvedShares);
 
         // First transfer: 30
         vm.prank(user2);
-        strategy.transferFrom(user, user2, 30e18);
-        assertEq(strategy.allowance(user, user2), 30e18, "remaining allowance");
+        strategy.transferFrom(user, user2, transferShares);
+        assertEq(strategy.allowance(user, user2), transferShares, "remaining allowance");
 
         // Second transfer: 30
         vm.prank(user2);
-        strategy.transferFrom(user, user2, 30e18);
+        strategy.transferFrom(user, user2, transferShares);
         assertEq(strategy.allowance(user, user2), 0, "allowance should be 0");
 
         // Third transfer should revert: no remaining allowance

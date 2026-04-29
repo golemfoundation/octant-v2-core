@@ -50,13 +50,14 @@ contract YieldDonatingDustMintTest is Setup {
         }
     }
 
-    /// @notice Dust profit: totalSupply = 1, totalAssets = 2, yield source holds 3. Profit is
-    ///         1 wei; `_convertToShares(1, Floor) = 1 * 1 / 2 = 0`. Fix skips the zero-share
-    ///         mint and its event. Pre-fix, `_mint(dragon, 0)` executed and `DonationMinted`
+    /// @notice Dust profit at an extreme PPS still maps to zero donation shares. With the
+    ///         6-decimal virtual offset, `_convertToShares(1, Floor)` only rounds to zero
+    ///         once `totalAssets + 1 > totalSupply + 1e6`. Fix skips the zero-share mint
+    ///         and its event. Pre-fix, `_mint(dragon, 0)` executed and `DonationMinted`
     ///         was emitted with amount 0.
     function test_reportDustProfit_noMintNoEvent() public {
-        _writeStrategyState({ totalSupply_: 1, totalAssets_: 2 });
-        asset.mint(address(yieldSource), 3);
+        _writeStrategyState({ totalSupply_: 1, totalAssets_: SHARE_SCALE + 1 });
+        asset.mint(address(yieldSource), SHARE_SCALE + 2);
 
         uint256 supplyBefore = strategy.totalSupply();
         uint256 dragonBalBefore = strategy.balanceOf(donationAddress);
@@ -71,14 +72,15 @@ contract YieldDonatingDustMintTest is Setup {
         assertEq(loss, 0, "no loss on profit path");
         assertEq(strategy.totalSupply(), supplyBefore, "no shares minted on zero-share path");
         assertEq(strategy.balanceOf(donationAddress), dragonBalBefore, "dragon balance unchanged");
-        assertEq(strategy.totalAssets(), 3, "totalAssets still reconciled to yield-source balance");
+        assertEq(strategy.totalAssets(), SHARE_SCALE + 2, "totalAssets still reconciled to yield-source balance");
         assertEq(_countDonationMintedLogs(logs), 0, "no DonationMinted event on zero-share dust");
     }
 
     /// @notice Sanity check: when profit rounds to a non-zero share amount the mint and the
     ///         DonationMinted event still fire. Protects against over-guarding the dust path.
     function test_reportProfit_emitsDonationMintedWhenSharesRoundUp() public {
-        // totalSupply = 2, totalAssets = 2 (PPS = 1). Profit of 3 -> 3 * 2 / 2 = 3 shares.
+        // totalSupply = 2, totalAssets = 2. Profit of 3 uses the virtual-offset formula:
+        // 3 * (2 + 1e6) / (2 + 1) = 1,000,002 shares.
         _writeStrategyState({ totalSupply_: 2, totalAssets_: 2 });
         asset.mint(address(yieldSource), 5);
 
@@ -91,6 +93,6 @@ contract YieldDonatingDustMintTest is Setup {
         assertEq(profit, 3, "profit should be 3 wei");
         assertEq(loss, 0, "no loss on profit path");
         assertEq(_countDonationMintedLogs(logs), 1, "DonationMinted emitted on real share mint");
-        assertEq(strategy.balanceOf(donationAddress), 3, "dragon received 3 shares");
+        assertEq(strategy.balanceOf(donationAddress), SHARE_SCALE + 2, "dragon received scaled shares");
     }
 }

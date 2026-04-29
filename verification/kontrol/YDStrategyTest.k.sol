@@ -14,11 +14,13 @@ struct YDProofState {
     uint256 dragonBalance;
 }
 
+uint256 constant DECIMALS_OFFSET = 6;
+
 /**
  * @title YDStrategyTest
  * @notice Kontrol formal verification proofs for YieldDonatingTokenizedStrategy
  * @dev Inherits 7 common proofs from StrategyBaseTest and adds 5 YD-specific proofs:
- *      - testReportProfit: OpenZeppelin default-offset shares minted to dragon, virtual PPS non-decreasing
+ *      - testReportProfit: OpenZeppelin-style offset shares minted to dragon, virtual PPS non-decreasing
  *      - testReportLossInsufficientDragon: partial burn, PPS impact bounded
  *      - testSharesRedeemableAfterDepositYD: deposit produces redeemable shares
  *      - testConversionConsistencyYD: round-trip does not create value
@@ -28,7 +30,6 @@ struct YDProofState {
 contract YDStrategyTest is StrategyBaseTest, YDSetup {
     YDProofState private preState;
     YDProofState private postState;
-    uint256 constant DECIMALS_OFFSET = 0;
 
     function setUp() public override(YDSetup) {
         YDSetup.setUp();
@@ -103,7 +104,7 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
                     INVARIANTS
     //////////////////////////////////////////////////////////////*/
 
-    /// @notice Virtual PPS does not decrease:
+    /// @notice OpenZeppelin-style offset PPS does not decrease:
     ///         (totalAssets_new + 1) * (totalSupply_old + 10 ** DECIMALS_OFFSET)
     ///         >= (totalAssets_old + 1) * (totalSupply_new + 10 ** DECIMALS_OFFSET)
     function ppsNonDecreasingInvariant(Mode mode) internal view {
@@ -129,7 +130,7 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice When report harvests a profit, shares are minted to dragon router
-    ///         and virtual PPS is preserved (non-decreasing) for regular holders
+    ///         and OpenZeppelin-style offset PPS is preserved (non-decreasing) for regular holders
     function testReportProfit() public {
         _assumeNonReentrant();
 
@@ -311,8 +312,8 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
 
     /// @notice Regression for the Bailsec dust-loss-recovery chain.
     ///         From totalAssets=0,totalSupply=1, any positive recovery report
-    ///         mints dragon shares through the virtual-offset converter, and
-    ///         the original dust share cannot withdraw 1 wei afterward.
+    ///         assigns the recovered assets to dragon through the virtual-offset
+    ///         converter, and the original dust share cannot withdraw 1 wei afterward.
     function testDustLossRecoveryFlowMintsDragonAndBlocksFinalDustBurn(uint256 recoveredAssets) public {
         _assumeNonReentrant();
 
@@ -324,7 +325,7 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
         _storeData(stratAddr, TS_FLAGS_SLOT, TS_ENABLE_BURNING_OFFSET, TS_ENABLE_BURNING_WIDTH, 0);
 
         vm.assume(recoveredAssets > 0);
-        vm.assume(recoveredAssets < ETH_UPPER_BOUND / 2);
+        vm.assume(recoveredAssets <= type(uint256).max / (1 + 10 ** DECIMALS_OFFSET));
 
         _storeUInt256(stratAddr, TS_TOTAL_ASSETS_SLOT, 0);
         _storeUInt256(stratAddr, TS_TOTAL_SUPPLY_SLOT, 1);
@@ -336,7 +337,7 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
         iStrategy.report();
         vm.stopPrank();
 
-        uint256 expectedDragonShares = recoveredAssets * 2;
+        uint256 expectedDragonShares = recoveredAssets * (1 + 10 ** DECIMALS_OFFSET);
         assertEq(iStrategy.totalAssets(), recoveredAssets);
         assertEq(iStrategy.balanceOf(_dragonRouter), expectedDragonShares);
         assertEq(iStrategy.totalSupply(), expectedDragonShares + 1);
