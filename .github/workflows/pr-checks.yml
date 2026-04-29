@@ -17,9 +17,60 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  pr_preflight:
+    name: PR Preflight
+    if: github.head_ref != 'main'
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    outputs:
+      private_ci_supported: ${{ steps.check.outputs.private_ci_supported }}
+    steps:
+      - name: Check PR source and branch
+        id: check
+        env:
+          HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPOSITORY: ${{ github.event.pull_request.base.repo.full_name }}
+          HEAD_BRANCH: ${{ github.head_ref }}
+        run: |
+          private_ci_supported=true
+          expected_branches="feature/*, fix/*, bugfix/*, hotfix/*, release/*, chore/*, ci/*, docs/*, test/*, refactor/*, perf/*"
+
+          if [ "$HEAD_REPOSITORY" != "$BASE_REPOSITORY" ]; then
+            private_ci_supported=false
+            echo "::error title=Unsupported PR source::PR Standards Check uses private container images. GitHub does not expose the required secrets to fork PRs. Push this branch to $BASE_REPOSITORY and open the PR from there."
+          fi
+
+          case "$HEAD_BRANCH" in
+            feature/*|fix/*|bugfix/*|hotfix/*|release/*|chore/*|ci/*|docs/*|test/*|refactor/*|perf/*)
+              ;;
+            *)
+              private_ci_supported=false
+              echo "::error title=Unsupported branch name::Branch '$HEAD_BRANCH' does not match the expected naming convention: $expected_branches."
+              ;;
+          esac
+
+          echo "private_ci_supported=$private_ci_supported" >> "$GITHUB_OUTPUT"
+
+          if [ "$private_ci_supported" != true ]; then
+            {
+              echo "## PR preflight failed"
+              echo ""
+              echo "| Check | Value |"
+              echo "|-------|-------|"
+              echo "| Head repository | $HEAD_REPOSITORY |"
+              echo "| Base repository | $BASE_REPOSITORY |"
+              echo "| Head branch | $HEAD_BRANCH |"
+              echo "| Expected branch names | $expected_branches |"
+              echo ""
+              echo "Private-container CI can run only for branches in the base repository because fork PRs do not receive the required secrets."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
   check-formatting:
     name: Check Code Formatting
-    if: github.head_ref != 'main'
+    needs: pr_preflight
+    if: github.head_ref != 'main' && needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 15
     runs-on: ubuntu-latest
     container:
@@ -39,7 +90,8 @@ jobs:
 
   lint:
     name: Lint Code
-    if: github.head_ref != 'main'
+    needs: pr_preflight
+    if: github.head_ref != 'main' && needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 15
     runs-on: ubuntu-latest
     container:
@@ -59,7 +111,8 @@ jobs:
 
   conventional-commits:
     name: Conventional Commits
-    if: github.head_ref != 'main'
+    needs: pr_preflight
+    if: github.head_ref != 'main' && needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
@@ -79,7 +132,8 @@ jobs:
 
   build:
     name: Build
-    if: github.head_ref != 'main'
+    needs: pr_preflight
+    if: github.head_ref != 'main' && needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 15
     runs-on: ubuntu-latest
     container:
@@ -101,7 +155,8 @@ jobs:
 
   test:
     name: Test suite
-    if: github.head_ref != 'main'
+    needs: pr_preflight
+    if: github.head_ref != 'main' && needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 15
     runs-on: general
     container:
@@ -151,7 +206,8 @@ jobs:
 
   coverage:
     name: Code Coverage
-    if: github.head_ref != 'main'
+    needs: pr_preflight
+    if: github.head_ref != 'main' && needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 30
     runs-on: general
     container:
@@ -279,7 +335,8 @@ jobs:
 
   kontrol-proofs:
     name: Kontrol Formal Verification
-    if: github.head_ref != 'main'
+    needs: pr_preflight
+    if: github.head_ref != 'main' && needs.pr_preflight.outputs.private_ci_supported == 'true'
     runs-on: general
     continue-on-error: true
     container:
@@ -320,7 +377,8 @@ jobs:
 
   analyze:
     name: Analyze with Slither
-    if: github.head_ref != 'main'
+    needs: pr_preflight
+    if: github.head_ref != 'main' && needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 15
     runs-on: ubuntu-latest
     container:
@@ -349,7 +407,8 @@ jobs:
 
   trivy:
     name: Vulnerability Scan
-    if: github.head_ref != 'main'
+    needs: pr_preflight
+    if: github.head_ref != 'main' && needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
@@ -361,7 +420,8 @@ jobs:
 
   natspec:
     name: NatSpec Documentation Check
-    if: github.head_ref != 'main'
+    needs: pr_preflight
+    if: github.head_ref != 'main' && needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 15
     runs-on: ubuntu-latest
     container:
@@ -392,7 +452,8 @@ jobs:
 
   semver-check:
     name: Contract Semver Check
-    if: github.head_ref != 'main'
+    needs: pr_preflight
+    if: github.head_ref != 'main' && needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 15
     runs-on: ubuntu-latest
     container:
