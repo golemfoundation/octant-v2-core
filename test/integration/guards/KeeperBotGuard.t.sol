@@ -80,6 +80,7 @@ contract KeeperBotGuardTest is Test {
 
     // Test constants
     uint256 public constant INITIAL_DEPOSIT = 100000e6; // USDC has 6 decimals
+    uint256 public constant MINIMUM_PROTOCOL_POSITION = 1_000_000_000;
 
     uint256 public mainnetFork;
 
@@ -149,6 +150,20 @@ contract KeeperBotGuardTest is Test {
                 false, // enableBurning
                 address(implementation)
             )
+        );
+        _seedMinimumPosition();
+    }
+
+    function _seedMinimumPosition() internal {
+        deal(USDC, address(safeMultisig), MINIMUM_PROTOCOL_POSITION);
+
+        _executeSafeTransaction(
+            USDC,
+            abi.encodeWithSelector(ERC20.approve.selector, address(strategy), MINIMUM_PROTOCOL_POSITION)
+        );
+        _executeSafeTransaction(
+            address(strategy),
+            abi.encodeWithSelector(YieldDonatingTokenizedStrategy.seedMinimumPosition.selector)
         );
     }
 

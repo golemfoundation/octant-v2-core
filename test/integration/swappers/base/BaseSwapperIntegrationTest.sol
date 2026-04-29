@@ -41,6 +41,7 @@ abstract contract BaseSwapperIntegrationTest is Test {
 
     uint256 public mainnetFork;
     uint256 public constant DEPOSIT_AMOUNT = 100_000e6; // 100k USDC
+    uint256 internal constant MINIMUM_PROTOCOL_POSITION = 1_000_000_000;
 
     // ========== ABSTRACT ==========
 
@@ -117,6 +118,7 @@ abstract contract BaseSwapperIntegrationTest is Test {
         require(strategyAddr == predictedStrategy, "Strategy address mismatch: vault wiring broken");
 
         strategy = MorphoCompounderStrategy(strategyAddr);
+        _seedMinimumPosition(strategyAddr, management);
 
         // 5. Airdrop USDC to user and approve
         deal(MorphoTestConfig.USDC, user, DEPOSIT_AMOUNT);
@@ -136,6 +138,15 @@ abstract contract BaseSwapperIntegrationTest is Test {
     }
 
     // ========== HELPERS ==========
+
+    function _seedMinimumPosition(address strategyAddr, address seedFunder) internal {
+        deal(MorphoTestConfig.USDC, seedFunder, MINIMUM_PROTOCOL_POSITION);
+
+        vm.startPrank(seedFunder);
+        ERC20(MorphoTestConfig.USDC).approve(strategyAddr, MINIMUM_PROTOCOL_POSITION);
+        YieldDonatingTokenizedStrategy(strategyAddr).seedMinimumPosition();
+        vm.stopPrank();
+    }
 
     /// @notice Deposit into strategy, then run initial report so strategy deploys to Morpho
     /// @dev Disables health check for the initial report (Morpho rounding can cause 1 wei "loss")

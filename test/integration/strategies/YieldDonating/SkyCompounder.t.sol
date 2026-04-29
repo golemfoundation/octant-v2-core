@@ -125,7 +125,11 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
 
     function testDepositSky() public {
         _testDeposit(100e18);
-        assertEq(strategy.balanceOfStake(), 100e18, "Staking balance not increased correctly");
+        assertEq(
+            strategy.balanceOfStake(),
+            MINIMUM_PROTOCOL_POSITION + 100e18,
+            "Staking balance not increased correctly"
+        );
     }
 
     function testWithdrawSky() public {
@@ -203,7 +207,7 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         vault.deposit(depositAmount, user);
         vm.stopPrank();
 
-        assertEq(strategy.balanceOfStake(), depositAmount, "Deposit should be staked");
+        assertEq(strategy.balanceOfStake(), MINIMUM_PROTOCOL_POSITION + depositAmount, "Deposit should be staked");
 
         skip(30 days);
         vm.roll(block.number + 6500 * 30);
@@ -259,7 +263,7 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         vault.deposit(depositAmount, user);
         vm.stopPrank();
 
-        assertEq(strategy.balanceOfStake(), depositAmount, "Deposit should be staked");
+        assertEq(strategy.balanceOfStake(), MINIMUM_PROTOCOL_POSITION + depositAmount, "Deposit should be staked");
 
         skip(30 days);
         vm.roll(block.number + 6500 * 30);
@@ -358,7 +362,7 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         vault.deposit(depositAmount, user);
         vm.stopPrank();
 
-        assertEq(strategy.balanceOfStake(), depositAmount, "Deposit should be staked");
+        assertEq(strategy.balanceOfStake(), MINIMUM_PROTOCOL_POSITION + depositAmount, "Deposit should be staked");
 
         skip(30 days);
         vm.roll(block.number + 6500 * 30);
@@ -415,7 +419,7 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         vault.deposit(depositAmount, user);
         vm.stopPrank();
 
-        assertEq(strategy.balanceOfStake(), depositAmount, "Deposit should be staked");
+        assertEq(strategy.balanceOfStake(), MINIMUM_PROTOCOL_POSITION + depositAmount, "Deposit should be staked");
 
         skip(45 days);
         vm.roll(block.number + 6500 * 45);
@@ -750,7 +754,11 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         vault.deposit(depositAmount, user);
         vm.stopPrank();
 
-        assertEq(strategy.balanceOfStake(), depositAmount, "All deposited assets should be staked");
+        assertEq(
+            strategy.balanceOfStake(),
+            MINIMUM_PROTOCOL_POSITION + depositAmount,
+            "All deposited assets should be staked"
+        );
         assertEq(strategy.balanceOfAsset(), 0, "No idle assets initially");
 
         deal(_asset(), address(strategy), dustAmount);
@@ -787,7 +795,7 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         deal(_asset(), address(strategy), dustAmount);
 
         assertEq(strategy.balanceOfAsset(), dustAmount, "Only dust assets should exist");
-        assertEq(strategy.balanceOfStake(), 0, "No staked assets should exist");
+        assertEq(strategy.balanceOfStake(), MINIMUM_PROTOCOL_POSITION, "Only seed should be staked");
 
         vm.prank(management);
         strategy.setDoHealthCheck(false);
@@ -796,9 +804,9 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         (uint256 profit, uint256 loss) = vault.report();
 
         uint256 totalAssets = vault.totalAssets();
-        assertEq(totalAssets, dustAmount, "Total assets should equal dust amount");
+        assertEq(totalAssets, MINIMUM_PROTOCOL_POSITION + dustAmount, "Total assets should include seed and dust");
 
-        assertEq(profit, dustAmount, "Profit should equal dust amount as it's a gain from 0");
+        assertEq(profit, dustAmount, "Profit should equal dust amount over the seed baseline");
         assertEq(loss, 0, "No loss should be reported");
     }
 
@@ -1036,7 +1044,11 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         vm.stopPrank();
 
         uint256 stakedBalance = strategy.balanceOfStake();
-        assertEq(stakedBalance, depositAmount, "Staked balance should equal deposit");
+        assertEq(
+            stakedBalance,
+            MINIMUM_PROTOCOL_POSITION + depositAmount,
+            "Staked balance should equal seed plus deposit"
+        );
 
         // Emergency withdraw exactly stakedBalance: _min(stakedBalance, stakedBalance) -> a == b, returns b
         vm.startPrank(emergencyAdmin);

@@ -135,6 +135,7 @@ contract UniswapV3MultiHopTest is Test {
 
     uint256 internal constant SWAP_AMOUNT_USDC = 10_000e6; // 10k USDC
     uint256 internal constant SWAP_AMOUNT_WETH = 1e18; // 1 WETH
+    uint256 internal constant MINIMUM_PROTOCOL_POSITION = 1_000_000_000;
 
     address internal swapReceiver = address(0xBEEF);
     uint256 internal mainnetFork;
@@ -148,6 +149,15 @@ contract UniswapV3MultiHopTest is Test {
         vm.label(USDC, "USDC");
         vm.label(DAI, "DAI");
         vm.label(swapReceiver, "SwapReceiver");
+    }
+
+    function _seedMinimumPosition(address strategyAddr, address seedFunder) internal {
+        deal(USDC, seedFunder, MINIMUM_PROTOCOL_POSITION);
+
+        vm.startPrank(seedFunder);
+        ERC20(USDC).approve(strategyAddr, MINIMUM_PROTOCOL_POSITION);
+        YieldDonatingTokenizedStrategy(strategyAddr).seedMinimumPosition();
+        vm.stopPrank();
     }
 
     // ═══════════════════════════════════════════════════════════
@@ -339,6 +349,7 @@ contract UniswapV3MultiHopTest is Test {
         );
         vm.stopPrank();
         require(stratAddr == predictedStrat, "Strategy address mismatch");
+        _seedMinimumPosition(stratAddr, mgmt);
 
         // Deposit
         address usr = address(0x1234);
