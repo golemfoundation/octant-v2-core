@@ -6,6 +6,7 @@ import { ITokenizedStrategy } from "src/core/interfaces/ITokenizedStrategy.sol";
 
 import { WadRayMath } from "src/utils/libs/Maths/WadRay.sol";
 
+import { MockDeployedYieldSkimmingStrategy } from "test/kontrol/MockDeployedYieldSkimmingStrategy.k.sol";
 import { StrategyBaseTest } from "test/kontrol/StrategyBaseTest.k.sol";
 import { YSSetup } from "test/kontrol/YSSetup.k.sol";
 import "test/kontrol/SharedStateSlots.k.sol";
@@ -21,8 +22,8 @@ struct YSProofState {
 /**
  * @title YSStrategyTest
  * @notice Kontrol formal verification proofs for YieldSkimmingTokenizedStrategy
- * @dev Inherits 4 common proofs from StrategyBaseTest (testTend, testReportNoChange,
- *      testReportLossNoBurning, testReportByManagement) and adds 11 YS-specific proofs.
+ * @dev Inherits common proofs from StrategyBaseTest (testTend, testReportNoChange,
+ *      testReportLossNoBurning, testReportByManagement) and adds YS-specific proofs.
  *
  *      Strategy-agnostic proofs (testReportOnlyKeeper, testShutdownBlocks, testBalanceBounded)
  *      run only under YDStrategyTest to avoid duplication.
@@ -179,6 +180,65 @@ contract YSStrategyTest is StrategyBaseTest, YSSetup {
         );
         state.userDebt = _loadUInt256(address(ysStrategy), YS_TOTAL_DEBT_OWED_TO_USER_SLOT);
         state.dragonDebt = _loadUInt256(address(ysStrategy), YS_DRAGON_ROUTER_DEBT_SLOT);
+    }
+
+    function _deployFinalExitStrategy()
+        internal
+        returns (MockDeployedYieldSkimmingStrategy deployedStrategy, ITokenizedStrategy tokenizedStrategy)
+    {
+        deployedStrategy = new MockDeployedYieldSkimmingStrategy(
+            _asset,
+            "Deployed Test Strategy",
+            "dtsSYMBOL",
+            _management,
+            _keeper,
+            _emergencyAdmin,
+            _dragonRouter,
+            true,
+            address(ysImplementation)
+        );
+        tokenizedStrategy = ITokenizedStrategy(address(deployedStrategy));
+    }
+
+    function _setFinalExitState(
+        MockDeployedYieldSkimmingStrategy deployedStrategy,
+        address owner,
+        uint256 ownerShares,
+        uint256 trackedAssets,
+        uint256 currentRate,
+        uint256 userDebt,
+        uint256 dragonDebt
+    ) internal {
+        address stratAddr = address(deployedStrategy);
+
+        _storeUInt256(stratAddr, TS_TOTAL_SUPPLY_SLOT, ownerShares);
+        _storeUInt256(stratAddr, TS_TOTAL_ASSETS_SLOT, trackedAssets);
+        _storeMappingUInt256(stratAddr, TS_BALANCES_SLOT, uint256(uint160(owner)), 0, ownerShares);
+        _storeMappingUInt256(stratAddr, TS_BALANCES_SLOT, uint256(uint160(_dragonRouter)), 0, 0);
+        _storeUInt256(stratAddr, YS_TOTAL_DEBT_OWED_TO_USER_SLOT, userDebt);
+        _storeUInt256(stratAddr, YS_DRAGON_ROUTER_DEBT_SLOT, dragonDebt);
+        _storeUInt256(stratAddr, YS_LAST_REPORTED_RATE_SLOT, currentRate);
+
+        deployedStrategy.setMockExchangeRate(currentRate);
+        deployedStrategy.setMockExchangeRateDecimals(27);
+        deployedStrategy.setDeployedAssets(trackedAssets);
+
+        _storeMappingUInt256(_asset, ERC20_BALANCES_SLOT, uint256(uint160(stratAddr)), 0, 0);
+        _storeMappingUInt256(_asset, ERC20_BALANCES_SLOT, uint256(uint160(owner)), 0, 0);
+        _storeMappingUInt256(_asset, ERC20_BALANCES_SLOT, uint256(uint160(_dragonRouter)), 0, 0);
+    }
+
+    function _setupStrandedAssetStateYS(uint256 strandedAssets) internal {
+        address stratAddr = getStrategyAddr();
+
+        _storeUInt256(stratAddr, TS_TOTAL_SUPPLY_SLOT, 0);
+        _storeUInt256(stratAddr, TS_TOTAL_ASSETS_SLOT, strandedAssets);
+        _storeUInt256(stratAddr, YS_TOTAL_DEBT_OWED_TO_USER_SLOT, 0);
+        _storeUInt256(stratAddr, YS_DRAGON_ROUTER_DEBT_SLOT, 0);
+        _storeUInt256(stratAddr, YS_LAST_REPORTED_RATE_SLOT, WadRayMath.RAY);
+        _storeUInt256(stratAddr, MOCK_YS_EXCHANGE_RATE_SLOT, WadRayMath.RAY);
+        _storeUInt256(stratAddr, MOCK_YS_EXCHANGE_RATE_DECIMALS_SLOT, 27);
+        _storeData(stratAddr, TS_FLAGS_SLOT, TS_SHUTDOWN_OFFSET, TS_SHUTDOWN_WIDTH, 0);
     }
 
     /*//////////////////////////////////////////////////////////////
@@ -474,6 +534,58 @@ contract YSStrategyTest is StrategyBaseTest, YSSetup {
         iYSStrategy.deposit(depositAmount, _dragonRouter);
     }
 
+    /// @notice A zero-supply strategy with tracked assets must not quote a
+    ///         positive deposit or mint path.
+    function testStrandedAssetPreviewsReturnZeroYS() public {
+        _assumeNonReentrant();
+
+        address depositor = makeAddr("STRANDED_ASSET_DEPOSITOR");
+        uint256 strandedAssets = freshUInt256Bounded();
+        vm.assume(strandedAssets > 0);
+        _setupStrandedAssetStateYS(strandedAssets);
+
+        assertEq(iYSStrategy.maxDeposit(depositor), 0);
+        assertEq(iYSStrategy.maxMint(depositor), 0);
+        assertEq(iYSStrategy.previewDeposit(1), 0);
+        assertEq(iYSStrategy.previewMint(1), 0);
+        assertEq(iYSStrategy.convertToShares(1), 0);
+        assertEq(iYSStrategy.convertToAssets(1), 0);
+    }
+
+    function testStrandedAssetDepositRevertsYS() public {
+        _assumeNonReentrant();
+
+        address stratAddr = getStrategyAddr();
+        address depositor = makeAddr("STRANDED_ASSET_DEPOSITOR");
+        uint256 strandedAssets = freshUInt256Bounded();
+        vm.assume(strandedAssets > 0);
+        _setupStrandedAssetStateYS(strandedAssets);
+
+        _storeMappingUInt256(_asset, ERC20_BALANCES_SLOT, uint256(uint160(depositor)), 0, 1);
+        vm.prank(depositor);
+        (bool ok, ) = _asset.call(abi.encodeWithSignature("approve(address,uint256)", stratAddr, 1));
+        require(ok);
+
+        vm.startPrank(depositor);
+        vm.expectRevert("ERC4626: deposit more than max");
+        iYSStrategy.deposit(1, depositor);
+        vm.stopPrank();
+    }
+
+    function testStrandedAssetMintRevertsYS() public {
+        _assumeNonReentrant();
+
+        address depositor = makeAddr("STRANDED_ASSET_DEPOSITOR");
+        uint256 strandedAssets = freshUInt256Bounded();
+        vm.assume(strandedAssets > 0);
+        _setupStrandedAssetStateYS(strandedAssets);
+
+        vm.startPrank(depositor);
+        vm.expectRevert("ERC4626: mint more than max");
+        iYSStrategy.mint(1, depositor);
+        vm.stopPrank();
+    }
+
     /*//////////////////////////////////////////////////////////////
                     YS-SPECIFIC: VALUE DEBT TRACKING
     //////////////////////////////////////////////////////////////*/
@@ -630,6 +742,76 @@ contract YSStrategyTest is StrategyBaseTest, YSSetup {
         assertEq(postState.userDebt, preState.userDebt - amount);
         // Dragon debt increased
         assertEq(postState.dragonDebt, preState.dragonDebt + amount);
+    }
+
+    /// @notice A zero-value final-exit surplus is freed and transferred to
+    ///         dragon so the last user share can burn without stranding assets.
+    function testFinalWithdrawZeroValueSurplusFreesAndTransfersDragonDustYS() public {
+        _assumeNonReentrant();
+
+        (
+            MockDeployedYieldSkimmingStrategy deployedStrategy,
+            ITokenizedStrategy tokenizedStrategy
+        ) = _deployFinalExitStrategy();
+        address owner = makeAddr("FINAL_EXIT_OWNER");
+        uint256 ownerShares = 100 ether;
+        uint256 withdrawalAssets = 200 ether;
+        uint256 surplusAssets = 1;
+        uint256 trackedAssets = withdrawalAssets + surplusAssets;
+        uint256 currentRate = WadRayMath.RAY / 2;
+
+        _setFinalExitState(deployedStrategy, owner, ownerShares, trackedAssets, currentRate, ownerShares, 0);
+
+        vm.prank(owner);
+        uint256 withdrawn = tokenizedStrategy.redeem(ownerShares, owner, owner, 10_000);
+
+        assertEq(withdrawn, withdrawalAssets);
+        assertEq(_loadUInt256(address(deployedStrategy), TS_TOTAL_ASSETS_SLOT), 0);
+        assertEq(_loadUInt256(address(deployedStrategy), TS_TOTAL_SUPPLY_SLOT), 0);
+        assertEq(_loadUInt256(address(deployedStrategy), YS_TOTAL_DEBT_OWED_TO_USER_SLOT), 0);
+        assertEq(_loadUInt256(address(deployedStrategy), YS_DRAGON_ROUTER_DEBT_SLOT), 0);
+        assertEq(_loadMappingUInt256(_asset, ERC20_BALANCES_SLOT, uint256(uint160(owner)), 0), withdrawalAssets);
+        assertEq(_loadMappingUInt256(_asset, ERC20_BALANCES_SLOT, uint256(uint160(_dragonRouter)), 0), surplusAssets);
+        assertEq(_loadMappingUInt256(_asset, ERC20_BALANCES_SLOT, uint256(uint160(address(deployedStrategy))), 0), 0);
+        assertEq(deployedStrategy.deployedAssets(), 0);
+    }
+
+    /// @notice A material final-exit surplus is represented as dragon shares
+    ///         and dragon value debt after the user exits.
+    function testFinalWithdrawPositiveValueSurplusMintsDragonSharesYS() public {
+        _assumeNonReentrant();
+
+        (
+            MockDeployedYieldSkimmingStrategy deployedStrategy,
+            ITokenizedStrategy tokenizedStrategy
+        ) = _deployFinalExitStrategy();
+        address owner = makeAddr("FINAL_EXIT_OWNER");
+        uint256 ownerShares = 100 ether;
+        uint256 withdrawalAssets = ownerShares;
+        uint256 surplusAssets = 50 ether;
+        uint256 trackedAssets = withdrawalAssets + surplusAssets;
+        uint256 currentRate = WadRayMath.RAY;
+        uint256 surplusValue = surplusAssets;
+
+        _setFinalExitState(deployedStrategy, owner, ownerShares, trackedAssets, currentRate, ownerShares, 0);
+
+        vm.prank(owner);
+        uint256 withdrawn = tokenizedStrategy.redeem(ownerShares, owner, owner, 10_000);
+
+        assertEq(withdrawn, withdrawalAssets);
+        assertEq(_loadUInt256(address(deployedStrategy), TS_TOTAL_ASSETS_SLOT), surplusAssets);
+        assertEq(_loadUInt256(address(deployedStrategy), TS_TOTAL_SUPPLY_SLOT), surplusValue);
+        assertEq(_loadMappingUInt256(address(deployedStrategy), TS_BALANCES_SLOT, uint256(uint160(owner)), 0), 0);
+        assertEq(
+            _loadMappingUInt256(address(deployedStrategy), TS_BALANCES_SLOT, uint256(uint160(_dragonRouter)), 0),
+            surplusValue
+        );
+        assertEq(_loadUInt256(address(deployedStrategy), YS_TOTAL_DEBT_OWED_TO_USER_SLOT), 0);
+        assertEq(_loadUInt256(address(deployedStrategy), YS_DRAGON_ROUTER_DEBT_SLOT), surplusValue);
+        assertEq(_loadMappingUInt256(_asset, ERC20_BALANCES_SLOT, uint256(uint160(owner)), 0), withdrawalAssets);
+        assertEq(_loadMappingUInt256(_asset, ERC20_BALANCES_SLOT, uint256(uint160(_dragonRouter)), 0), 0);
+        assertEq(_loadMappingUInt256(_asset, ERC20_BALANCES_SLOT, uint256(uint160(address(deployedStrategy))), 0), 0);
+        assertEq(deployedStrategy.deployedAssets(), surplusAssets);
     }
 
     /*//////////////////////////////////////////////////////////////

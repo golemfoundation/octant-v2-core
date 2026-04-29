@@ -41,5 +41,6 @@ error TokenizedStrategy__RedeemMoreThanMax();
 error TokenizedStrategy__NotPendingManagement();
 error TokenizedStrategy__StrategyNotInShutdown();
 error TokenizedStrategy__TooMuchLoss();
+error TokenizedStrategy__FinalWithdrawLeavesAssets();
 
 error BaseStrategy__NotSelf();

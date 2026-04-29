@@ -5,7 +5,7 @@ import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
-import { TokenizedStrategy__InvalidSigner } from "src/errors.sol";
+import { TokenizedStrategy__FinalWithdrawLeavesAssets, TokenizedStrategy__InvalidSigner } from "src/errors.sol";
 
 import { IBaseStrategy } from "src/core/interfaces/IBaseStrategy.sol";
 
@@ -459,7 +459,7 @@ abstract contract TokenizedStrategy {
 
     /// @notice API version identifier for this TokenizedStrategy implementation
     /// @dev Used for tracking strategy versions and compatibility
-    string internal constant API_VERSION = "1.0.0";
+    string internal constant API_VERSION = "1.1.0";
 
     /// @notice Reentrancy guard flag value during function execution
     /// @dev Set to 2 when a protected function is executing
@@ -970,8 +970,8 @@ abstract contract TokenizedStrategy {
     ) internal view virtual returns (uint256) {
         // Saves an extra SLOAD if values are non-zero.
         uint256 totalSupply_ = _totalSupply(S);
-        // If supply is 0, PPS = 1.
-        if (totalSupply_ == 0) return assets;
+        // If supply is 0, PPS = 1 unless assets are stranded without shares.
+        if (totalSupply_ == 0) return _totalAssets(S) == 0 ? assets : 0;
 
         uint256 totalAssets_ = _totalAssets(S);
         // If assets are 0 but supply is not PPS = 0.
@@ -992,13 +992,16 @@ abstract contract TokenizedStrategy {
         // Saves an extra SLOAD if totalSupply() is non-zero.
         uint256 supply = _totalSupply(S);
 
-        return supply == 0 ? shares : shares.mulDiv(_totalAssets(S), supply, _rounding);
+        if (supply == 0) return _totalAssets(S) == 0 ? shares : 0;
+
+        return shares.mulDiv(_totalAssets(S), supply, _rounding);
     }
 
     /// @dev Internal implementation of {maxDeposit}.
     function _maxDeposit(StrategyData storage S, address receiver) internal view returns (uint256) {
         // Cannot deposit when shutdown or to the strategy.
         if (S.shutdown || receiver == address(this)) return 0;
+        if (_totalSupply(S) == 0 && _totalAssets(S) != 0) return 0;
 
         return IBaseStrategy(address(this)).availableDepositLimit(receiver);
     }
@@ -1007,6 +1010,7 @@ abstract contract TokenizedStrategy {
     function _maxMint(StrategyData storage S, address receiver) internal view returns (uint256 maxMint_) {
         // Cannot mint when shutdown or to the strategy.
         if (S.shutdown || receiver == address(this)) return 0;
+        if (_totalSupply(S) == 0 && _totalAssets(S) != 0) return 0;
 
         maxMint_ = IBaseStrategy(address(this)).availableDepositLimit(receiver);
         if (maxMint_ != type(uint256).max) {
@@ -1079,6 +1083,24 @@ abstract contract TokenizedStrategy {
     }
 
     /**
+     * @dev Allows specialized strategies to allocate surplus assets that would
+     *      otherwise remain after the last pre-existing share is burned.
+     *
+     * The default implementation leaves accounting unchanged, so `_withdraw`
+     * will still revert unless an override either accounts for all assets or
+     * mints replacement shares before the burn. `assets` is the receiver
+     * payout that `_withdraw` will transfer after this hook returns.
+     */
+    function _handleFinalWithdrawSurplus(
+        StrategyData storage,
+        uint256 assetsToRemove,
+        uint256,
+        uint256
+    ) internal virtual returns (uint256) {
+        return assetsToRemove;
+    }
+
+    /**
      * @dev To be called during {redeem} and {withdraw}.
      *
      * This will handle all logic, transfers and accounting
@@ -1134,8 +1156,23 @@ abstract contract TokenizedStrategy {
             }
         }
 
+        uint256 assetsToRemove = assets + loss;
+        uint256 totalAssets_ = _totalAssets(S);
+
+        // Do not let rounding burn the last share while leaving tracked assets
+        // behind. A zero-supply/positive-assets state prices the next deposit as
+        // a first deposit even though the strategy still has assets.
+        if (shares == _totalSupply(S) && assetsToRemove != totalAssets_) {
+            if (assetsToRemove < totalAssets_) {
+                assetsToRemove = _handleFinalWithdrawSurplus(S, assetsToRemove, totalAssets_, assets);
+            }
+            if (assetsToRemove > totalAssets_ || (assetsToRemove != totalAssets_ && shares == _totalSupply(S))) {
+                revert TokenizedStrategy__FinalWithdrawLeavesAssets();
+            }
+        }
+
         // Update assets based on how much we took.
-        S.totalAssets -= (assets + loss);
+        S.totalAssets = totalAssets_ - assetsToRemove;
 
         _burn(S, owner, shares);
 

@@ -41,7 +41,7 @@ auto_abstract              = true
 run-constructor            = false
 match-test                 = [
         # ============================================
-        # YieldDonating strategy proofs (7 inherited + 4 unique = 11)
+        # YieldDonating strategy proofs
         # ============================================
         # Inherited from StrategyBaseTest
         "YDStrategyTest.testTend()",
@@ -53,11 +53,16 @@ match-test                 = [
         "YDStrategyTest.testReportLossNoBurning()",
         # YD-unique
         "YDStrategyTest.testReportProfit()",
+        "YDStrategyTest.testReportZeroAssetRecoveryMintsOnlySurplusDragonShares()",
+        "YDStrategyTest.testReportZeroAssetRecoverySurplusRedeemableOneToOne()",
+        "YDStrategyTest.testReportZeroAssetRecoveryPreservesPrincipalWhenRecoveryAtOrBelowSupply()",
+        "YDStrategyTest.testWithdrawFinalShareCannotLeaveTrackedAssets()",
+        "YDStrategyTest.testDepositBlockedWhenSupplyZeroAssetsPositive()",
         "YDStrategyTest.testReportLossInsufficientDragon()",
         "YDStrategyTest.testSharesRedeemableAfterDepositYD(uint256,address)",
         "YDStrategyTest.testConversionConsistencyYD(uint256)",
         # ============================================
-        # YieldSkimming strategy proofs (4 inherited + 11 unique = 15)
+        # YieldSkimming strategy proofs
         # ============================================
         # Inherited from StrategyBaseTest (overridden for debt assertions)
         "YSStrategyTest.testTend()",
@@ -71,13 +76,18 @@ match-test                 = [
         "YSStrategyTest.testDepositBlockedDuringInsolvency()",
         "YSStrategyTest.testDragonBlockedDuringInsolvency()",
         "YSStrategyTest.testDepositBlockedForDragon()",
+        "YSStrategyTest.testStrandedAssetPreviewsReturnZeroYS()",
+        "YSStrategyTest.testStrandedAssetDepositRevertsYS()",
+        "YSStrategyTest.testStrandedAssetMintRevertsYS()",
         "YSStrategyTest.testDepositValueDebtYS(uint256,address)",
         "YSStrategyTest.testTransferDragonToUser(address,uint256)",
         "YSStrategyTest.testTransferUserToDragon(address,uint256)",
+        "YSStrategyTest.testFinalWithdrawZeroValueSurplusFreesAndTransfersDragonDustYS()",
+        "YSStrategyTest.testFinalWithdrawPositiveValueSurplusMintsDragonSharesYS()",
         "YSStrategyTest.testConversionSolventYS(uint256)",
         "YSStrategyTest.testConversionFallbackInsolventYS(uint256)",
         # ============================================
-        # YieldForwarder proofs (7)
+        # YieldForwarder proofs
         # ============================================
         "YFTest.testReportAndForwardOnlyKeeper()",
         "YFTest.testReportAndForwardReceiverGuarantee()",
@@ -87,7 +97,7 @@ match-test                 = [
         "YFTest.testReportAndForwardZeroAssetsPassthrough()",
         "YFTest.testReportAndForwardReturnsRedeemAssets()",
         # ============================================
-        # SwappingYieldForwarder proofs (9)
+        # SwappingYieldForwarder proofs
         # ============================================
         "SYFTest.testReportSwapAndForwardOnlyKeeper()",
         "SYFTest.testReportSwapAndForwardReceiverGuarantee()",

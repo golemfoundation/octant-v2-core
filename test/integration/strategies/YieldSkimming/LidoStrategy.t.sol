@@ -1287,11 +1287,11 @@ contract LidoStrategyTest is Test {
         assertEq(ERC20(WSTETH).balanceOf(data.user2), 150e18, "User2 balance should be 150e18 after withdrawal");
         assertEq(vault.balanceOf(data.user2), 0, "User2 should have no shares left");
 
-        // Final state: vault should be mostly empty
-        // There might be some remaining dragon shares that weren't fully burned
-        // and their value at the current rate
+        // Final state: the final-exit surplus is minted to the dragon when it has positive value.
         uint256 remainingDragonShares = vault.balanceOf(donationAddress);
         uint256 remainingAssets = vault.totalAssets();
+        uint256 expectedRemainingAssets = 23076923076923076924;
+        uint256 expectedSurplusDragonShares = (expectedRemainingAssets * data.increasedRate) / 1e18;
 
         // Log final state for debugging
         console.log("Remaining dragon shares:", remainingDragonShares);
@@ -1300,12 +1300,12 @@ contract LidoStrategyTest is Test {
 
         // Final state analysis:
         // In this specific test scenario, we know the outcome:
-        // - remainingDragonShares = 0 (all 50e18 burned to cover loss)
-        // - vault.totalSupply() = 0 (both users withdrew all shares)
-        // - remainingAssets = 33.333e18 rETH (uncovered loss portion)
+        // - remainingDragonShares = remaining surplus value at the current rate
+        // - vault.totalSupply() = remainingDragonShares
+        // - remainingAssets = 23.077e18 rETH (uncovered loss portion)
 
-        assertEq(remainingDragonShares, 0, "All dragon shares should be burned");
-        assertEq(vault.totalSupply(), 0, "All shares should be withdrawn");
+        assertEq(remainingDragonShares, expectedSurplusDragonShares, "Remaining surplus should be minted to dragon");
+        assertEq(vault.totalSupply(), expectedSurplusDragonShares, "Only dragon surplus shares should remain");
 
         // Final state explanation:
         // After all operations: 183.333e18 rETH remained after user1 withdrawal
@@ -1316,7 +1316,7 @@ contract LidoStrategyTest is Test {
         // that couldn't be covered by the 50e18 dragon shares that were burned
         console.log("Expected behavior: Assets remain due to uncovered loss");
         // User1 got more (76.923 vs 66.667), so less uncovered loss remains
-        assertEq(remainingAssets, 23076923076923076924, "Expected 23.077e18 rETH to remain from uncovered loss");
+        assertEq(remainingAssets, expectedRemainingAssets, "Expected 23.077e18 rETH to remain from uncovered loss");
 
         // lets call report
         vm.startPrank(keeper);

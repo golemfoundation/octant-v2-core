@@ -19,22 +19,14 @@ import { IBaseStrategy } from "src/core/interfaces/IBaseStrategy.sol";
  *      - Losses first attempt dragon share burning when enabled; residual losses decrease PPS
  *      - Dragon router change follows TokenizedStrategy cooldown and two-step finalization
  *
- * Terminal-state recovery (operator-managed):
+ * Terminal-state recovery:
  *      - After a catastrophic loss that reduces `totalAssets` to 0 while `totalSupply`
- *        remains positive (all dragon shares burned and residual loss socialized), the
- *        strategy enters a terminal state: `_convertToShares` returns 0 at the new PPS,
- *        so deposit() and mint() revert until accounting is restored by a future report
- *        and conversions no longer round to zero.
- *      - External donations of the underlying asset are not a dedicated recovery
- *        mechanism. A donated balance can raise `totalAssets` when report() records it,
- *        but the value flows proportionally to existing shareholders. At the terminal
- *        ratio the dragon-mint floors to 0, so no new profit shares accrue to the dragon
- *        router or donation receiver.
- *      - This contract does not implement an automatic recovery flow for that state.
- *        Recovery is operator-managed: call `shutdownStrategy` to stop new deposits while
- *        operators assess the position and migrate users to a fresh deployment if needed.
- *        Avoiding a donation-based rescue path prevents reintroducing first-depositor
- *        dust-extraction style issues.
+ *        remains positive, deposit() and mint() stay blocked while `totalAssets` is 0.
+ *      - If value later re-enters the strategy and report() records positive assets,
+ *        existing shares receive first claim up to 1 asset per share. Only recovered
+ *        value above the outstanding supply is minted to the dragon router as surplus.
+ *        This keeps full-loss recovery with remaining non-dust supply from being donated
+ *        while preventing stale dust shares from capturing recovered surplus.
  */
 
 contract YieldDonatingTokenizedStrategy is TokenizedStrategy {
@@ -90,7 +82,17 @@ contract YieldDonatingTokenizedStrategy is TokenizedStrategy {
             unchecked {
                 profit = newTotalAssets - oldTotalAssets;
             }
-            uint256 sharesToMint = _convertToShares(S, profit, Math.Rounding.Floor);
+            uint256 totalSupply_ = _totalSupply(S);
+            uint256 sharesToMint = 0;
+            if (oldTotalAssets == 0 && totalSupply_ != 0) {
+                if (profit > totalSupply_) {
+                    unchecked {
+                        sharesToMint = profit - totalSupply_;
+                    }
+                }
+            } else {
+                sharesToMint = _convertToShares(S, profit, Math.Rounding.Floor);
+            }
 
             // Floor rounding can map dust profit to zero shares; skip the no-op mint and
             // DonationMinted emission so off-chain indexers do not see a donation event

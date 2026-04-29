@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { ITokenizedStrategy } from "src/core/interfaces/ITokenizedStrategy.sol";
+import { TokenizedStrategy__FinalWithdrawLeavesAssets } from "src/errors.sol";
 
 import { StrategyBaseTest } from "test/kontrol/StrategyBaseTest.k.sol";
 import { YDSetup } from "test/kontrol/YDSetup.k.sol";
@@ -17,8 +18,11 @@ struct YDProofState {
 /**
  * @title YDStrategyTest
  * @notice Kontrol formal verification proofs for YieldDonatingTokenizedStrategy
- * @dev Inherits 7 common proofs from StrategyBaseTest and adds 4 YD-specific proofs:
+ * @dev Inherits common proofs from StrategyBaseTest and adds YD-specific proofs:
  *      - testReportProfit: shares minted to dragon, PPS non-decreasing
+ *      - testReportZeroAssetRecoveryMintsOnlySurplusDragonShares: recovered surplus mints dragon shares
+ *      - testWithdrawFinalShareCannotLeaveTrackedAssets: final-share withdraw cannot strand assets
+ *      - testDepositBlockedWhenSupplyZeroAssetsPositive: stranded-asset state blocks first deposits
  *      - testReportLossInsufficientDragon: partial burn, PPS impact bounded
  *      - testSharesRedeemableAfterDepositYD: deposit produces redeemable shares
  *      - testConversionConsistencyYD: round-trip does not create value
@@ -165,6 +169,158 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
         _establish(Mode.Assert, postState.dragonBalance >= preState.dragonBalance);
         // totalSupply increased
         _establish(Mode.Assert, postState.totalSupply >= preState.totalSupply);
+    }
+
+    /// @notice If totalAssets is zero while supply remains nonzero, later recovery
+    ///         must preserve existing share principal first and mint only recovered
+    ///         surplus to dragon.
+    function testReportZeroAssetRecoveryMintsOnlySurplusDragonShares() public {
+        _assumeNonReentrant();
+
+        address stratAddr = getStrategyAddr();
+        _storeData(stratAddr, HC_SLOT, HC_DO_HEALTH_CHECK_OFFSET, HC_DO_HEALTH_CHECK_WIDTH, 0);
+
+        uint256 oldSupply = freshUInt256Bounded();
+        vm.assume(oldSupply > 0);
+        uint256 dragonBalance = freshUInt256Bounded();
+        vm.assume(dragonBalance <= oldSupply);
+
+        _storeUInt256(stratAddr, TS_TOTAL_ASSETS_SLOT, 0);
+        _storeUInt256(stratAddr, TS_TOTAL_SUPPLY_SLOT, oldSupply);
+        _storeMappingUInt256(stratAddr, TS_BALANCES_SLOT, uint256(uint160(_dragonRouter)), 0, dragonBalance);
+
+        uint256 recoveredAssets = freshUInt256Bounded();
+        vm.assume(recoveredAssets > oldSupply);
+        _assumeNoOverflow(dragonBalance, recoveredAssets);
+        _storeUInt256(stratAddr, MOCK_NEXT_TOTAL_ASSETS_SLOT, recoveredAssets);
+
+        uint256 surplusShares = recoveredAssets - oldSupply;
+
+        vm.startPrank(_keeper);
+        iStrategy.report();
+        vm.stopPrank();
+
+        assertEq(_loadUInt256(stratAddr, TS_TOTAL_ASSETS_SLOT), recoveredAssets);
+        assertEq(_loadUInt256(stratAddr, TS_TOTAL_SUPPLY_SLOT), recoveredAssets);
+        assertEq(
+            _loadMappingUInt256(stratAddr, TS_BALANCES_SLOT, uint256(uint160(_dragonRouter)), 0),
+            dragonBalance + surplusShares
+        );
+    }
+
+    /// @notice After surplus recovery refills totalSupply to totalAssets,
+    ///         principal and surplus shares redeem 1:1.
+    function testReportZeroAssetRecoverySurplusRedeemableOneToOne() public {
+        _assumeNonReentrant();
+
+        address stratAddr = getStrategyAddr();
+        uint256 oldSupply = 100 ether;
+        uint256 recoveredAssets = 150 ether;
+        uint256 surplusShares = recoveredAssets - oldSupply;
+
+        _storeData(stratAddr, HC_SLOT, HC_DO_HEALTH_CHECK_OFFSET, HC_DO_HEALTH_CHECK_WIDTH, 0);
+        _storeUInt256(stratAddr, TS_TOTAL_ASSETS_SLOT, 0);
+        _storeUInt256(stratAddr, TS_TOTAL_SUPPLY_SLOT, oldSupply);
+        _storeMappingUInt256(stratAddr, TS_BALANCES_SLOT, uint256(uint160(_dragonRouter)), 0, 0);
+        _storeUInt256(stratAddr, MOCK_NEXT_TOTAL_ASSETS_SLOT, recoveredAssets);
+
+        vm.startPrank(_keeper);
+        iStrategy.report();
+        vm.stopPrank();
+
+        assertEq(iStrategy.convertToAssets(oldSupply), oldSupply);
+        assertEq(iStrategy.convertToAssets(surplusShares), surplusShares);
+    }
+
+    /// @notice If recovery is at or below outstanding supply, existing holders
+    ///         keep the recovered principal and dragon receives no new shares.
+    function testReportZeroAssetRecoveryPreservesPrincipalWhenRecoveryAtOrBelowSupply() public {
+        _assumeNonReentrant();
+
+        address stratAddr = getStrategyAddr();
+        address lossHolder = makeAddr("LOSS_HOLDER");
+        _storeData(stratAddr, HC_SLOT, HC_DO_HEALTH_CHECK_OFFSET, HC_DO_HEALTH_CHECK_WIDTH, 0);
+
+        uint256 oldSupply = freshUInt256Bounded();
+        vm.assume(oldSupply > 0);
+        uint256 recoveredAssets = freshUInt256Bounded();
+        vm.assume(recoveredAssets > 0);
+        vm.assume(recoveredAssets <= oldSupply);
+
+        _storeUInt256(stratAddr, TS_TOTAL_ASSETS_SLOT, 0);
+        _storeUInt256(stratAddr, TS_TOTAL_SUPPLY_SLOT, oldSupply);
+        _storeMappingUInt256(stratAddr, TS_BALANCES_SLOT, uint256(uint160(lossHolder)), 0, oldSupply);
+        _storeMappingUInt256(stratAddr, TS_BALANCES_SLOT, uint256(uint160(_dragonRouter)), 0, 0);
+        _storeUInt256(stratAddr, MOCK_NEXT_TOTAL_ASSETS_SLOT, recoveredAssets);
+
+        vm.startPrank(_keeper);
+        iStrategy.report();
+        vm.stopPrank();
+
+        assertEq(_loadUInt256(stratAddr, TS_TOTAL_ASSETS_SLOT), recoveredAssets);
+        assertEq(_loadUInt256(stratAddr, TS_TOTAL_SUPPLY_SLOT), oldSupply);
+        assertEq(_loadMappingUInt256(stratAddr, TS_BALANCES_SLOT, uint256(uint160(lossHolder)), 0), oldSupply);
+        assertEq(_loadMappingUInt256(stratAddr, TS_BALANCES_SLOT, uint256(uint160(_dragonRouter)), 0), 0);
+        assertEq(iStrategy.convertToAssets(oldSupply), recoveredAssets);
+    }
+
+    /// @notice A withdraw that burns the final share must remove all tracked assets.
+    ///         Otherwise the strategy would enter totalSupply == 0 && totalAssets > 0.
+    function testWithdrawFinalShareCannotLeaveTrackedAssets() public {
+        _assumeNonReentrant();
+
+        address stratAddr = getStrategyAddr();
+        address owner = makeAddr("FINAL_SHARE_OWNER");
+
+        uint256 trackedAssets = freshUInt256Bounded();
+        vm.assume(trackedAssets > 1);
+
+        _storeUInt256(stratAddr, TS_TOTAL_ASSETS_SLOT, trackedAssets);
+        _storeUInt256(stratAddr, TS_TOTAL_SUPPLY_SLOT, 1);
+        _storeMappingUInt256(stratAddr, TS_BALANCES_SLOT, uint256(uint160(owner)), 0, 1);
+        _storeMappingUInt256(_asset, ERC20_BALANCES_SLOT, uint256(uint160(stratAddr)), 0, trackedAssets);
+
+        vm.startPrank(owner);
+        vm.expectRevert(TokenizedStrategy__FinalWithdrawLeavesAssets.selector);
+        iStrategy.withdraw(1, owner, owner, 0);
+        vm.stopPrank();
+    }
+
+    /// @notice If a zero-supply/positive-assets state is ever present, deposits
+    ///         are blocked instead of being priced as first deposits.
+    function testDepositBlockedWhenSupplyZeroAssetsPositive() public {
+        _assumeNonReentrant();
+
+        address stratAddr = getStrategyAddr();
+        address depositor = makeAddr("STRANDED_ASSET_DEPOSITOR");
+
+        uint256 strandedAssets = freshUInt256Bounded();
+        vm.assume(strandedAssets > 0);
+
+        _storeUInt256(stratAddr, TS_TOTAL_ASSETS_SLOT, strandedAssets);
+        _storeUInt256(stratAddr, TS_TOTAL_SUPPLY_SLOT, 0);
+
+        assertEq(iStrategy.convertToShares(1), 0);
+        assertEq(iStrategy.convertToAssets(1), 0);
+        assertEq(iStrategy.maxDeposit(depositor), 0);
+        assertEq(iStrategy.maxMint(depositor), 0);
+        assertEq(iStrategy.previewDeposit(1), 0);
+        assertEq(iStrategy.previewMint(1), 0);
+
+        _storeMappingUInt256(_asset, ERC20_BALANCES_SLOT, uint256(uint160(depositor)), 0, 1);
+        vm.prank(depositor);
+        (bool ok, ) = _asset.call(abi.encodeWithSignature("approve(address,uint256)", stratAddr, 1));
+        require(ok);
+
+        vm.startPrank(depositor);
+        vm.expectRevert("ERC4626: deposit more than max");
+        iStrategy.deposit(1, depositor);
+        vm.stopPrank();
+
+        vm.startPrank(depositor);
+        vm.expectRevert("ERC4626: mint more than max");
+        iStrategy.mint(1, depositor);
+        vm.stopPrank();
     }
 
     /*//////////////////////////////////////////////////////////////

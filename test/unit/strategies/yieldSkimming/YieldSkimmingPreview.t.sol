@@ -14,9 +14,18 @@ import { YieldSkimmingTokenizedStrategy } from "src/strategies/yieldSkimming/Yie
 contract YieldSkimmingPreviewTest is Setup {
     uint256 internal constant INITIAL_RATE = 1e18;
     uint256 internal constant DEPOSIT_AMOUNT = 100e18;
+    bytes32 internal constant TOKENIZED_STRATEGY_STORAGE =
+        keccak256(abi.encode(uint256(keccak256("octant.tokenized.strategy.storage")) - 1)) & ~bytes32(uint256(0xff));
+    bytes32 internal constant TOTAL_SUPPLY_SLOT = bytes32(uint256(TOKENIZED_STRATEGY_STORAGE) + 8);
+    bytes32 internal constant TOTAL_ASSETS_SLOT = bytes32(uint256(TOKENIZED_STRATEGY_STORAGE) + 9);
 
     function setUp() public override {
         super.setUp();
+    }
+
+    function _writeStrategyState(uint256 totalSupply_, uint256 totalAssets_) internal {
+        vm.store(address(strategy), TOTAL_SUPPLY_SLOT, bytes32(totalSupply_));
+        vm.store(address(strategy), TOTAL_ASSETS_SLOT, bytes32(totalAssets_));
     }
 
     /// @dev Drops the exchange rate to force `_isVaultInsolvent` -> true. After a deposit
@@ -88,6 +97,17 @@ contract YieldSkimmingPreviewTest is Setup {
         _makeInsolventAfterDeposit(INITIAL_RATE / 2);
 
         assertEq(strategy.previewMint(1e18), 0, "previewMint must return 0 while the real mint would revert");
+    }
+
+    function test_previewsReturnZeroWhenSupplyZeroAssetsPositive() public {
+        _writeStrategyState({ totalSupply_: 0, totalAssets_: DEPOSIT_AMOUNT });
+
+        assertEq(strategy.maxDeposit(user), 0, "stranded assets should block deposits");
+        assertEq(strategy.maxMint(user), 0, "stranded assets should block mints");
+        assertEq(strategy.previewDeposit(1e18), 0, "previewDeposit should mirror stranded-assets guard");
+        assertEq(strategy.previewMint(1e18), 0, "previewMint should mirror stranded-assets guard");
+        assertEq(strategy.convertToShares(1e18), 0, "convertToShares should mirror stranded-assets guard");
+        assertEq(strategy.convertToAssets(1e18), 0, "convertToAssets should mirror stranded-assets guard");
     }
 
     // -------------------------------------------------------------------------

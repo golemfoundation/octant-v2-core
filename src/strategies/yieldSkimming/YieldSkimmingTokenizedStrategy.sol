@@ -622,6 +622,8 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
         uint256 assets,
         Math.Rounding rounding
     ) internal view virtual override returns (uint256) {
+        if (_totalSupply(S) == 0 && _totalAssets(S) != 0) return 0;
+
         if (_isVaultInsolvent()) {
             // Vault insolvent - use parent TokenizedStrategy logic
             return super._convertToShares(S, assets, rounding);
@@ -649,6 +651,8 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
         uint256 shares,
         Math.Rounding rounding
     ) internal view virtual override returns (uint256) {
+        if (_totalSupply(S) == 0 && _totalAssets(S) != 0) return 0;
+
         if (_isVaultInsolvent()) {
             // Vault insolvent - use parent TokenizedStrategy logic
             return super._convertToAssets(S, shares, rounding);
@@ -662,6 +666,43 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
                 return super._convertToAssets(S, shares, rounding);
             }
         }
+    }
+
+    /**
+     * @dev When the last user exit leaves surplus value because the exchange
+     *      rate moved up after the latest report, materialize that surplus as
+     *      dragon shares before the user shares are burned.
+     */
+    function _handleFinalWithdrawSurplus(
+        StrategyData storage S,
+        uint256 assetsToRemove,
+        uint256 totalAssets_,
+        uint256 assets
+    ) internal override returns (uint256) {
+        uint256 surplus = totalAssets_ - assetsToRemove;
+        uint256 currentRate = _currentRateRay();
+        uint256 surplusValue = surplus.mulDiv(currentRate, WadRayMath.RAY);
+
+        if (surplusValue == 0) {
+            uint256 requiredIdle = assets + surplus;
+            uint256 idle = S.asset.balanceOf(address(this));
+            if (idle < requiredIdle) {
+                IBaseStrategy(address(this)).freeFunds(requiredIdle - idle);
+                idle = S.asset.balanceOf(address(this));
+            }
+
+            if (idle < requiredIdle) return assetsToRemove;
+
+            S.asset.safeTransfer(S.dragonRouter, surplus);
+            return totalAssets_;
+        }
+
+        _mint(S, S.dragonRouter, surplusValue);
+        _strategyYieldSkimmingStorage().dragonRouterDebtInAssetValue += surplusValue;
+
+        emit DonationMinted(S.dragonRouter, surplusValue, currentRate.rayToWad());
+
+        return assetsToRemove;
     }
 
     /**

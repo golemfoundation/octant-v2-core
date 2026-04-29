@@ -904,12 +904,14 @@ abstract contract BaseYieldSkimmingIntegrationTest is BaseIntegrationTest {
 
         uint256 remainingDragonShares = vault.balanceOf(donationAddress);
         uint256 remainingAssets = vault.totalAssets();
+        uint256 expectedRemainingAssets = 23076923076923076924;
+        uint256 expectedSurplusDragonShares = (expectedRemainingAssets * data.increasedRate) / 1e18;
 
-        assertEq(remainingDragonShares, 0, "All dragon shares should be burned");
-        assertEq(vault.totalSupply(), 0, "All shares should be withdrawn");
         // User1 got more (76.92 vs 66.67), so less remains for uncovered loss
         // 173076923076923076924 - 150e18 = 23076923076923076924
-        assertEq(remainingAssets, 23076923076923076924, "Expected remaining assets from uncovered loss");
+        assertEq(remainingAssets, expectedRemainingAssets, "Expected remaining assets from uncovered loss");
+        assertEq(remainingDragonShares, expectedSurplusDragonShares, "Remaining surplus should be minted to dragon");
+        assertEq(vault.totalSupply(), expectedSurplusDragonShares, "Only dragon surplus shares should remain");
     }
 
     /// @notice Test dragon router withdrawal followed by rate recovery - user should have no loss

@@ -1525,14 +1525,23 @@ contract AccountingTest is Setup {
         vm.prank(user2);
         strategy.redeem(user2Balance, user2, user2);
 
+        uint256 finalDragonShares = strategy.balanceOf(donationAddress);
+        assertGt(finalDragonShares, 0, "Final surplus should be allocated to dragon shares");
+
         // w3: No User3 to withdraw (deposit was blocked by insolvency)
         console2.log("Step 12: w3 - No User3 withdrawal (no deposit occurred)");
 
         console2.log("\n=== FINAL STATE ===");
-        console2.log("Final dragon shares:", strategy.balanceOf(donationAddress));
+        console2.log("Final dragon shares:", finalDragonShares);
         console2.log("Final total assets:", strategy.totalAssets());
         console2.log("Final total supply:", strategy.totalSupply());
         console2.log("Final total value debt:", strategy.totalSupply() - strategy.balanceOf(strategy.dragonRouter()));
+
+        vm.prank(donationAddress);
+        strategy.redeem(finalDragonShares, donationAddress, donationAddress);
+
+        assertEq(strategy.totalAssets(), 0, "Dragon surplus redemption should empty assets");
+        assertEq(strategy.totalSupply(), 0, "Dragon surplus redemption should empty supply");
 
         // Verify that without the rate check, losses are properly handled
         assertEq(profit2, 0, "Should report no profit in second report");

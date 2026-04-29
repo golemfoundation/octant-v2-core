@@ -4,10 +4,27 @@ pragma solidity >=0.8.18;
 import { Setup, IMockStrategy } from "./utils/Setup.sol";
 import { TokenizedStrategy } from "src/core/TokenizedStrategy.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
+import { TokenizedStrategy__FinalWithdrawLeavesAssets } from "src/errors.sol";
 
 contract ReportLifecycleTest is Setup {
+    bytes32 internal constant OCTANT_STRATEGY_STORAGE =
+        keccak256(abi.encode(uint256(keccak256("octant.tokenized.strategy.storage")) - 1)) & ~bytes32(uint256(0xff));
+
+    bytes32 internal constant BALANCES_SLOT = bytes32(uint256(OCTANT_STRATEGY_STORAGE) + 1);
+    bytes32 internal constant TOTAL_SUPPLY_SLOT = bytes32(uint256(OCTANT_STRATEGY_STORAGE) + 8);
+    bytes32 internal constant TOTAL_ASSETS_SLOT = bytes32(uint256(OCTANT_STRATEGY_STORAGE) + 9);
+
     function setUp() public override {
         super.setUp();
+    }
+
+    function _writeStrategyState(uint256 totalSupply_, uint256 totalAssets_) internal {
+        vm.store(address(strategy), TOTAL_SUPPLY_SLOT, bytes32(totalSupply_));
+        vm.store(address(strategy), TOTAL_ASSETS_SLOT, bytes32(totalAssets_));
+    }
+
+    function _writeBalance(address account, uint256 amount) internal {
+        vm.store(address(strategy), keccak256(abi.encode(account, BALANCES_SLOT)), bytes32(amount));
     }
 
     // ==================== Report with Profit ====================
@@ -81,6 +98,100 @@ contract ReportLifecycleTest is Setup {
 
         vm.prank(keeper);
         strategy.report();
+    }
+
+    function test_reportRecovery_zeroAssetsDustSupplyDonatesOnlySurplus() public {
+        address dustHolder = address(0xA11CE);
+        uint256 recoveredValue = 100 ether;
+        uint256 dustSupply = 1;
+
+        _writeStrategyState({ totalSupply_: dustSupply, totalAssets_: 0 });
+        _writeBalance(dustHolder, dustSupply);
+        asset.mint(address(strategy), recoveredValue);
+
+        vm.prank(keeper);
+        (uint256 profit, uint256 recoveryLoss) = strategy.report();
+
+        assertEq(profit, recoveredValue, "recovered value should be reported as profit");
+        assertEq(recoveryLoss, 0, "recovery report should not report loss");
+        assertEq(
+            strategy.balanceOf(donationAddress),
+            recoveredValue - dustSupply,
+            "dragon should receive recovered surplus shares"
+        );
+        assertEq(strategy.balanceOf(dustHolder), dustSupply, "dust holder balance should remain");
+        assertEq(strategy.totalSupply(), recoveredValue, "recovery surplus shares should refill supply to assets");
+        assertEq(strategy.totalAssets(), recoveredValue, "recovered assets should be tracked");
+        assertEq(strategy.previewRedeem(dustSupply), dustSupply, "dust holder should recover only dust principal");
+    }
+
+    function test_reportRecovery_zeroAssetsNonDustSupplyPreservesRecoveredPrincipal() public {
+        address lossHolder = address(0xA11CE);
+        uint256 oldSupply = 100 ether;
+        uint256 recoveredValue = 100 ether;
+
+        _writeStrategyState({ totalSupply_: oldSupply, totalAssets_: 0 });
+        _writeBalance(lossHolder, oldSupply);
+        asset.mint(address(strategy), recoveredValue);
+
+        vm.prank(keeper);
+        (uint256 profit, uint256 recoveryLoss) = strategy.report();
+
+        assertEq(profit, recoveredValue, "recovered value should be reported as profit");
+        assertEq(recoveryLoss, 0, "recovery report should not report loss");
+        assertEq(strategy.balanceOf(donationAddress), 0, "dragon should not receive principal recovery shares");
+        assertEq(strategy.balanceOf(lossHolder), oldSupply, "loss holder balance should remain");
+        assertEq(strategy.totalSupply(), oldSupply, "no recovery shares should be minted");
+        assertEq(strategy.totalAssets(), recoveredValue, "recovered assets should be tracked");
+        assertEq(strategy.previewRedeem(oldSupply), recoveredValue, "loss holder should recover principal first");
+    }
+
+    function test_reportRecovery_zeroAssetsNonDustSupplyDonatesSurplusOnly() public {
+        address lossHolder = address(0xA11CE);
+        uint256 oldSupply = 100 ether;
+        uint256 recoveredValue = 150 ether;
+        uint256 expectedSurplus = recoveredValue - oldSupply;
+
+        _writeStrategyState({ totalSupply_: oldSupply, totalAssets_: 0 });
+        _writeBalance(lossHolder, oldSupply);
+        asset.mint(address(strategy), recoveredValue);
+
+        vm.prank(keeper);
+        (uint256 profit, uint256 recoveryLoss) = strategy.report();
+
+        assertEq(profit, recoveredValue, "recovered value should be reported as profit");
+        assertEq(recoveryLoss, 0, "recovery report should not report loss");
+        assertEq(strategy.balanceOf(donationAddress), expectedSurplus, "dragon should receive surplus shares only");
+        assertEq(strategy.balanceOf(lossHolder), oldSupply, "loss holder balance should remain");
+        assertEq(strategy.totalSupply(), recoveredValue, "surplus shares should refill supply to recovered assets");
+        assertEq(strategy.totalAssets(), recoveredValue, "recovered assets should be tracked");
+        assertEq(strategy.previewRedeem(oldSupply), oldSupply, "loss holder should recover principal first");
+        assertEq(strategy.previewRedeem(expectedSurplus), expectedSurplus, "dragon should receive recovered surplus");
+    }
+
+    function test_withdrawCannotBurnFinalShareUnlessAllAssetsAreRemoved() public {
+        _writeStrategyState({ totalSupply_: 1, totalAssets_: 100 ether });
+        _writeBalance(user, 1);
+        asset.mint(address(strategy), 100 ether);
+
+        vm.prank(user);
+        vm.expectRevert(TokenizedStrategy__FinalWithdrawLeavesAssets.selector);
+        strategy.withdraw(1, user, user, 0);
+    }
+
+    function test_depositBlockedWhenSupplyZeroAssetsPositive() public {
+        address firstDepositor = address(0xBEEF);
+        _writeStrategyState({ totalSupply_: 0, totalAssets_: 100 ether });
+
+        assertEq(strategy.previewDeposit(1), 0, "stranded assets should not price deposits at 1:1");
+        assertEq(strategy.maxDeposit(firstDepositor), 0, "deposits should be blocked while assets are stranded");
+
+        asset.mint(firstDepositor, 1);
+        vm.startPrank(firstDepositor);
+        asset.approve(address(strategy), 1);
+        vm.expectRevert("ERC4626: deposit more than max");
+        strategy.deposit(1, firstDepositor);
+        vm.stopPrank();
     }
 
     // ==================== Report with Loss + Burning Enabled ====================
