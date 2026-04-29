@@ -731,7 +731,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         lossImpl.mint(0, user);
     }
 
-    // --- _convertToShares when totalAssets == 0 uses the virtual offset ---
+    // --- _convertToShares when totalAssets == 0 uses the OpenZeppelin default virtual offset ---
 
     function test_convertToShares_totalAssetsZero_usesVirtualOffset() public {
         MockTokenizedStrategyWithLoss lossImpl = _freshLossImpl();
@@ -749,7 +749,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         lossImpl.mintShares(user, 10e18);
 
         uint256 shares = lossImpl.convertToShares(1e18);
-        assertEq(shares, 1e18 * (10e18 + 1), "convertToShares should use virtual assets and shares");
+        assertEq(shares, 1e18 * (10e18 + 10 ** 0), "convertToShares should use OZ default virtual offset");
     }
 
     // --- maxMint with limited deposit (line 995, branch 0) ---

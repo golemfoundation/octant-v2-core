@@ -4,6 +4,7 @@ pragma solidity >=0.8.18;
 import { Setup } from "./utils/Setup.sol";
 
 contract VirtualOffsetTest is Setup {
+    uint256 internal constant DECIMALS_OFFSET = 0;
     uint256 internal constant TS_BASE = uint256(0x4df8983d84042631e7325fb5ba31b73b056fa9890e796c4c95fbf1e6d76eba00);
     uint256 internal constant TS_TOTAL_SUPPLY_SLOT = TS_BASE + 8;
     uint256 internal constant TS_TOTAL_ASSETS_SLOT = TS_BASE + 9;
@@ -115,6 +116,24 @@ contract VirtualOffsetTest is Setup {
         assertEq(strategy.balanceOf(donationAddress), recoveredAssets, "dragon receives first recovery shares");
         assertEq(strategy.totalSupply(), recoveredAssets, "recovery creates dragon supply");
         assertEq(strategy.totalAssets(), recoveredAssets, "assets tracked");
+    }
+
+    function test_openZeppelinDefaultOffset_formulaMatchesConversions() public {
+        _forceTotals({ totalSupply_: 10e18, totalAssets_: 5e18 });
+
+        uint256 assets = 2e18;
+        uint256 shares = 3e18;
+
+        assertEq(
+            strategy.convertToShares(assets),
+            (assets * (10e18 + 10 ** DECIMALS_OFFSET)) / (5e18 + 1),
+            "convertToShares should match OZ default offset"
+        );
+        assertEq(
+            strategy.convertToAssets(shares),
+            (shares * (5e18 + 1)) / (10e18 + 10 ** DECIMALS_OFFSET),
+            "convertToAssets should match OZ default offset"
+        );
     }
 
     function _createZeroAssetDustShareState() internal {

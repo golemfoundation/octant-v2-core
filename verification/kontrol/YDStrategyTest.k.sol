@@ -18,7 +18,7 @@ struct YDProofState {
  * @title YDStrategyTest
  * @notice Kontrol formal verification proofs for YieldDonatingTokenizedStrategy
  * @dev Inherits 7 common proofs from StrategyBaseTest and adds 5 YD-specific proofs:
- *      - testReportProfit: virtual-offset shares minted to dragon, virtual PPS non-decreasing
+ *      - testReportProfit: OpenZeppelin default-offset shares minted to dragon, virtual PPS non-decreasing
  *      - testReportLossInsufficientDragon: partial burn, PPS impact bounded
  *      - testSharesRedeemableAfterDepositYD: deposit produces redeemable shares
  *      - testConversionConsistencyYD: round-trip does not create value
@@ -28,6 +28,7 @@ struct YDProofState {
 contract YDStrategyTest is StrategyBaseTest, YDSetup {
     YDProofState private preState;
     YDProofState private postState;
+    uint256 constant DECIMALS_OFFSET = 0;
 
     function setUp() public override(YDSetup) {
         YDSetup.setUp();
@@ -103,13 +104,13 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Virtual PPS does not decrease:
-    ///         (totalAssets_new + 1) * (totalSupply_old + 1)
-    ///         >= (totalAssets_old + 1) * (totalSupply_new + 1)
+    ///         (totalAssets_new + 1) * (totalSupply_old + 10 ** DECIMALS_OFFSET)
+    ///         >= (totalAssets_old + 1) * (totalSupply_new + 10 ** DECIMALS_OFFSET)
     function ppsNonDecreasingInvariant(Mode mode) internal view {
         _establish(
             mode,
-            (postState.totalAssets + 1) * (preState.totalSupply + 1) >=
-                (preState.totalAssets + 1) * (postState.totalSupply + 1)
+            (postState.totalAssets + 1) * (preState.totalSupply + 10 ** DECIMALS_OFFSET) >=
+                (preState.totalAssets + 1) * (postState.totalSupply + 10 ** DECIMALS_OFFSET)
         );
     }
 
@@ -147,9 +148,9 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
         vm.assume(newTotalAssets > preState.totalAssets);
         _storeUInt256(address(strategy), MOCK_NEXT_TOTAL_ASSETS_SLOT, newTotalAssets);
 
-        // Avoid overflow in sharesToMint = profit * (totalSupply + 1) / (totalAssets + 1)
+        // Avoid overflow in sharesToMint = profit * (totalSupply + 10 ** DECIMALS_OFFSET) / (totalAssets + 1)
         uint256 profit = newTotalAssets - preState.totalAssets;
-        uint256 virtualSupply = preState.totalSupply + 1;
+        uint256 virtualSupply = preState.totalSupply + 10 ** DECIMALS_OFFSET;
         uint256 virtualAssets = preState.totalAssets + 1;
         _assumeNoOverflow(profit, virtualSupply);
 
@@ -207,7 +208,7 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
         _storeUInt256(address(strategy), MOCK_NEXT_TOTAL_ASSETS_SLOT, newTotalAssets);
 
         uint256 loss = preState.totalAssets - newTotalAssets;
-        uint256 virtualSupply = preState.totalSupply + 1;
+        uint256 virtualSupply = preState.totalSupply + 10 ** DECIMALS_OFFSET;
         uint256 virtualAssets = preState.totalAssets + 1;
         _assumeNoOverflow(loss, virtualSupply);
         uint256 sharesToBurn = Math.mulDiv(loss, virtualSupply, virtualAssets, Math.Rounding.Floor);
@@ -246,7 +247,7 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
         vm.assume(totalAssets > 0);
         vm.assume(totalSupply > 0);
 
-        uint256 virtualSupply = totalSupply + 1;
+        uint256 virtualSupply = totalSupply + 10 ** DECIMALS_OFFSET;
         uint256 virtualAssets = totalAssets + 1;
         _assumeNoOverflow(assets, virtualSupply);
         uint256 expectedShares = (assets * virtualSupply) / virtualAssets;

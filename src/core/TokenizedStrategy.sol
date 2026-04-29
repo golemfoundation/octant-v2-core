@@ -474,14 +474,6 @@ abstract contract TokenizedStrategy {
     ///      10,000 basis points = 100%
     uint256 internal constant MAX_BPS = 10_000;
 
-    /// @notice Virtual assets used in ERC4626 conversions to avoid empty-vault inflation cliffs.
-    /// @dev Uses an OpenZeppelin/YieldBox-style virtual offset with 0 extra share decimals.
-    uint256 internal constant VIRTUAL_ASSETS = 1;
-
-    /// @notice Virtual shares used in ERC4626 conversions to avoid empty-vault inflation cliffs.
-    /// @dev Kept at 1 so existing share decimals and normal 1:1 healthy-path accounting remain unchanged.
-    uint256 internal constant VIRTUAL_SHARES = 1;
-
     /// @notice Mandatory cooldown period for dragon router changes
     /// @dev 14 days in seconds. Prevents rapid changes that could enable attacks
     ///      OCTANT-SPECIFIC security feature to protect yield distribution
@@ -970,13 +962,18 @@ abstract contract TokenizedStrategy {
         return S.totalSupply;
     }
 
+    /// @dev Offset between asset decimals and share decimals.
+    function _decimalsOffset() internal view virtual returns (uint8) {
+        return 0;
+    }
+
     /// @dev Internal implementation of {convertToShares}.
     function _convertToShares(
         StrategyData storage S,
         uint256 assets,
         Math.Rounding _rounding
     ) internal view virtual returns (uint256) {
-        return assets.mulDiv(_totalSupply(S) + VIRTUAL_SHARES, _totalAssets(S) + VIRTUAL_ASSETS, _rounding);
+        return assets.mulDiv(_totalSupply(S) + 10 ** _decimalsOffset(), _totalAssets(S) + 1, _rounding);
     }
 
     /// @dev Internal implementation of {convertToAssets}.
@@ -988,7 +985,7 @@ abstract contract TokenizedStrategy {
         uint256 shares,
         Math.Rounding _rounding
     ) internal view virtual returns (uint256) {
-        return shares.mulDiv(_totalAssets(S) + VIRTUAL_ASSETS, _totalSupply(S) + VIRTUAL_SHARES, _rounding);
+        return shares.mulDiv(_totalAssets(S) + 1, _totalSupply(S) + 10 ** _decimalsOffset(), _rounding);
     }
 
     /// @dev Internal implementation of {maxDeposit}.
@@ -1331,7 +1328,7 @@ abstract contract TokenizedStrategy {
      */
     function pricePerShare() public view returns (uint256) {
         StrategyData storage S = _strategyStorage();
-        return _convertToAssets(S, 10 ** S.decimals, Math.Rounding.Floor);
+        return _convertToAssets(S, 10 ** (S.decimals + _decimalsOffset()), Math.Rounding.Floor);
     }
 
     /**
@@ -1522,7 +1519,7 @@ abstract contract TokenizedStrategy {
      * @return decimals_ Decimals used by strategy and asset
      */
     function decimals() external view returns (uint8) {
-        return _strategyStorage().decimals;
+        return _strategyStorage().decimals + _decimalsOffset();
     }
 
     /**
