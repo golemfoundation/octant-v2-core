@@ -65,4 +65,12 @@ interface IYieldSkimmingStrategy {
      * @return isInsolvent True if vault cannot cover user value debt
      */
     function isVaultInsolvent() external view returns (bool isInsolvent);
+
+    /**
+     * @notice Reports current accounting, then disables dragon burn loss protection.
+     * @dev Use this when disabling burning may otherwise race with unreported loss.
+     * @return profit Profit reported by the accounting sync
+     * @return loss Loss reported by the accounting sync
+     */
+    function reportAndDisableBurning() external returns (uint256 profit, uint256 loss);
 }

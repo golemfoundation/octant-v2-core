@@ -8,8 +8,24 @@ import { IYieldSkimmingStrategy } from "src/strategies/yieldSkimming/IYieldSkimm
 import { MockStrategySkimming } from "test/mocks/core/tokenized-strategies/MockStrategySkimming.sol";
 
 contract AccessControlTest is Setup {
+    uint256 internal constant BAILSEC31_DEPOSIT_AMOUNT = 100e18;
+
     function setUp() public override {
         super.setUp();
+    }
+
+    function _seedBailsec31DragonProfit() internal {
+        vm.prank(management);
+        strategy.setEnableBurning(true);
+
+        mintAndDepositIntoStrategy(strategy, user, BAILSEC31_DEPOSIT_AMOUNT);
+
+        MockStrategySkimming(address(strategy)).updateExchangeRate(15e17);
+        vm.prank(keeper);
+        strategy.report();
+
+        assertEq(strategy.balanceOf(donationAddress), 50e18, "dragon profit shares");
+        assertTrue(strategy.enableBurning(), "burning enabled");
     }
 
     function test_setManagement(address _address) public {
@@ -190,6 +206,99 @@ contract AccessControlTest is Setup {
         strategy.setName(newName);
 
         assertEq(strategy.name(), newName);
+    }
+
+    // ================== Burning Toggle Tests ==================
+
+    function test_bailsec31_disableBurningRevertsWithPendingDragonBurn() public {
+        _seedBailsec31DragonProfit();
+
+        MockStrategySkimming(address(strategy)).updateExchangeRate(9e17);
+        assertTrue(IYieldSkimmingStrategy(address(strategy)).isVaultInsolvent(), "user debt should be undercovered");
+
+        vm.prank(management);
+        vm.expectRevert("report before disabling burning");
+        strategy.setEnableBurning(false);
+
+        assertTrue(strategy.enableBurning(), "burning should remain enabled");
+    }
+
+    function test_bailsec31_disableBurningChecksCombinedDebtNotOnlyUserInsolvency() public {
+        _seedBailsec31DragonProfit();
+
+        MockStrategySkimming(address(strategy)).updateExchangeRate(12e17);
+        assertFalse(
+            IYieldSkimmingStrategy(address(strategy)).isVaultInsolvent(),
+            "users should still be fully covered"
+        );
+
+        vm.prank(management);
+        vm.expectRevert("report before disabling burning");
+        strategy.setEnableBurning(false);
+    }
+
+    function test_bailsec31_disableBurningUsesLiveAssetBalance() public {
+        _seedBailsec31DragonProfit();
+
+        vm.prank(address(strategy));
+        yieldSource.transfer(address(0xdead), 1e18);
+
+        assertEq(strategy.totalAssets(), BAILSEC31_DEPOSIT_AMOUNT, "stored totalAssets should be stale");
+        assertEq(
+            yieldSource.balanceOf(address(strategy)),
+            BAILSEC31_DEPOSIT_AMOUNT - 1e18,
+            "live balance should be lower"
+        );
+
+        vm.prank(management);
+        vm.expectRevert("report before disabling burning");
+        strategy.setEnableBurning(false);
+    }
+
+    function test_bailsec31_reportThenDisableBurningSucceeds() public {
+        _seedBailsec31DragonProfit();
+
+        MockStrategySkimming(address(strategy)).updateExchangeRate(9e17);
+
+        vm.prank(keeper);
+        strategy.report();
+
+        assertEq(strategy.balanceOf(donationAddress), 0, "dragon shares should be burned");
+
+        vm.prank(management);
+        strategy.setEnableBurning(false);
+
+        assertFalse(strategy.enableBurning(), "burning disabled after report");
+    }
+
+    function test_bailsec31_reportAndDisableBurningIsAtomic() public {
+        _seedBailsec31DragonProfit();
+
+        MockStrategySkimming(address(strategy)).updateExchangeRate(9e17);
+
+        vm.prank(management);
+        (uint256 profit, uint256 loss) = IYieldSkimmingStrategy(address(strategy)).reportAndDisableBurning();
+
+        assertEq(profit, 0, "no profit");
+        assertGt(loss, 0, "loss should be reported");
+        assertEq(strategy.balanceOf(donationAddress), 0, "dragon shares should be burned");
+        assertFalse(strategy.enableBurning(), "burning disabled atomically");
+    }
+
+    function test_bailsec31_disableBurningSucceedsWhenNoPendingDragonBurn() public {
+        _seedBailsec31DragonProfit();
+
+        vm.prank(management);
+        strategy.setEnableBurning(false);
+
+        assertFalse(strategy.enableBurning(), "burning disabled");
+        assertEq(strategy.balanceOf(donationAddress), 50e18, "dragon shares unchanged");
+    }
+
+    function test_bailsec31_reportAndDisableBurningOnlyManagement() public {
+        vm.prank(user);
+        vm.expectRevert("!management");
+        IYieldSkimmingStrategy(address(strategy)).reportAndDisableBurning();
     }
 
     // ================== Dragon Router Cooldown Tests ==================

@@ -611,6 +611,38 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
     }
 
     /**
+     * @notice Sets whether dragon-share burning is enabled for loss protection.
+     * @dev Disabling burning is blocked while there is an unreported shortfall against
+     *      combined user + dragon value debt. The shortfall must be reported while
+     *      burning is still enabled so dragon shares absorb their pending first loss.
+     * @param _enableBurning Whether to enable the burning mechanism
+     */
+    function setEnableBurning(bool _enableBurning) external override onlyManagement {
+        StrategyData storage S = _strategyStorage();
+
+        if (S.enableBurning && !_enableBurning) {
+            require(!_hasPendingDragonBurn(S, _strategyYieldSkimmingStorage()), "report before disabling burning");
+        }
+
+        S.enableBurning = _enableBurning;
+        emit UpdateBurningMechanism(_enableBurning);
+    }
+
+    /**
+     * @notice Reports current accounting, then disables dragon burn loss protection.
+     * @dev This explicit helper gives operators an atomic path for disabling burning
+     *      without leaving a between-transaction window for rate changes.
+     * @return profit Profit reported by the accounting sync
+     * @return loss Loss reported by the accounting sync
+     */
+    function reportAndDisableBurning() external onlyManagement returns (uint256 profit, uint256 loss) {
+        (profit, loss) = report();
+
+        _strategyStorage().enableBurning = false;
+        emit UpdateBurningMechanism(false);
+    }
+
+    /**
      * @dev Converts assets to shares using value debt approach with solvency awareness
      * @param S Strategy storage
      * @param assets Amount of assets to convert
@@ -677,6 +709,24 @@ contract YieldSkimmingTokenizedStrategy is TokenizedStrategy {
         // Vault is only insolvent if it cannot cover user debt
         // Dragon debt is excluded as dragon shares are designed to absorb losses
         return YS.totalDebtOwedToUserInAssetValue > 0 && currentVaultValue < YS.totalDebtOwedToUserInAssetValue;
+    }
+
+    /**
+     * @dev Returns true when dragon shares still have a pending first-loss burn.
+     *      This intentionally checks combined debt, not `_isVaultInsolvent()`, because
+     *      users can still be fully covered while the dragon tranche is impaired.
+     */
+    function _hasPendingDragonBurn(
+        StrategyData storage S,
+        YieldSkimmingStorage storage YS
+    ) internal view returns (bool) {
+        if (_balanceOf(S, S.dragonRouter) == 0) return false;
+
+        uint256 currentRate = _currentRateRay();
+        uint256 currentVaultValue = S.asset.balanceOf(address(this)).mulDiv(currentRate, WadRayMath.RAY);
+        uint256 totalDebt = YS.totalDebtOwedToUserInAssetValue + YS.dragonRouterDebtInAssetValue;
+
+        return currentVaultValue < totalDebt;
     }
 
     /**

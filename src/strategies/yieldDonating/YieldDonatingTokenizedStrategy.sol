@@ -119,6 +119,39 @@ contract YieldDonatingTokenizedStrategy is TokenizedStrategy {
     }
 
     /**
+     * @notice Sets whether dragon-share burning is enabled for loss protection.
+     * @dev Yield-donating strategies learn their authoritative current asset value
+     *      through `report()`. When dragon shares exist, disabling burning without
+     *      reporting first could retroactively preserve dragon shares through an
+     *      unreported loss. Use `reportAndDisableBurning()` in that case.
+     * @param _enableBurning Whether to enable the burning mechanism
+     */
+    function setEnableBurning(bool _enableBurning) external override onlyManagement {
+        StrategyData storage S = _strategyStorage();
+
+        if (S.enableBurning && !_enableBurning) {
+            require(S.balances[S.dragonRouter] == 0, "report before disabling burning");
+        }
+
+        S.enableBurning = _enableBurning;
+        emit UpdateBurningMechanism(_enableBurning);
+    }
+
+    /**
+     * @notice Reports current accounting, then disables dragon burn loss protection.
+     * @dev This explicit helper gives operators an atomic path for disabling burning
+     *      without leaving a between-transaction window for unreported losses.
+     * @return profit Profit reported by the accounting sync
+     * @return loss Loss reported by the accounting sync
+     */
+    function reportAndDisableBurning() external onlyManagement returns (uint256 profit, uint256 loss) {
+        (profit, loss) = report();
+
+        _strategyStorage().enableBurning = false;
+        emit UpdateBurningMechanism(false);
+    }
+
+    /**
      * @dev Internal function to handle loss protection for dragon principal
      * @param S Storage struct pointer to access strategy's storage variables
      * @param loss Amount of loss to protect against in asset base units
