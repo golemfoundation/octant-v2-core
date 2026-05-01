@@ -977,8 +977,12 @@ abstract contract TokenizedStrategy {
     ) internal view virtual returns (uint256) {
         // Saves an extra SLOAD if values are non-zero.
         uint256 totalSupply_ = _totalSupply(S);
-        // If supply is 0, PPS = 1.
-        if (totalSupply_ == 0) return assets;
+        if (totalSupply_ == 0) {
+            // A tracked positive-asset balance with zero shares is a corrupted
+            // ghost-collateral state. Do not price a first depositor at 1:1.
+            if (_totalAssets(S) != 0) return 0;
+            return assets;
+        }
 
         uint256 totalAssets_ = _totalAssets(S);
         // If assets are 0 but supply is not PPS = 0.
@@ -999,13 +1003,21 @@ abstract contract TokenizedStrategy {
         // Saves an extra SLOAD if totalSupply() is non-zero.
         uint256 supply = _totalSupply(S);
 
-        return supply == 0 ? shares : shares.mulDiv(_totalAssets(S), supply, _rounding);
+        if (supply == 0) {
+            if (_totalAssets(S) != 0) return 0;
+            return shares;
+        }
+
+        return shares.mulDiv(_totalAssets(S), supply, _rounding);
     }
 
     /// @dev Internal implementation of {maxDeposit}.
     function _maxDeposit(StrategyData storage S, address receiver) internal view returns (uint256) {
         // Cannot deposit when shutdown or to the strategy.
         if (S.shutdown || receiver == address(this)) return 0;
+        uint256 totalSupply_ = _totalSupply(S);
+        uint256 totalAssets_ = _totalAssets(S);
+        if ((totalSupply_ == 0 && totalAssets_ != 0) || (totalSupply_ != 0 && totalAssets_ == 0)) return 0;
 
         return IBaseStrategy(address(this)).availableDepositLimit(receiver);
     }
@@ -1014,6 +1026,9 @@ abstract contract TokenizedStrategy {
     function _maxMint(StrategyData storage S, address receiver) internal view returns (uint256 maxMint_) {
         // Cannot mint when shutdown or to the strategy.
         if (S.shutdown || receiver == address(this)) return 0;
+        uint256 totalSupply_ = _totalSupply(S);
+        uint256 totalAssets_ = _totalAssets(S);
+        if ((totalSupply_ == 0 && totalAssets_ != 0) || (totalSupply_ != 0 && totalAssets_ == 0)) return 0;
 
         maxMint_ = IBaseStrategy(address(this)).availableDepositLimit(receiver);
         if (maxMint_ != type(uint256).max) {
@@ -1037,17 +1052,20 @@ abstract contract TokenizedStrategy {
 
     /// @dev Internal implementation of {maxRedeem}.
     function _maxRedeem(StrategyData storage S, address owner) internal view returns (uint256 maxRedeem_) {
+        uint256 balance = _balanceOf(S, owner);
+        if (balance == 0 || _convertToAssets(S, balance, Math.Rounding.Floor) == 0) return 0;
+
         // Get the max the owner could withdraw currently.
         maxRedeem_ = IBaseStrategy(address(this)).availableWithdrawLimit(owner);
 
         // Conversion would overflow and saves a min check if there is no withdrawal limit.
         if (maxRedeem_ == type(uint256).max) {
-            maxRedeem_ = _balanceOf(S, owner);
+            maxRedeem_ = balance;
         } else {
             maxRedeem_ = Math.min(
                 // Can't redeem more than the balance.
                 _convertToShares(S, maxRedeem_, Math.Rounding.Floor),
-                _balanceOf(S, owner)
+                balance
             );
         }
     }

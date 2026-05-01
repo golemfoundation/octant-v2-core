@@ -11,6 +11,11 @@ contract AccountingTest is Setup {
         super.setUp();
     }
 
+    function _requiredMaxLoss(uint256 requestedAssets, uint256 expectedOut) internal view returns (uint256) {
+        uint256 realizedLoss = requestedAssets - expectedOut;
+        return (realizedLoss * MAX_BPS + requestedAssets - 1) / requestedAssets;
+    }
+
     function test_airdropDoesNotIncreasePPS(address _address, uint256 _amount, uint16 _profitFactor) public {
         _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
         _profitFactor = uint16(bound(uint256(_profitFactor), 10, MAX_BPS));
@@ -35,14 +40,15 @@ contract AccountingTest is Setup {
         checkStrategyTotals(strategy, _amount, _amount - toAirdrop, toAirdrop, _amount);
 
         uint256 beforeBalance = asset.balanceOf(_address);
+        uint256 userShares = strategy.balanceOf(_address);
+        uint256 userAssets = strategy.convertToAssets(userShares);
         vm.prank(_address);
-        strategy.redeem(_amount, _address, _address);
+        strategy.redeem(userShares, _address, _address);
 
         // should have pulled out just the deposited amount leaving the rest deployed.
-        assertEq(asset.balanceOf(_address), beforeBalance + _amount);
-        assertEq(asset.balanceOf(address(strategy)), 0);
-        assertEq(asset.balanceOf(address(yieldSource)), toAirdrop);
-        checkStrategyTotals(strategy, 0, 0, 0, 0);
+        assertEq(asset.balanceOf(_address), beforeBalance + userAssets);
+        assertEq(strategy.totalAssets(), minimumLiquidity);
+        assertEq(strategy.totalSupply(), minimumLiquidity);
     }
 
     function test_airdropDoesNotIncreasePPS_reportRecordsIt(
@@ -104,8 +110,10 @@ contract AccountingTest is Setup {
         checkStrategyTotals(strategy, _amount + toAirdrop, _amount, toAirdrop);
 
         uint256 beforeBalance = asset.balanceOf(_address);
+        uint256 userShares = strategy.balanceOf(_address);
+        uint256 userAssets = strategy.convertToAssets(userShares);
         vm.prank(_address);
-        strategy.redeem(_amount, _address, _address);
+        strategy.redeem(userShares, _address, _address);
 
         // withdaw donation address shares
         uint256 donationShares = strategy.balanceOf(donationAddress);
@@ -116,12 +124,13 @@ contract AccountingTest is Setup {
         vm.stopPrank();
 
         // should have pulled out the deposit plus profit that was reported but not the second airdrop
-        assertEq(asset.balanceOf(_address), beforeBalance + _amount);
+        assertEq(asset.balanceOf(_address), beforeBalance + userAssets);
         // assert donation address has the airdrop
         assertEq(asset.balanceOf(donationAddress), toAirdrop, "!donationAddress");
         assertEq(asset.balanceOf(address(strategy)), 0, "!strategy");
 
-        checkStrategyTotals(strategy, 0, 0, 0, 0);
+        assertEq(strategy.totalAssets(), minimumLiquidity);
+        assertEq(strategy.totalSupply(), minimumLiquidity);
     }
 
     function test_earningYieldDoesNotIncreasePPS(address _address, uint256 _amount, uint16 _profitFactor) public {
@@ -148,13 +157,15 @@ contract AccountingTest is Setup {
         checkStrategyTotals(strategy, _amount, _amount, 0, _amount);
 
         uint256 beforeBalance = asset.balanceOf(_address);
+        uint256 userShares = strategy.balanceOf(_address);
+        uint256 userAssets = strategy.convertToAssets(userShares);
         vm.prank(_address);
-        strategy.redeem(_amount, _address, _address);
+        strategy.redeem(userShares, _address, _address);
 
         // should have pulled out just the deposit amount
-        assertEq(asset.balanceOf(_address), beforeBalance + _amount);
-        assertEq(asset.balanceOf(address(yieldSource)), toAirdrop);
-        checkStrategyTotals(strategy, 0, 0, 0, 0);
+        assertEq(asset.balanceOf(_address), beforeBalance + userAssets);
+        assertEq(strategy.totalAssets(), minimumLiquidity);
+        assertEq(strategy.totalSupply(), minimumLiquidity);
     }
 
     function test_earningYieldDoesNotIncreasePPS_reportRecordsIt(
@@ -232,12 +243,13 @@ contract AccountingTest is Setup {
         vm.stopPrank();
 
         // should have pulled out the deposit plus profit that was reported but not the second airdrop
-        assertEq(asset.balanceOf(_address), beforeBalance + _amount);
+        assertEq(asset.balanceOf(_address), beforeBalance + _amount - minimumLiquidity);
         // assert donation address has the airdrop
         assertEq(asset.balanceOf(donationAddress), toAirdrop, "!donationAddress");
         assertEq(asset.balanceOf(address(strategy)), 0, "!strategy");
 
-        checkStrategyTotals(strategy, 0, 0, 0, 0);
+        assertEq(strategy.totalAssets(), minimumLiquidity);
+        assertEq(strategy.totalSupply(), minimumLiquidity);
     }
 
     function test_tend_noIdle_harvestProfit(uint256 _amount, uint16 _profitFactor) public {
@@ -278,8 +290,10 @@ contract AccountingTest is Setup {
         assertEq(strategy.pricePerShare(), pricePerShare);
 
         uint256 beforeBalance = asset.balanceOf(user);
+        uint256 userShares = strategy.balanceOf(user);
+        uint256 userAssets = strategy.convertToAssets(userShares);
         vm.prank(user);
-        strategy.redeem(_amount, user, user);
+        strategy.redeem(userShares, user, user);
 
         // withdaw donation address shares
         uint256 donationShares = strategy.balanceOf(donationAddress);
@@ -290,11 +304,12 @@ contract AccountingTest is Setup {
         vm.stopPrank();
 
         // should have pulled out the deposit plus profit that was reported but not the second airdrop
-        assertEq(asset.balanceOf(user), beforeBalance + _amount);
+        assertEq(asset.balanceOf(user), beforeBalance + userAssets);
         // assert donation address has the airdrop
         assertEq(asset.balanceOf(donationAddress), toAirdrop, "!donationAddress");
         assertEq(asset.balanceOf(address(strategy)), 0, "!strategy");
-        checkStrategyTotals(strategy, 0, 0, 0, 0);
+        assertEq(strategy.totalAssets(), minimumLiquidity);
+        assertEq(strategy.totalSupply(), minimumLiquidity);
     }
 
     function test_tend_idleFunds_harvestProfit(uint256 _amount, uint16 _profitFactor) public {
@@ -363,13 +378,15 @@ contract AccountingTest is Setup {
         mintAndDepositIntoStrategy(strategy, _address, _amount);
 
         uint256 toLose = (_amount * _lossFactor) / MAX_BPS;
+        vm.assume(toLose > minimumLiquidity);
         // Simulate a loss.
         vm.prank(address(yieldSource));
         asset.transfer(address(69), toLose);
 
+        uint256 requestedAssets = strategy.convertToAssets(strategy.balanceOf(_address));
         vm.expectRevert("too much loss");
         vm.prank(_address);
-        strategy.withdraw(_amount, _address, _address);
+        strategy.withdraw(requestedAssets, _address, _address);
     }
 
     function test_withdrawWithUnrealizedLoss_withMaxLoss(address _address, uint256 _amount, uint16 _lossFactor) public {
@@ -380,21 +397,25 @@ contract AccountingTest is Setup {
         mintAndDepositIntoStrategy(strategy, _address, _amount);
 
         uint256 toLose = (_amount * _lossFactor) / MAX_BPS;
+        vm.assume(toLose > minimumLiquidity);
         // Simulate a loss.
         vm.prank(address(yieldSource));
         asset.transfer(address(69), toLose);
 
         uint256 beforeBalance = asset.balanceOf(_address);
         uint256 expectedOut = _amount - toLose;
+        uint256 requestedAssets = strategy.convertToAssets(strategy.balanceOf(_address));
+        uint256 requiredMaxLoss = _requiredMaxLoss(requestedAssets, expectedOut);
         // Withdraw the full amount before the loss is reported.
         vm.prank(_address);
-        strategy.withdraw(_amount, _address, _address, _lossFactor);
+        strategy.withdraw(requestedAssets, _address, _address, requiredMaxLoss);
 
         uint256 afterBalance = asset.balanceOf(_address);
 
         assertEq(afterBalance - beforeBalance, expectedOut);
         assertEq(strategy.pricePerShare(), wad);
-        checkStrategyTotals(strategy, 0, 0, 0, 0);
+        assertEq(strategy.totalAssets(), minimumLiquidity);
+        assertEq(strategy.totalSupply(), minimumLiquidity);
     }
 
     function test_redeemWithUnrealizedLoss(address _address, uint256 _amount, uint16 _lossFactor) public {
@@ -405,21 +426,24 @@ contract AccountingTest is Setup {
         mintAndDepositIntoStrategy(strategy, _address, _amount);
 
         uint256 toLose = (_amount * _lossFactor) / MAX_BPS;
+        vm.assume(toLose > minimumLiquidity);
         // Simulate a loss.
         vm.prank(address(yieldSource));
         asset.transfer(address(69), toLose);
 
         uint256 beforeBalance = asset.balanceOf(_address);
         uint256 expectedOut = _amount - toLose;
+        uint256 userShares = strategy.balanceOf(_address);
         // Withdraw the full amount before the loss is reported.
         vm.prank(_address);
-        strategy.redeem(_amount, _address, _address);
+        strategy.redeem(userShares, _address, _address);
 
         uint256 afterBalance = asset.balanceOf(_address);
 
         assertEq(afterBalance - beforeBalance, expectedOut);
         assertEq(strategy.pricePerShare(), wad);
-        checkStrategyTotals(strategy, 0, 0, 0, 0);
+        assertEq(strategy.totalAssets(), minimumLiquidity);
+        assertEq(strategy.totalSupply(), minimumLiquidity);
     }
 
     function test_redeemWithUnrealizedLoss_allowNoLoss_reverts(
@@ -434,13 +458,15 @@ contract AccountingTest is Setup {
         mintAndDepositIntoStrategy(strategy, _address, _amount);
 
         uint256 toLose = (_amount * _lossFactor) / MAX_BPS;
+        vm.assume(toLose > minimumLiquidity);
         // Simulate a loss.
         vm.prank(address(yieldSource));
         asset.transfer(address(69), toLose);
 
+        uint256 userShares = strategy.balanceOf(_address);
         vm.expectRevert("too much loss");
         vm.prank(_address);
-        strategy.redeem(_amount, _address, _address, 0);
+        strategy.redeem(userShares, _address, _address, 0);
     }
 
     function test_redeemWithUnrealizedLoss_customMaxLoss(address _address, uint256 _amount, uint16 _lossFactor) public {
@@ -451,27 +477,32 @@ contract AccountingTest is Setup {
         mintAndDepositIntoStrategy(strategy, _address, _amount);
 
         uint256 toLose = (_amount * _lossFactor) / MAX_BPS;
+        vm.assume(toLose > minimumLiquidity);
         // Simulate a loss.
         vm.prank(address(yieldSource));
         asset.transfer(address(69), toLose);
 
         uint256 beforeBalance = asset.balanceOf(_address);
         uint256 expectedOut = _amount - toLose;
+        uint256 userShares = strategy.balanceOf(_address);
+        uint256 requestedAssets = strategy.convertToAssets(userShares);
+        uint256 requiredMaxLoss = _requiredMaxLoss(requestedAssets, expectedOut);
 
         // First set it to just under the expected loss.
         vm.expectRevert("too much loss");
         vm.prank(_address);
-        strategy.redeem(_amount, _address, _address, _lossFactor - 1);
+        strategy.redeem(userShares, _address, _address, requiredMaxLoss - 1);
 
         // Now redeem with the correct loss.
         vm.prank(_address);
-        strategy.redeem(_amount, _address, _address, _lossFactor);
+        strategy.redeem(userShares, _address, _address, requiredMaxLoss);
 
         uint256 afterBalance = asset.balanceOf(_address);
 
         assertEq(afterBalance - beforeBalance, expectedOut);
         assertEq(strategy.pricePerShare(), wad);
-        checkStrategyTotals(strategy, 0, 0, 0, 0);
+        assertEq(strategy.totalAssets(), minimumLiquidity);
+        assertEq(strategy.totalSupply(), minimumLiquidity);
     }
 
     function test_maxUintDeposit_depositsBalance(address _address, uint256 _amount) public {
@@ -492,7 +523,7 @@ contract AccountingTest is Setup {
         checkStrategyTotals(strategy, _amount, _amount, 0, _amount);
 
         assertEq(asset.balanceOf(_address), 0);
-        assertEq(strategy.balanceOf(_address), _amount);
+        assertEq(strategy.balanceOf(_address), _amount - minimumLiquidity);
         assertEq(asset.balanceOf(address(strategy)), 0);
 
         assertEq(asset.balanceOf(address(yieldSource)), _amount);
@@ -543,7 +574,8 @@ contract AccountingTest is Setup {
         // 4. User gets fair share of remaining assets
         uint256 userShares = strategy.balanceOf(user);
         uint256 userAssetValue = strategy.convertToAssets(userShares);
-        assertEq(userAssetValue, 75e18, "User should get fair share of 75 remaining assets");
+        uint256 expectedUserAssetValue = ((80e18 - minimumLiquidity) * 75e18) / 80e18;
+        assertEq(userAssetValue, expectedUserAssetValue, "User should get fair share of 75 remaining assets");
     }
 
     /**

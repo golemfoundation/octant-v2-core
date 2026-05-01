@@ -177,7 +177,11 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         uint256 assetsReceived = vault.redeem(sharesToRedeem, user, user);
         vm.stopPrank();
 
-        assertEq(assetsReceived, depositAmount, "User should only receive original deposit");
+        assertEq(
+            assetsReceived,
+            depositAmount - MINIMUM_LIQUIDITY,
+            "User should receive original deposit less locked liquidity"
+        );
         assertEq(vault.balanceOf(donationAddress), profitAmount, "Donation address should receive profit in shares");
     }
 

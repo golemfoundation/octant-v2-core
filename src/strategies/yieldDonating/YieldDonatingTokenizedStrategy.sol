@@ -22,26 +22,25 @@ import { IBaseStrategy } from "src/core/interfaces/IBaseStrategy.sol";
  * Terminal-state recovery (operator-managed):
  *      - After a catastrophic loss that reduces `totalAssets` to 0 while `totalSupply`
  *        remains positive (all dragon shares burned and residual loss socialized), the
- *        strategy enters a terminal state: `_convertToShares` returns 0 at the new PPS,
- *        so deposit() and mint() revert until accounting is restored by a future report
- *        and conversions no longer round to zero.
- *      - External donations of the underlying asset are not a dedicated recovery
- *        mechanism. A donated balance can raise `totalAssets` when report() records it,
- *        but the value flows proportionally to existing shareholders. At the terminal
- *        ratio the dragon-mint floors to 0, so no new profit shares accrue to the dragon
- *        router or donation receiver.
- *      - This contract does not implement an automatic recovery flow for that state.
- *        Recovery is operator-managed: call `shutdownStrategy` to stop new deposits while
- *        operators assess the position and migrate users to a fresh deployment if needed.
- *        Avoiding a donation-based rescue path prevents reintroducing first-depositor
- *        dust-extraction style issues.
+ *        strategy enters a terminal state: `_convertToShares` returns 0 while tracked
+ *        assets are 0, so deposit() and mint() revert until accounting is restored.
+ *      - A direct donation followed by report() can heal that state. When report()
+ *        observes recovered assets from a zero-asset state, surplus recovery shares
+ *        are minted to the dragon router as donation yield. This restores a usable
+ *        PPS without assigning the recovered surplus to stale dust holders.
  */
 
 contract YieldDonatingTokenizedStrategy is TokenizedStrategy {
     using Math for uint256;
 
-    /// @notice Emitted when profit shares are minted to dragon router
-    /// @param dragonRouter Address receiving minted donation shares
+    /// @notice Permanently locked first shares, following the Uniswap V2 minimum-liquidity pattern
+    uint256 internal constant MINIMUM_LIQUIDITY = 1_000;
+
+    /// @notice Receiver for permanently locked minimum-liquidity shares
+    address internal constant MINIMUM_LIQUIDITY_RECEIVER = address(0xdead);
+
+    /// @notice Emitted when profit or recovery shares are minted
+    /// @param dragonRouter Address receiving minted donation or recovery shares
     /// @param amount Amount of shares minted in share base units
     event DonationMinted(address indexed dragonRouter, uint256 amount);
 
@@ -49,6 +48,118 @@ contract YieldDonatingTokenizedStrategy is TokenizedStrategy {
     /// @param dragonRouter Address whose shares are burned
     /// @param amount Amount of shares burned in share base units
     event DonationBurned(address indexed dragonRouter, uint256 amount);
+
+    /// @inheritdoc TokenizedStrategy
+    function deposit(uint256 assets, address receiver) public virtual override nonReentrant returns (uint256 shares) {
+        StrategyData storage S = _strategyStorage();
+
+        if (assets == type(uint256).max) {
+            assets = S.asset.balanceOf(msg.sender);
+        }
+
+        require(assets <= _maxDepositWithMinimumLiquidity(S, receiver), "ERC4626: deposit more than max");
+        require((shares = _convertToShares(S, assets, Math.Rounding.Floor)) != 0, "ZERO_SHARES");
+
+        _deposit(S, receiver, assets, shares);
+    }
+
+    /// @dev Yield-donating first deposits fund permanently locked shares.
+    function _convertToShares(
+        StrategyData storage S,
+        uint256 assets,
+        Math.Rounding _rounding
+    ) internal view virtual override returns (uint256) {
+        if (_totalSupply(S) == 0) {
+            if (_totalAssets(S) != 0) return 0;
+            return assets > MINIMUM_LIQUIDITY ? assets - MINIMUM_LIQUIDITY : 0;
+        }
+
+        return super._convertToShares(S, assets, _rounding);
+    }
+
+    /// @inheritdoc TokenizedStrategy
+    function previewMint(uint256 shares) public view virtual override returns (uint256 assets) {
+        StrategyData storage S = _strategyStorage();
+        if (_totalSupply(S) == 0 && _totalAssets(S) == 0) return _addMinimumLiquidity(shares);
+
+        return super.previewMint(shares);
+    }
+
+    /// @inheritdoc TokenizedStrategy
+    function mint(uint256 shares, address receiver) public virtual override nonReentrant returns (uint256 assets) {
+        StrategyData storage S = _strategyStorage();
+
+        require(shares <= _maxMint(S, receiver), "ERC4626: mint more than max");
+
+        if (_totalSupply(S) == 0 && _totalAssets(S) == 0) {
+            assets = _addMinimumLiquidity(shares);
+        } else {
+            assets = _convertToAssets(S, shares, Math.Rounding.Ceil);
+        }
+
+        require(assets != 0, "ZERO_ASSETS");
+
+        _deposit(S, receiver, assets, shares);
+    }
+
+    /// @inheritdoc TokenizedStrategy
+    function maxDeposit(address receiver) public view virtual override returns (uint256) {
+        StrategyData storage S = _strategyStorage();
+
+        return _maxDepositWithMinimumLiquidity(S, receiver);
+    }
+
+    /// @inheritdoc TokenizedStrategy
+    function maxMint(address receiver) public view virtual override returns (uint256) {
+        StrategyData storage S = _strategyStorage();
+        if (_isZeroAssetTerminalState(S)) return 0;
+
+        return super.maxMint(receiver);
+    }
+
+    /// @inheritdoc TokenizedStrategy
+    function maxRedeem(address owner) public view virtual override returns (uint256) {
+        StrategyData storage S = _strategyStorage();
+        if (_isZeroAssetTerminalState(S)) return 0;
+
+        return super.maxRedeem(owner);
+    }
+
+    /// @dev Seeds permanently locked shares on the first successful yield-donating deposit/mint.
+    function _deposit(
+        StrategyData storage S,
+        address receiver,
+        uint256 assets,
+        uint256 shares
+    ) internal virtual override {
+        bool seedMinimumLiquidity = _totalSupply(S) == 0;
+
+        super._deposit(S, receiver, assets, shares);
+
+        if (seedMinimumLiquidity) {
+            _mint(S, MINIMUM_LIQUIDITY_RECEIVER, MINIMUM_LIQUIDITY);
+        }
+    }
+
+    function _addMinimumLiquidity(uint256 shares) internal pure returns (uint256) {
+        if (shares == 0) return 0;
+        if (shares > type(uint256).max - MINIMUM_LIQUIDITY) return type(uint256).max;
+        return shares + MINIMUM_LIQUIDITY;
+    }
+
+    function _maxDepositWithMinimumLiquidity(
+        StrategyData storage S,
+        address receiver
+    ) internal view returns (uint256 maxAssets) {
+        maxAssets = _maxDeposit(S, receiver);
+        // Empty yield-donating vaults need enough headroom to fund the dead-share lock.
+        if (_totalSupply(S) == 0 && _totalAssets(S) == 0 && maxAssets <= MINIMUM_LIQUIDITY) return 0;
+    }
+
+    function _isZeroAssetTerminalState(StrategyData storage S) internal view returns (bool) {
+        return _totalSupply(S) != 0 && _totalAssets(S) == 0;
+    }
+
     /**
      * @notice Reports strategy performance and distributes profits as donations
      * @dev Mints profit-derived shares to dragon router when newTotalAssets > oldTotalAssets; on loss, attempts
@@ -90,15 +201,35 @@ contract YieldDonatingTokenizedStrategy is TokenizedStrategy {
             unchecked {
                 profit = newTotalAssets - oldTotalAssets;
             }
-            uint256 sharesToMint = _convertToShares(S, profit, Math.Rounding.Floor);
+            uint256 totalSupply_ = _totalSupply(S);
+            address sharesReceiver = _dragonRouter;
+            uint256 sharesToMint = 0;
+
+            if (totalSupply_ == 0) {
+                // Ghost collateral has assets but no share owner. Lock matching
+                // shares to the strategy so later deposits do not get first-
+                // depositor pricing against pre-existing assets.
+                sharesReceiver = address(this);
+                sharesToMint = newTotalAssets;
+            } else if (oldTotalAssets == 0) {
+                // Recovery from a zero-asset state should not let stale dust
+                // capture the surplus; normal conversion cannot price from zero.
+                // Existing supply receives up to 1 asset/share, surplus goes to dragon.
+                if (newTotalAssets > totalSupply_) {
+                    unchecked {
+                        sharesToMint = newTotalAssets - totalSupply_;
+                    }
+                }
+            } else {
+                sharesToMint = _convertToShares(S, profit, Math.Rounding.Floor);
+            }
 
             // Floor rounding can map dust profit to zero shares; skip the no-op mint and
             // DonationMinted emission so off-chain indexers do not see a donation event
             // without a corresponding supply change.
             if (sharesToMint != 0) {
-                // mint the shares to the dragon router
-                _mint(S, _dragonRouter, sharesToMint);
-                emit DonationMinted(_dragonRouter, sharesToMint);
+                _mint(S, sharesReceiver, sharesToMint);
+                emit DonationMinted(sharesReceiver, sharesToMint);
             }
         } else {
             unchecked {
@@ -109,6 +240,11 @@ contract YieldDonatingTokenizedStrategy is TokenizedStrategy {
                 // Handle loss protection
                 _handleDragonLossProtection(S, loss);
             }
+        }
+
+        if (_totalSupply(S) == 0 && newTotalAssets != 0) {
+            _mint(S, address(this), newTotalAssets);
+            emit DonationMinted(address(this), newTotalAssets);
         }
 
         // Update the new total assets value

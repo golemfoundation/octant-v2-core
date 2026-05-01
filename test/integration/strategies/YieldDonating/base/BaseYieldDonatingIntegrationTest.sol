@@ -22,6 +22,9 @@ abstract contract BaseYieldDonatingIntegrationTest is BaseIntegrationTest {
     /// @notice Implementation of YieldDonatingTokenizedStrategy
     YieldDonatingTokenizedStrategy public implementation;
 
+    /// @notice Permanent first-deposit share lock used by yield-donating strategies.
+    uint256 internal constant MINIMUM_LIQUIDITY = 1_000;
+
     // ========== ABSTRACT METHODS ==========
 
     /// @notice Returns the compounder/staking vault address for mocking
@@ -257,12 +260,14 @@ abstract contract BaseYieldDonatingIntegrationTest is BaseIntegrationTest {
         uint256 user2Assets = vault.redeem(user2Shares, user2, user2);
         vm.stopPrank();
 
-        // Users should receive approximately their original deposits (profit goes to donation address)
-        uint256 user1ProfitPercentage = ((user1Assets - depositAmount1) * 1e18) / depositAmount1;
-        uint256 user2ProfitPercentage = ((user2Assets - depositAmount2) * 1e18) / depositAmount2;
-
-        assertEq(user1ProfitPercentage, 0, "User 1 should have received no profit");
-        assertEq(user1ProfitPercentage, user2ProfitPercentage, "Users should have received no profit");
+        // Users should receive no donated profit. The first depositor permanently funds MINIMUM_LIQUIDITY.
+        assertApproxEqAbs(
+            user1Assets,
+            depositAmount1 - MINIMUM_LIQUIDITY,
+            2,
+            "User 1 should receive deposit less locked liquidity"
+        );
+        assertApproxEqAbs(user2Assets, depositAmount2, 2, "User 2 should receive original deposit");
 
         // Check donation address received profit shares
         uint256 donationShares = vault.balanceOf(donationAddress);

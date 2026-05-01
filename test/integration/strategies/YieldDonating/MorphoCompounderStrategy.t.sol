@@ -454,10 +454,10 @@ contract MorphoCompounderDonatingStrategyTest is BaseYieldDonatingIntegrationTes
         }
 
         if (shouldUser1Withdraw && shouldUser2Withdraw) {
-            assertLt(
+            assertLe(
                 IERC4626(address(strategy)).totalAssets(),
-                10,
-                "Strategy should be nearly empty after all withdrawals"
+                MINIMUM_LIQUIDITY + 10,
+                "Strategy should only retain minimum liquidity after all withdrawals"
             );
         }
     }

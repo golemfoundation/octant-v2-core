@@ -456,10 +456,11 @@ contract YearnV3DonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         }
 
         if (shouldUser1Withdraw && shouldUser2Withdraw) {
-            assertLt(
+            uint256 expectedRemaining = profit <= totalDeposits ? profit + MINIMUM_LIQUIDITY : MINIMUM_LIQUIDITY;
+            assertLe(
                 IERC4626(address(strategy)).totalAssets(),
-                1000e6,
-                "Strategy should be nearly empty after all withdrawals"
+                expectedRemaining + 10,
+                "Strategy should only retain donation profit and minimum liquidity"
             );
         }
     }
