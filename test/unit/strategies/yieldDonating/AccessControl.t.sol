@@ -486,7 +486,7 @@ contract AccessControlTest is Setup {
         strategy.redeem(userShares, user, user);
 
         // Should have received their funds back
-        assertEq(asset.balanceOf(user), _amount);
+        assertEq(asset.balanceOf(user), _amount - minimumLiquidity);
     }
 
     function test_reportingDuringPendingChange() public {

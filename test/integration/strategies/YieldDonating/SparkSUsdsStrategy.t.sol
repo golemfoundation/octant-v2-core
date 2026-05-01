@@ -345,7 +345,12 @@ contract SparkSUsdsDonatingStrategyTest is BaseYieldDonatingIntegrationTest {
         uint256 received = vault.redeem(redeemable, user, user);
         vm.stopPrank();
 
-        assertApproxEqAbs(received, amount, 2, "User should recover the deposited amount within rounding");
+        assertApproxEqAbs(
+            received,
+            amount - MINIMUM_LIQUIDITY,
+            2,
+            "User should recover deposited amount less locked liquidity"
+        );
         assertLe(vault.balanceOf(user), 2, "User should hold at most dust shares after full redeem");
     }
 

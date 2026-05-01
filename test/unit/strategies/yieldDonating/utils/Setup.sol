@@ -37,6 +37,8 @@ contract Setup is Test {
     uint256 public decimals = 18;
     uint256 public MAX_BPS = 10_000;
     uint256 public wad = 10 ** decimals;
+    uint256 public minimumLiquidity = 1_000;
+    address public deadShares = address(0xdead);
     // Fuzz from $0.01 of 1e6 stable coins up to 1 trillion of a 1e18 coin
     uint256 public maxFuzzAmount = 1e30;
     uint256 public minFuzzAmount = 10_000;

@@ -528,7 +528,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
 
         // The overloaded maxWithdraw that takes maxLoss should also work
         uint256 maxW = ITokenizedStrategy(address(strategy)).maxWithdraw(user, 0);
-        assertEq(maxW, 10e18);
+        assertEq(maxW, 10e18 - 1_000);
     }
 
     // --- maxRedeem with maxLoss param ---
@@ -541,7 +541,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         vm.stopPrank();
 
         uint256 maxR = ITokenizedStrategy(address(strategy)).maxRedeem(user, 0);
-        assertEq(maxR, 10e18);
+        assertEq(maxR, 10e18 - 1_000);
     }
 
     // --- redeem more than max reverts ---
@@ -687,8 +687,8 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         vm.stopPrank();
     }
 
-    // --- Redeem zero assets (line 769, branch 0) ---
-    // totalAssets == 0 while totalSupply > 0 => _convertToAssets returns 0
+    // --- Redeem blocked when no assets are redeemable ---
+    // totalAssets == 0 while totalSupply > 0 => maxRedeem returns 0
 
     function test_redeem_zeroAssets_reverts() public {
         MockTokenizedStrategyWithLoss lossImpl = _freshLossImpl();
@@ -706,12 +706,15 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         // Mint shares directly (totalSupply > 0, totalAssets == 0)
         lossImpl.mintShares(user, 10e18);
 
+        assertEq(lossImpl.maxRedeem(user), 0, "maxRedeem");
+        assertEq(lossImpl.maxRedeem(user, 10000), 0, "maxRedeem overload");
+
         vm.prank(user);
-        vm.expectRevert("ZERO_ASSETS");
+        vm.expectRevert("ERC4626: redeem more than max");
         lossImpl.redeem(5e18, user, user, 10000);
     }
 
-    // --- Mint zero assets => ZERO_ASSETS (line 685, branch 0) ---
+    // --- Mint blocked when no assets can back minted shares ---
 
     function test_mint_zeroAssets_reverts() public {
         MockTokenizedStrategyWithLoss lossImpl = _freshLossImpl();
@@ -729,8 +732,10 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         // totalSupply > 0 but totalAssets == 0 => _convertToAssets returns 0
         lossImpl.mintShares(user, 10e18);
 
+        assertEq(lossImpl.maxMint(user), 0, "maxMint");
+
         vm.prank(user);
-        vm.expectRevert("ZERO_ASSETS");
+        vm.expectRevert("ERC4626: mint more than max");
         lossImpl.mint(1e18, user);
     }
 

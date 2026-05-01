@@ -15,15 +15,16 @@ contract ShareTransferTest is Setup {
 
     function test_transfer_balancesUpdate(uint256 _amount, uint256 _transferAmount) public {
         _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
-        _transferAmount = bound(_transferAmount, 1, _amount);
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
+        uint256 userShares = _amount - minimumLiquidity;
+        _transferAmount = bound(_transferAmount, 1, userShares);
 
         vm.prank(user);
         bool success = strategy.transfer(user2, _transferAmount);
 
         assertTrue(success, "transfer should return true");
-        assertEq(strategy.balanceOf(user), _amount - _transferAmount, "sender balance");
+        assertEq(strategy.balanceOf(user), userShares - _transferAmount, "sender balance");
         assertEq(strategy.balanceOf(user2), _transferAmount, "receiver balance");
     }
 
@@ -31,22 +32,24 @@ contract ShareTransferTest is Setup {
         _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
+        uint256 userShares = _amount - minimumLiquidity;
 
         vm.prank(user);
-        strategy.transfer(user2, _amount);
+        strategy.transfer(user2, userShares);
 
         assertEq(strategy.balanceOf(user), 0, "sender should have 0");
-        assertEq(strategy.balanceOf(user2), _amount, "receiver should have full amount");
+        assertEq(strategy.balanceOf(user2), userShares, "receiver should have full amount");
     }
 
     function test_transfer_moreThanBalance_reverts(uint256 _amount) public {
         _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
+        uint256 userShares = _amount - minimumLiquidity;
 
         vm.prank(user);
         vm.expectRevert();
-        strategy.transfer(user2, _amount + 1);
+        strategy.transfer(user2, userShares + 1);
     }
 
     // ==================== Transfer to Dragon Router ====================
@@ -87,9 +90,10 @@ contract ShareTransferTest is Setup {
 
     function test_transferFrom_withApproval(uint256 _amount, uint256 _transferAmount) public {
         _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
-        _transferAmount = bound(_transferAmount, 1, _amount);
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
+        uint256 userShares = _amount - minimumLiquidity;
+        _transferAmount = bound(_transferAmount, 1, userShares);
 
         // User approves user2
         vm.prank(user);
@@ -102,7 +106,7 @@ contract ShareTransferTest is Setup {
         bool success = strategy.transferFrom(user, user2, _transferAmount);
 
         assertTrue(success, "transferFrom should return true");
-        assertEq(strategy.balanceOf(user), _amount - _transferAmount, "sender balance");
+        assertEq(strategy.balanceOf(user), userShares - _transferAmount, "sender balance");
         assertEq(strategy.balanceOf(user2), _transferAmount, "receiver balance");
         assertEq(strategy.allowance(user, user2), 0, "allowance should be consumed");
     }
@@ -121,14 +125,15 @@ contract ShareTransferTest is Setup {
         _amount = bound(_amount, minFuzzAmount, maxFuzzAmount);
 
         mintAndDepositIntoStrategy(strategy, user, _amount);
+        uint256 userShares = _amount - minimumLiquidity;
 
         // Approve less than transfer amount
         vm.prank(user);
-        strategy.approve(user2, _amount / 2);
+        strategy.approve(user2, userShares / 2);
 
         vm.prank(user2);
         vm.expectRevert("ERC20: insufficient allowance");
-        strategy.transferFrom(user, user2, _amount);
+        strategy.transferFrom(user, user2, userShares);
     }
 
     // ==================== Approve ====================
@@ -200,7 +205,7 @@ contract ShareTransferTest is Setup {
         vm.prank(user);
         strategy.transfer(user2, 0);
 
-        assertEq(strategy.balanceOf(user), _amount, "sender balance unchanged");
+        assertEq(strategy.balanceOf(user), _amount - minimumLiquidity, "sender balance unchanged");
         assertEq(strategy.balanceOf(user2), 0, "receiver balance still 0");
     }
 

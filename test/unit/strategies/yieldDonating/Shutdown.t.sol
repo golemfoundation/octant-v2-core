@@ -60,7 +60,11 @@ contract ShutdownTest is Setup {
         vm.prank(user);
         strategy.redeem(userShares, user, user);
 
-        assertEq(asset.balanceOf(user) - balBefore, _amount, "user should get full deposit back");
+        assertEq(
+            asset.balanceOf(user) - balBefore,
+            _amount - minimumLiquidity,
+            "user should get deposit less locked liquidity"
+        );
         assertEq(strategy.balanceOf(user), 0, "user should have 0 shares");
     }
 
@@ -217,7 +221,7 @@ contract ShutdownTest is Setup {
         vm.prank(user);
         strategy.redeem(userShares, user, user);
 
-        assertEq(asset.balanceOf(user), _amount, "user should get full deposit back");
+        assertEq(asset.balanceOf(user), _amount - minimumLiquidity, "user should get deposit less locked liquidity");
         assertEq(strategy.balanceOf(user), 0, "user should have 0 shares");
     }
 
@@ -238,7 +242,7 @@ contract ShutdownTest is Setup {
         uint256 user1Shares = strategy.balanceOf(user);
         vm.prank(user);
         strategy.redeem(user1Shares, user, user);
-        assertEq(asset.balanceOf(user), amount1, "user1 should get deposit back");
+        assertEq(asset.balanceOf(user), amount1 - minimumLiquidity, "user1 should get deposit less locked liquidity");
 
         uint256 user2Shares = strategy.balanceOf(user2);
         vm.prank(user2);

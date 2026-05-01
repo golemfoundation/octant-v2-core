@@ -17,13 +17,18 @@ struct YDProofState {
 /**
  * @title YDStrategyTest
  * @notice Kontrol formal verification proofs for YieldDonatingTokenizedStrategy
- * @dev Inherits 7 common proofs from StrategyBaseTest and adds 4 YD-specific proofs:
+ * @dev Inherits 7 common proofs from StrategyBaseTest and adds 6 YD-specific proofs:
  *      - testReportProfit: shares minted to dragon, PPS non-decreasing
+ *      - testFirstDepositSeedsMinimumLiquidity: first deposit locks dead shares
+ *      - testReportLocksSharesForZeroSupplyGhostCollateral: report heals zero-supply ghost collateral
  *      - testReportLossInsufficientDragon: partial burn, PPS impact bounded
  *      - testSharesRedeemableAfterDepositYD: deposit produces redeemable shares
  *      - testConversionConsistencyYD: round-trip does not create value
  */
 contract YDStrategyTest is StrategyBaseTest, YDSetup {
+    uint256 internal constant MINIMUM_LIQUIDITY = 1_000;
+    address internal constant MINIMUM_LIQUIDITY_RECEIVER = address(0xdead);
+
     YDProofState private preState;
     YDProofState private postState;
 
@@ -96,6 +101,10 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
         );
     }
 
+    function _clearStrategyBalance(address account) internal {
+        _storeMappingUInt256(address(strategy), TS_BALANCES_SLOT, uint256(uint160(account)), 0, 0);
+    }
+
     /*//////////////////////////////////////////////////////////////
                     INVARIANTS
     //////////////////////////////////////////////////////////////*/
@@ -165,6 +174,78 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
         _establish(Mode.Assert, postState.dragonBalance >= preState.dragonBalance);
         // totalSupply increased
         _establish(Mode.Assert, postState.totalSupply >= preState.totalSupply);
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    YD-SPECIFIC: FIRST DEPOSIT MINIMUM LIQUIDITY
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice The first yield-donating deposit permanently locks 1,000 shares
+    ///         and leaves totalSupply == totalAssets.
+    function testFirstDepositSeedsMinimumLiquidity() public {
+        _assumeNonReentrant();
+
+        uint256 assets = 100 ether;
+        address receiver = makeAddr("MINIMUM_LIQUIDITY_RECEIVER");
+
+        _storeUInt256(address(strategy), TS_TOTAL_SUPPLY_SLOT, 0);
+        _storeUInt256(address(strategy), TS_TOTAL_ASSETS_SLOT, 0);
+        _clearStrategyBalance(receiver);
+        _clearStrategyBalance(MINIMUM_LIQUIDITY_RECEIVER);
+        _storeData(address(strategy), TS_FLAGS_SLOT, TS_SHUTDOWN_OFFSET, TS_SHUTDOWN_WIDTH, 0);
+
+        address depositor = makeAddr("MINIMUM_LIQUIDITY_DEPOSITOR");
+        _storeMappingUInt256(_asset, ERC20_BALANCES_SLOT, uint256(uint160(depositor)), 0, assets);
+        _storeMappingUInt256(_asset, ERC20_BALANCES_SLOT, uint256(uint160(address(strategy))), 0, 0);
+
+        vm.prank(depositor);
+        (bool ok, ) = _asset.call(abi.encodeWithSignature("approve(address,uint256)", address(strategy), assets));
+        require(ok);
+
+        vm.prank(depositor);
+        uint256 shares = iStrategy.deposit(assets, receiver);
+
+        assertEq(shares, assets - MINIMUM_LIQUIDITY);
+        assertEq(_loadUInt256(address(strategy), TS_TOTAL_SUPPLY_SLOT), assets);
+        assertEq(_loadUInt256(address(strategy), TS_TOTAL_ASSETS_SLOT), assets);
+        assertEq(
+            _loadMappingUInt256(address(strategy), TS_BALANCES_SLOT, uint256(uint160(receiver)), 0),
+            assets - MINIMUM_LIQUIDITY
+        );
+        assertEq(
+            _loadMappingUInt256(address(strategy), TS_BALANCES_SLOT, uint256(uint160(MINIMUM_LIQUIDITY_RECEIVER)), 0),
+            MINIMUM_LIQUIDITY
+        );
+    }
+
+    /*//////////////////////////////////////////////////////////////
+                    YD-SPECIFIC: GHOST COLLATERAL RECOVERY
+    //////////////////////////////////////////////////////////////*/
+
+    /// @notice If accounting reaches totalSupply == 0 while assets are positive,
+    ///         report() locks matching recovery shares to the strategy itself.
+    function testReportLocksSharesForZeroSupplyGhostCollateral() public {
+        _assumeNonReentrant();
+
+        uint256 oldTotalAssets = 75 ether;
+        uint256 newTotalAssets = 100 ether;
+
+        _storeData(address(strategy), HC_SLOT, HC_DO_HEALTH_CHECK_OFFSET, HC_DO_HEALTH_CHECK_WIDTH, 0);
+        _storeUInt256(address(strategy), TS_TOTAL_SUPPLY_SLOT, 0);
+        _storeUInt256(address(strategy), TS_TOTAL_ASSETS_SLOT, oldTotalAssets);
+        _storeUInt256(address(strategy), MOCK_NEXT_TOTAL_ASSETS_SLOT, newTotalAssets);
+        _clearStrategyBalance(address(strategy));
+        _clearStrategyBalance(_dragonRouter);
+
+        vm.prank(_keeper);
+        iStrategy.report();
+
+        assertEq(_loadUInt256(address(strategy), TS_TOTAL_ASSETS_SLOT), newTotalAssets);
+        assertEq(_loadUInt256(address(strategy), TS_TOTAL_SUPPLY_SLOT), newTotalAssets);
+        assertEq(
+            _loadMappingUInt256(address(strategy), TS_BALANCES_SLOT, uint256(uint160(address(strategy))), 0),
+            newTotalAssets
+        );
     }
 
     /*//////////////////////////////////////////////////////////////

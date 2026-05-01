@@ -23,7 +23,7 @@ contract MultiUserTest is Setup {
         mintAndDepositIntoStrategy(strategy, user, _amount);
         mintAndDepositIntoStrategy(strategy, user2, _amount);
 
-        assertEq(strategy.balanceOf(user), _amount, "user1 shares");
+        assertEq(strategy.balanceOf(user), _amount - minimumLiquidity, "user1 shares");
         assertEq(strategy.balanceOf(user2), _amount, "user2 shares");
         assertEq(strategy.pricePerShare(), wad, "PPS should be 1:1");
 
@@ -90,7 +90,11 @@ contract MultiUserTest is Setup {
         strategy.redeem(userShares, user, user);
 
         // User gets back their original deposit (not the profit)
-        assertEq(asset.balanceOf(user) - balBefore, _amount, "user should get original deposit back");
+        assertEq(
+            asset.balanceOf(user) - balBefore,
+            _amount - minimumLiquidity,
+            "user should get original deposit less locked liquidity"
+        );
     }
 
     // ==================== Dragon Router Redeems Shares ====================
@@ -182,13 +186,17 @@ contract MultiUserTest is Setup {
         uint256 user1Shares = strategy.balanceOf(user);
         uint256 user2Shares = strategy.balanceOf(user2);
 
-        assertEq(user1Shares, smallAmount, "small depositor shares");
+        assertEq(user1Shares, smallAmount - minimumLiquidity, "small depositor shares");
         assertEq(user2Shares, largeAmount, "large depositor shares");
 
         // Both can redeem for their original amount
         vm.prank(user);
         strategy.redeem(user1Shares, user, user);
-        assertEq(asset.balanceOf(user), smallAmount, "small depositor gets deposit back");
+        assertEq(
+            asset.balanceOf(user),
+            smallAmount - minimumLiquidity,
+            "small depositor gets deposit less locked liquidity"
+        );
 
         vm.prank(user2);
         strategy.redeem(user2Shares, user2, user2);
@@ -220,7 +228,7 @@ contract MultiUserTest is Setup {
         mintAndDepositIntoStrategy(strategy, user3, amount);
 
         // All users should have the same PPS since yield donating keeps PPS at 1:1
-        assertEq(strategy.balanceOf(user), amount, "user1 shares");
+        assertEq(strategy.balanceOf(user), amount - minimumLiquidity, "user1 shares");
         assertEq(strategy.balanceOf(user2), amount, "user2 shares");
         assertEq(strategy.balanceOf(user3), amount, "user3 shares");
         assertEq(strategy.pricePerShare(), wad, "PPS should be 1:1");
@@ -253,7 +261,7 @@ contract MultiUserTest is Setup {
 
         vm.prank(user);
         strategy.withdraw(user1Assets, user, user);
-        assertEq(asset.balanceOf(user), _amount1, "user1 should get back deposit");
+        assertEq(asset.balanceOf(user), _amount1 - minimumLiquidity, "user1 should get deposit less locked liquidity");
 
         uint256 user2Shares = strategy.balanceOf(user2);
         uint256 user2Assets = strategy.convertToAssets(user2Shares);
