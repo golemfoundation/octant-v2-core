@@ -6,16 +6,8 @@ import { Enum } from "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { NATIVE_TOKEN } from "src/constants.sol";
 import { ILinearAllowanceSingleton } from "src/zodiac-core/interfaces/ILinearAllowanceSingleton.sol";
+import { ISafe } from "src/zodiac-core/interfaces/Safe.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
-
-interface ISafe {
-    function execTransactionFromModule(
-        address to,
-        uint256 value,
-        bytes memory data,
-        Enum.Operation operation
-    ) external returns (bool success);
-}
 
 /**
  * @title LinearAllowanceSingletonForGnosisSafe
@@ -250,10 +242,10 @@ contract LinearAllowanceSingletonForGnosisSafe is ILinearAllowanceSingleton, Ree
 
         bool success;
         if (token == NATIVE_TOKEN) {
-            success = ISafe(payable(safe)).execTransactionFromModule(to, amount, "", Enum.Operation.Call);
+            success = ISafe(payable(safe)).execTransactionFromModule(to, amount, "", uint8(Enum.Operation.Call));
         } else {
             bytes memory data = abi.encodeCall(IERC20.transfer, (to, amount));
-            success = ISafe(payable(safe)).execTransactionFromModule(token, 0, data, Enum.Operation.Call);
+            success = ISafe(payable(safe)).execTransactionFromModule(token, 0, data, uint8(Enum.Operation.Call));
         }
 
         // Explicit success check for defense-in-depth

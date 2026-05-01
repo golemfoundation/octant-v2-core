@@ -3,6 +3,7 @@ pragma solidity >=0.8.25;
 
 import { AaveV3Strategy } from "src/strategies/yieldDonating/AaveV3Strategy.sol";
 import { BaseStrategyFactory } from "src/factories/BaseStrategyFactory.sol";
+import { USDC_MAINNET } from "src/constants.sol";
 
 /**
  * @title AaveV3StrategyFactory
@@ -26,8 +27,8 @@ contract AaveV3StrategyFactory is BaseStrategyFactory {
     ///      the factory surface small and to prevent operator misconfiguration.
     address public constant AAVE_REWARDS_CONTROLLER = 0x8164Cc65827dcFe994AB23944CBC90e0aa80bFcb;
 
-    /// @notice USDC token address (0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 on Ethereum mainnet)
-    address public constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    /// @notice USDC token address on Ethereum mainnet
+    address public constant USDC = USDC_MAINNET;
 
     /// @notice Emitted on successful strategy deployment
     /// @param deployer Transaction sender performing deployment
