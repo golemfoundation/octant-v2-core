@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.10](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.9..1.2.0-develop.10) - 2026-05-01
+
+### Bug Fixes
+
+- **(strategies)** enforce pending burn reporting - ([63d88a2](https://github.com/golemfoundation/octant-v2-core/commit/63d88a2e248e8b744fd590e376600d8f3b2e57c1)) - Ferit
+
+
 ## [1.2.0-develop.9](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.8..1.2.0-develop.9) - 2026-05-01
 
 ### Bug Fixes
