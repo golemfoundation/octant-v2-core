@@ -6,10 +6,6 @@ pragma solidity ^0.8.25;
 
 error Unauthorized();
 error ZeroAddress();
-error ReentrancyGuard__ReentrantCall();
-error ZeroShares();
-error ZeroAssets();
-error ERC20InsufficientBalance();
 error AlreadyInitialized();
 
 error NotInAllowset(address user);
@@ -41,5 +37,3 @@ error TokenizedStrategy__RedeemMoreThanMax();
 error TokenizedStrategy__NotPendingManagement();
 error TokenizedStrategy__StrategyNotInShutdown();
 error TokenizedStrategy__TooMuchLoss();
-
-error BaseStrategy__NotSelf();

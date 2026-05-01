@@ -163,7 +163,7 @@ Shared utilities and helper contracts:
 - **constants.sol**: Protocol-wide constants and parameters
 - **errors.sol**: Shared error definitions for gas efficiency
 - **interfaces/**: Global interfaces not specific to any module
-  - `IAccountant.sol`, `IDragon.sol`, `IEvents.sol`, `IFactory.sol`, etc.
+  - `IAccountant.sol`, `IEvents.sol`, etc.
   - `deprecated/`: Legacy interfaces maintained for compatibility
 
 ### Test Organization (`test/`)
