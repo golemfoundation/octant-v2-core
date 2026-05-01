@@ -1,11 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity >=0.8.18;
 
-import { Test } from "forge-std/Test.sol";
-import { Setup, IMockStrategy } from "test/unit/strategies/yieldSkimming/utils/Setup.sol";
+import { Setup } from "test/unit/strategies/yieldSkimming/utils/Setup.sol";
 import { IYieldSkimmingStrategy } from "src/strategies/yieldSkimming/IYieldSkimmingStrategy.sol";
 import { MockStrategySkimming } from "test/mocks/core/tokenized-strategies/MockStrategySkimming.sol";
-import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 
 /**
  * @title HighSeverityPoC
@@ -284,26 +282,6 @@ contract HighSeverityPoC is Setup {
             vm.prank(keeper);
             strategy.report();
         }
-    }
-
-    // =========================================================================
-    // CH-2: Zero slippage + Zero deadline = Full MEV extraction
-    // =========================================================================
-
-    /**
-     * @notice CH-2: This is a configuration-level test. SkyCompounderStrategy defaults
-     *         minAmountOut=0 and uses block.timestamp as deadline, providing zero MEV protection.
-     *         We verify the default configuration is vulnerable by checking the code pattern.
-     *         (No on-chain execution needed - this is a configuration/design verification)
-     */
-    function test_POC_CH2_DefaultConfigZeroMEVProtection() public pure {
-        // CH-2 is a configuration issue:
-        // - SkyCompounderStrategy.minAmountOut defaults to 0
-        // - _swapFrom uses block.timestamp as deadline
-        // Both are verified by code inspection. A full PoC would require
-        // forking mainnet with Uniswap pools, which is out of scope for unit tests.
-        // Evidence: CODE-TRACE verified by reading SkyCompounderStrategy source.
-        assertTrue(true, "Configuration verified by code inspection");
     }
 
     // =========================================================================

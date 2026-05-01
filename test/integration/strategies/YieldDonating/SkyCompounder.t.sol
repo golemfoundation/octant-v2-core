@@ -112,6 +112,7 @@ contract SkyCompounderTest is BaseYieldDonatingIntegrationTest {
         assertEq(strategy.staking(), SkyCompounderTestConfig.STAKING, "Staking address incorrect");
         assertEq(strategy.claimRewards(), true, "Claim rewards should default to true");
         assertEq(strategy.useUniV3(), false, "Use UniV3 should default to false");
+        assertEq(strategy.minAmountOut(), 0, "Min amount out should default to zero");
 
         // Verify that the strategy was recorded in the factory
         (address deployerAddress, , string memory name, address stratDonationAddress) = factory.strategies(

@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity >=0.8.18;
 
-import { Test } from "forge-std/Test.sol";
-import { Setup, IMockStrategy } from "test/unit/strategies/yieldSkimming/utils/Setup.sol";
+import { Setup } from "test/unit/strategies/yieldSkimming/utils/Setup.sol";
 import { IYieldSkimmingStrategy } from "src/strategies/yieldSkimming/IYieldSkimmingStrategy.sol";
 import { MockStrategySkimming } from "test/mocks/core/tokenized-strategies/MockStrategySkimming.sol";
 import { YieldForwarder } from "src/core/YieldForwarder.sol";
@@ -101,75 +100,6 @@ contract MediumSeverityPoC is Setup {
         // In this test setup the old dragon balance adds to user debt
         // while alice's transfer-out didn't reduce her debt
         assertGt(userDebtAfter, aliceShares, "User debt inflated above actual user shares - phantom debt present");
-
-        // Log values for documentation
-        assertTrue(true, "H-4a: Phantom user debt confirmed via finalizeDragonRouterChange");
-    }
-
-    /**
-     * @notice H-4b: When newDragonBalance > totalDebtOwedToUserInAssetValue (possible when
-     *         userDebt has been reduced by floor events), step 2 of finalizeDragonRouterChange
-     *         floors userDebt to 0, losing accurate user debt tracking.
-     */
-    function test_POC_H4b_UserDebtZeroed_WhenNewDragonBalanceLarge() public {
-        vm.prank(management);
-        strategy.setEnableBurning(true);
-
-        // 1) Deposit small amount so userDebt is small
-        mintAndDepositIntoStrategy(strategy, alice, 5e18);
-
-        // 2) Profit: rate -> 2.0
-        MockStrategySkimming(address(strategy)).updateExchangeRate(2e18);
-        vm.prank(keeper);
-        strategy.report();
-
-        // state: userDebt=5e18, dragonDebt=5e18
-
-        // 3) Alice redeems most shares to simulate user debt becoming very small
-        //    (This also demonstrates H-2 behavior)
-        uint256 aliceShares = strategy.balanceOf(alice);
-        if (aliceShares > 1e15) {
-            vm.prank(alice);
-            strategy.redeem(aliceShares - 1e15, alice, alice, 10_000);
-        }
-
-        // 4) Set a new dragon router that already holds many shares (from separate mint/transfer)
-        //    To set up: have bob hold shares as the pendingDragonRouter
-        address newDragon = makeAddr("newDragon");
-        // Give newDragon a large share balance directly (simulate shares pre-transferred)
-        mintAndDepositIntoStrategy(strategy, newDragon, 50e18);
-
-        // Update rate back to 1.0 for clarity before the router change
-        MockStrategySkimming(address(strategy)).updateExchangeRate(1e18);
-        vm.prank(keeper);
-        strategy.report();
-
-        // 5) Set newDragon as pending dragon router
-        vm.prank(management);
-        strategy.setDragonRouter(newDragon);
-
-        vm.warp(block.timestamp + 14 days + 1);
-
-        uint256 userDebtBefore = IYieldSkimmingStrategy(address(strategy)).gettotalDebtOwedToUserInAssetValue();
-        uint256 newDragonBalance = strategy.balanceOf(newDragon);
-
-        // Finalize: step 2 subtracts newDragonBalance from userDebt
-        // If newDragonBalance > userDebt, userDebt is floored to 0
-        strategy.finalizeDragonRouterChange();
-
-        uint256 userDebtAfter = IYieldSkimmingStrategy(address(strategy)).gettotalDebtOwedToUserInAssetValue();
-
-        if (newDragonBalance >= userDebtBefore) {
-            // User debt was zeroed even though alice still has shares
-            uint256 aliceSharesFinal = strategy.balanceOf(alice);
-            if (aliceSharesFinal > 0) {
-                assertEq(userDebtAfter, 0, "H-4b: User debt zeroed by floor - confirmed");
-                // Now vault reports as solvent (userDebt=0) even if underlying value < original deposited
-                bool insolvent = IYieldSkimmingStrategy(address(strategy)).isVaultInsolvent();
-                assertFalse(insolvent, "H-4b: After zeroing, vault appears solvent regardless of real state");
-            }
-        }
-        assertTrue(true, "H-4b code path executed");
     }
 
     // =========================================================================
@@ -247,13 +177,6 @@ contract MediumSeverityPoC is Setup {
         // Bob transfers to dragon - this calls _rebalanceDebtOnDragonTransfer which
         // INCREASES dragonDebt, so this path doesn't cause underflow via bob transfer.
         // The underflow arises specifically through finalization desync (H-4/H-3 paths).
-
-        // CODE-TRACE: The underflow is triggered when:
-        // dragonBalance (50e18 from profit) > dragonDebt (e.g., 30e18 after partial rebalance)
-        // and lossValue > dragonBalance
-        // => dragonBurn = dragonBalance = 50e18, but dragonDebt = 30e18
-        // => 30e18 - 50e18 UNDERFLOWS (arithmetic panic, reverts permanently)
-        assertTrue(true, "H-5: Underflow path verified by code trace [CODE-TRACE]");
     }
 
     // =========================================================================
@@ -300,91 +223,6 @@ contract MediumSeverityPoC is Setup {
         // even though they weren't yield from the strategy's operations
         uint256 dragonProfit = dragonAfter - dragonBefore;
         assertGt(dragonProfit, 0, "H-6: Donation converted to dragon profit confirmed");
-    }
-
-    // =========================================================================
-    // H-7: block.timestamp Deadline Provides Zero MEV Protection (CODE-TRACE)
-    // Root: block.timestamp as deadline always passes; validators can hold tx
-    // =========================================================================
-
-    /**
-     * @notice H-7: Code-trace verification. UniswapV3Swapper._swapFrom() and
-     *         SkyCompounderStrategy._uniV2swapFrom() both use block.timestamp as
-     *         deadline, providing zero time-based MEV protection.
-     */
-    function test_POC_H7_BlockTimestampDeadlineZeroMEVProtection() public pure {
-        // CODE-TRACE: UniswapV3Swapper.sol L64/L75 (direct path and multi-hop path):
-        //   ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams(
-        //       _from, _to, uniFees[_from][_to], address(this),
-        //       block.timestamp,   // <-- deadline == current block timestamp, always valid
-        //       _amountIn, _minAmountOut, 0
-        //   );
-        //
-        // SkyCompounderStrategy.sol L283:
-        //   IUniswapV2Router02(UNIV2ROUTER).swapExactTokensForTokens(
-        //       _amountIn, _minAmountOut, path, address(this),
-        //       block.timestamp    // <-- same issue on UniV2
-        //   );
-        //
-        // A validator/builder can include the transaction in any block without
-        // deadline expiry risk. Combined with minAmountOut=0 (H-8), the swap
-        // can be sandwiched with maximum extraction in the same block.
-        assertTrue(true, "H-7: block.timestamp deadline verified by code inspection [CODE-TRACE]");
-    }
-
-    // =========================================================================
-    // H-8: minAmountOut Defaults to 0 — Harvest Fully Sandwichable (CODE-TRACE)
-    // Root: SkyCompounderStrategy.minAmountOut defaults to 0
-    // =========================================================================
-
-    /**
-     * @notice H-8: Code-trace verification. minAmountOut is declared as a state variable
-     *         with no non-zero initialization; default is 0.
-     */
-    function test_POC_H8_MinAmountOutDefaultZeroSandwichable() public pure {
-        // CODE-TRACE: SkyCompounderStrategy.sol L33:
-        //   uint256 public minAmountOut;   // <-- defaults to 0 (no initializer)
-        //
-        // L247/L250: the zero value is passed directly to swap functions:
-        //   _swapFrom(rewardsToken, address(asset), rewardBalance, minAmountOut); // 0
-        //   _uniV2swapFrom(rewardsToken, address(asset), rewardBalance, minAmountOut); // 0
-        //
-        // Combined with H-7 (block.timestamp deadline), an attacker can:
-        //   1. Front-run harvest with large buy of rewardsToken (price up)
-        //   2. Harvest executes at inflated price, receives minimal asset output (accepted: minAmountOut=0)
-        //   3. Back-run with sell of rewardsToken (price recovers)
-        //   Net: attacker profits, strategy loses value = full MEV extraction
-        assertTrue(true, "H-8: minAmountOut=0 default verified by code inspection [CODE-TRACE]");
-    }
-
-    // =========================================================================
-    // H-9: 100% maxLoss on Yearn/Morpho Withdrawals (CODE-TRACE)
-    // Root: MorphoCompounderStrategy._freeFunds calls withdraw with maxLoss=10_000
-    // =========================================================================
-
-    /**
-     * @notice H-9: Code-trace verification. MorphoCompounderStrategy._freeFunds()
-     *         passes maxLoss=10_000 (100%) to downstream withdraw, silently accepting
-     *         any loss from the Morpho vault.
-     */
-    function test_POC_H9_MaxLoss100PercentSilentlyAcceptsAnyLoss() public pure {
-        // CODE-TRACE: MorphoCompounderStrategy.sol L132-134:
-        //   function _freeFunds(uint256 _amount) internal override {
-        //       ITokenizedStrategy(compounderVault).withdraw(_amount, address(this), address(this), 10_000);
-        //   }
-        //
-        // 10_000 BPS = 100% maxLoss. If the Morpho compounder vault has experienced
-        // a loss (e.g., bad debt from a Morpho market), the withdrawal proceeds silently
-        // with any loss level — including total loss.
-        //
-        // Multi-hop loss amplification (TF-2):
-        //   MorphoCompounderStrategy is nested inside YieldSkimmingStrategy
-        //   (via MultistrategyVault or direct composition).
-        //   A loss in the Morpho vault cascades:
-        //     Morpho market loss → MorphoCompounder loss (100% accepted) →
-        //     YieldSkimming strategy loss → dragon burn → user insolvency
-        //   With no intermediate circuit breaker between hops.
-        assertTrue(true, "H-9: 100% maxLoss verified by code inspection [CODE-TRACE]");
     }
 
     // =========================================================================
@@ -474,11 +312,9 @@ contract MediumSeverityPoC is Setup {
             "H-10: Small rate drop causes mode switch; insolvent mode returns proportional value"
         );
 
-        // The real discontinuity is more visible when checking the RATE of change:
-        // Just-above-boundary: assets = shares * RAY / rate (rate-based)
-        // Just-below-boundary: assets = shares * totalAssets / totalSupply (proportional)
-        // These two formulas diverge as the vault accumulates dragon profit relative to user debt.
-        assertTrue(true, "H-10: Conversion discontinuity at solvency boundary confirmed [CODE-TRACE]");
+        // The real discontinuity is more visible when checking the rate of change:
+        // just-above-boundary uses rate-based conversion, while just-below-boundary
+        // uses proportional conversion.
     }
 
     // =========================================================================
@@ -531,51 +367,6 @@ contract MediumSeverityPoC is Setup {
         //   - Bob's deposit records userDebt at NEW rate (more shares per asset)
         //   - Next report sees totalValue > totalDebt only for the OLD depositor's gain
         //   - Bob's deposit dilutes the yield pool if dragon skim is based on position size
-
-        // CODE-TRACE: The MEV opportunity is bounded by the rate appreciation between
-        // lastReportedRate and currentRate. A front-runner can capture yield proportional
-        // to their deposit size relative to total pool, for the unreported appreciation period.
-        assertTrue(true, "H-11: Keeper report MEV opportunity verified by code trace [CODE-TRACE]");
-    }
-
-    // =========================================================================
-    // H-12: Health Check Default lossLimitRatio=0 DoS on Any Loss
-    // Root: _lossLimitRatio=0 causes revert on any loss (even 1 wei rounding)
-    // =========================================================================
-
-    /**
-     * @notice H-12: With default lossLimitRatio=0, ANY rate decrease causes
-     *         harvestAndReport() to revert with "!loss", permanently blocking report().
-     *
-     * @dev Uses MockStrategySkimming which implements BaseStrategy (without health check).
-     *      The health check behavior is in BaseYieldSkimmingHealthCheck. We verify
-     *      the logic by code-trace since MockStrategySkimming doesn't inherit health check.
-     */
-    function test_POC_H12_DefaultLossLimitZeroDoSOnAnyLoss() public pure {
-        // CODE-TRACE: BaseYieldSkimmingHealthCheck.sol L28:
-        //   uint16 private _lossLimitRatio;   // defaults to 0
-        //
-        // L184-188:
-        //   } else if (currentExchangeRate > newExchangeRate) {
-        //       require(
-        //           ((currentExchangeRate - newExchangeRate) <=
-        //               (currentExchangeRate * uint256(_lossLimitRatio)) / MAX_BPS),
-        //           "!loss"
-        //       );
-        //   }
-        //
-        // With _lossLimitRatio=0: allowedLoss = currentRate * 0 / 10_000 = 0
-        // Any rate decrease (even 1 wei): currentRate - newRate > 0 = allowedLoss
-        // => ALWAYS reverts with "!loss"
-        //
-        // For real strategies (LidoStrategy, RocketPoolStrategy) that use
-        // BaseYieldSkimmingHealthCheck, the default lossLimitRatio=0 means
-        // the first time any negative rate change occurs (e.g., stETH slashing),
-        // report() permanently reverts until management calls setLossLimitRatio().
-        //
-        // Impact: Yield stops flowing, dragon accumulates unreported shares,
-        // users cannot assess vault health, health check requires manual override.
-        assertTrue(true, "H-12: Default lossLimitRatio=0 DoS path verified [CODE-TRACE]");
     }
 
     /**
@@ -647,11 +438,8 @@ contract MediumSeverityPoC is Setup {
         //   }
         //
         // So the blocking only occurs if report() is called before any deposit.
-        // However, if rate changes between deposit and first report (which is normal),
-        // lastReportedRate = deposit-time rate while currentRate = report-time rate.
-        // If rate increased significantly, health check blocks with "!profit"
-        // unless profitLimitRatio is set appropriately.
-        assertTrue(true, "H-13: lastReportedRate=0 initialization verified [CODE-TRACE]");
+        // However, if rate changes between deposit and first report, health check
+        // blocks with "!profit" unless profitLimitRatio is set appropriately.
     }
 
     // =========================================================================
@@ -708,8 +496,6 @@ contract MediumSeverityPoC is Setup {
         } else {
             // Sync maintained — demonstrate dragon can transfer normally
             assertEq(dragonShares2, dragonDebt2, "Dragon balance and debt stay in sync after partial loss");
-            // This is the happy path — no desync in normal operation
-            assertTrue(true, "H-14: No desync in this scenario; desync arises from H-2/H-4 paths");
         }
     }
 
@@ -759,9 +545,8 @@ contract MediumSeverityPoC is Setup {
         vm.expectRevert("Router change would cause insolvency");
         strategy.finalizeDragonRouterChange();
 
-        // Protocol is now STUCK: cannot change dragon router during insolvency
-        // No emergency bypass exists — management cannot unblock this
-        assertTrue(true, "H-15: finalizeDragonRouterChange frozen during insolvency CONFIRMED [POC-PASS]");
+        // Protocol is now stuck: cannot change dragon router during insolvency.
+        // No emergency bypass exists for management.
     }
 
     // =========================================================================
@@ -809,81 +594,7 @@ contract MediumSeverityPoC is Setup {
         assertEq(profit, 0, "No profit reported during insolvency");
         assertGt(loss, 0, "Loss is reported");
 
-        // The silent return of 0 is the finding: no error signal to monitoring
-        assertTrue(true, "H-16: Silent zero return during insolvency confirmed [POC-PASS]");
-    }
-
-    // =========================================================================
-    // H-17: emergencyWithdraw Creates False-Solvent State via Stale totalAssets
-    // Root: emergencyWithdraw() doesn't update S.totalAssets
-    // =========================================================================
-
-    /**
-     * @notice H-17: After emergencyWithdraw(), S.totalAssets is stale (still shows
-     *         pre-withdrawal value). _isVaultInsolvent() reads S.totalAssets * rate,
-     *         so the vault appears to have more value than it does, allowing dragon
-     *         to over-redeem during shutdown.
-     *
-     * @dev This is a CODE-TRACE as _emergencyWithdraw is internal and tested at strategy level.
-     */
-    function test_POC_H17_EmergencyWithdrawStalesTotalAssets() public pure {
-        // CODE-TRACE: YieldSkimmingTokenizedStrategy.sol uses S.totalAssets from
-        //   TokenizedStrategy._strategyStorage().totalAssets
-        //
-        // TokenizedStrategy._emergencyWithdraw() (via BaseStrategy) calls:
-        //   _emergencyWithdraw(_amount)
-        //   Then sets S.totalAssets to balance check.
-        //   However, the YieldSkimmingTokenizedStrategy overrides report() but NOT
-        //   the emergency withdrawal path that updates totalAssets.
-        //
-        // _isVaultInsolvent() at L560-564:
-        //   uint256 currentVaultValue = S.totalAssets.mulDiv(currentRate, WadRayMath.RAY);
-        //   return totalDebtOwedToUserInAssetValue > 0 &&
-        //          currentVaultValue < totalDebtOwedToUserInAssetValue;
-        //
-        // If emergencyWithdraw reduces actual asset balance but S.totalAssets stays
-        // at old value, currentVaultValue is overstated, making the vault appear
-        // solvent when it may not be. Dragon can then redeem more than safe.
-        //
-        // Note: In BaseStrategy._emergencyWithdraw implementations for MockStrategySkimming,
-        // the function is a no-op. The real impact is in LidoStrategy/RocketPoolStrategy
-        // which have non-trivial _emergencyWithdraw that moves assets without updating
-        // S.totalAssets via _updateStorage() equivalent.
-        assertTrue(true, "H-17: Stale totalAssets after emergencyWithdraw verified [CODE-TRACE]");
-    }
-
-    // =========================================================================
-    // H-18: convertToAssets Manipulation Dependency (CODE-TRACE)
-    // Root: MorphoCompounderStrategy._harvestAndReport uses external convertToAssets
-    // =========================================================================
-
-    /**
-     * @notice H-18: MorphoCompounderStrategy._harvestAndReport() calls
-     *         ITokenizedStrategy(compounderVault).convertToAssets(shares) to value
-     *         its position. For non-audited vaults, this function may be manipulable
-     *         via flash loans or oracle manipulation.
-     */
-    function test_POC_H18_ConvertToAssetsManipulationDependency() public pure {
-        // CODE-TRACE: MorphoCompounderStrategy.sol L148-158:
-        //   function _harvestAndReport() internal view override returns (uint256 _totalAssets) {
-        //       uint256 shares = ITokenizedStrategy(compounderVault).balanceOf(address(this));
-        //       uint256 vaultAssets = ITokenizedStrategy(compounderVault).convertToAssets(shares);
-        //       ...
-        //       _totalAssets = vaultAssets + idleAssets;
-        //   }
-        //
-        // If compounderVault.convertToAssets() can be transiently inflated (via
-        // flash loan donation to the Morpho vault, or oracle price manipulation
-        // for Morpho markets), a manipulator can:
-        //   1. Inflate vaultAssets returned by convertToAssets
-        //   2. _harvestAndReport returns inflated totalAssets
-        //   3. YieldSkimmingStrategy.report() sees inflated currentValue
-        //   4. Dragon gets excess profit shares minted (false profit)
-        //   5. Dragon immediately redeems inflated shares for real assets
-        //
-        // Yearn's own tokenized strategy vaults use EIP-4626 standard which has
-        // flash loan protection for convertToAssets, but third-party vaults may not.
-        assertTrue(true, "H-18: convertToAssets manipulation dependency verified [CODE-TRACE]");
+        // The silent return of 0 is the finding: no error signal to monitoring.
     }
 
     // =========================================================================
@@ -919,7 +630,6 @@ contract MediumSeverityPoC is Setup {
         // Verify current defaults are excessively permissive
         assertEq(defaultProfitLimit, 10_000, "Default profit limit is 100% (excessive)");
         assertGt(maxSettable, 10_000, "Max settable is 655% (no effective upper bound)");
-        assertTrue(true, "H-19: Profit limit ratio defaults verified [CODE-TRACE]");
     }
 
     // =========================================================================
@@ -970,10 +680,7 @@ contract MediumSeverityPoC is Setup {
             "H-20: 0.02% rate increase exceeds profitLimitRatio=1 => report() deadlocked"
         );
 
-        // Combined with lossLimitRatio=0: any DECREASE also reverts
-        // So ANY rate change (increase or decrease) causes permanent revert
-        // Management can brick the health check without any emergency override
-        assertTrue(true, "H-20: Health check parameter deadlock confirmed [CODE-TRACE]");
+        // Combined with lossLimitRatio=0, any decrease also reverts.
     }
 
     // =========================================================================
@@ -1084,13 +791,17 @@ contract MediumSeverityPoC is Setup {
             // H-10 triggered: conversion mode has switched
             // In insolvent mode, alice gets proportional share of totalAssets
             // not rate-based value. This is the conversion discontinuity.
-            assertTrue(true, "CH-5: Phantom debt triggered insolvency and conversion discontinuity");
+            assertGt(
+                strategy.convertToAssets(aliceSharesFinal),
+                0,
+                "CH-5: Insolvent conversion should still return proportional assets"
+            );
         }
 
         // Log for evidence
         emit log_named_uint("userDebt after finalize", userDebtAfter);
         emit log_named_uint("dragonDebt after finalize", dragonDebtAfter);
         emit log_named_uint("vault insolvent", insolvent ? 1 : 0);
-        assertTrue(true, "CH-5: Chain confirmed [CODE-TRACE]");
+        assertGt(userDebtAfter, strategy.balanceOf(alice), "CH-5: Phantom debt exceeds Alice's remaining shares");
     }
 }

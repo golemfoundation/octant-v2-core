@@ -19,6 +19,7 @@ interface IPool {
 ///      `forge coverage` build profile (viaIR + optimizer disabled). Same underlying
 ///      contract, narrower signature.
 interface IPoolDataProviderSlim {
+    /// @notice Returns the first three reserve data fields needed for supply-cap accounting
     function getReserveData(
         address asset
     ) external view returns (uint256 unbacked, uint256 accruedToTreasuryScaled, uint256 totalAToken);
