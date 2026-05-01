@@ -6,12 +6,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
-import {
-    IPool,
-    IPoolAddressesProvider,
-    IPoolDataProvider,
-    IPoolDataProviderSlim
-} from "src/strategies/interfaces/IAaveV3.sol";
+import { IPool, IPoolAddressesProvider, IPoolDataProvider, IPoolDataProviderSlim } from "src/strategies/interfaces/IAaveV3.sol";
 
 interface IRewardsController {
     /// @notice Claims all accrued rewards across the supplied assets to `to`.

@@ -720,8 +720,8 @@ contract MediumSeverityPoC is Setup {
 
     /**
      * @notice H-15: When the vault is insolvent and old dragon has a positive balance,
-     *         finalizeDragonRouterChange() calls _requireDragonSolvency(oldDragonRouter)
-     *         which reverts with "Dragon cannot operate during insolvency".
+     *         finalizeDragonRouterChange() rejects the migration because it would leave
+     *         the post-migration accounting insolvent.
      */
     function test_POC_H15_FinalizeFrozenDuringInsolvency() public {
         vm.prank(management);
@@ -756,7 +756,7 @@ contract MediumSeverityPoC is Setup {
         // 5) After cooldown, try to finalize — should REVERT because old dragon has balance
         vm.warp(block.timestamp + 14 days + 1);
 
-        vm.expectRevert("Dragon cannot operate during insolvency");
+        vm.expectRevert("Router change would cause insolvency");
         strategy.finalizeDragonRouterChange();
 
         // Protocol is now STUCK: cannot change dragon router during insolvency
