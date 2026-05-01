@@ -71,7 +71,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         bytes32 PERMIT_TYPEHASH = keccak256(
             "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
         );
-        bytes32 VERSION_HASH = keccak256(bytes("1.0.0"));
+        bytes32 VERSION_HASH = keccak256(bytes("1.1.0"));
         bytes32 nameHash = keccak256(bytes(ITokenizedStrategy(address(strategy)).name()));
         bytes32 domainSeparator = keccak256(
             abi.encode(EIP712DOMAIN_TYPEHASH, nameHash, VERSION_HASH, block.chainid, address(strategy))
@@ -593,9 +593,9 @@ contract TokenizedStrategyBranchCoverageTest is Test {
 
     // --- API version ---
 
-    function test_apiVersion_returns100() public view {
+    function test_apiVersion_returns110() public view {
         string memory version = ITokenizedStrategy(address(strategy)).apiVersion();
-        assertEq(keccak256(bytes(version)), keccak256(bytes("1.0.0")));
+        assertEq(keccak256(bytes(version)), keccak256(bytes("1.1.0")));
     }
 
     // --- getter functions ---

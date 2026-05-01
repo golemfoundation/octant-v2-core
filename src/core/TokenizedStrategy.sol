@@ -466,7 +466,7 @@ abstract contract TokenizedStrategy {
 
     /// @notice API version identifier for this TokenizedStrategy implementation
     /// @dev Used for tracking strategy versions and compatibility
-    string internal constant API_VERSION = "1.0.0";
+    string internal constant API_VERSION = "1.1.0";
 
     /// @notice Reentrancy guard flag value during function execution
     /// @dev Set to 2 when a protected function is executing
