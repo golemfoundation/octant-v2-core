@@ -7,6 +7,7 @@ import { MockYieldSource } from "test/mocks/core/MockYieldSource.sol";
 import { MockStrategy as MockBaseStrategy } from "test/mocks/core/MockBaseStrategy.sol";
 import { MockIlliquidStrategy } from "test/mocks/core/tokenized-strategies/MockIlliquidStrategy.sol";
 import { MockTokenizedStrategyWithLoss } from "test/mocks/core/MockTokenizedStrategyWithLoss.sol";
+import { TokenizedStrategy } from "src/core/TokenizedStrategy.sol";
 import { YieldDonatingTokenizedStrategy } from "src/strategies/yieldDonating/YieldDonatingTokenizedStrategy.sol";
 import { ITokenizedStrategy } from "src/core/interfaces/ITokenizedStrategy.sol";
 import { TokenizedStrategy__InvalidSigner } from "src/errors.sol";
@@ -70,7 +71,7 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         bytes32 PERMIT_TYPEHASH = keccak256(
             "Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)"
         );
-        bytes32 VERSION_HASH = keccak256(bytes("1.0.0"));
+        bytes32 VERSION_HASH = keccak256(bytes("1.1.0"));
         bytes32 nameHash = keccak256(bytes(ITokenizedStrategy(address(strategy)).name()));
         bytes32 domainSeparator = keccak256(
             abi.encode(EIP712DOMAIN_TYPEHASH, nameHash, VERSION_HASH, block.chainid, address(strategy))
@@ -212,7 +213,10 @@ contract TokenizedStrategyBranchCoverageTest is Test {
 
     function test_emergencyWithdraw_afterShutdown_succeeds() public {
         ITokenizedStrategy(address(strategy)).shutdownStrategy();
-        // Should not revert
+
+        vm.expectEmit(true, false, false, true, address(strategy));
+        emit TokenizedStrategy.EmergencyWithdraw(address(this), 0);
+
         ITokenizedStrategy(address(strategy)).emergencyWithdraw(0);
     }
 
@@ -589,9 +593,9 @@ contract TokenizedStrategyBranchCoverageTest is Test {
 
     // --- API version ---
 
-    function test_apiVersion_returns100() public view {
+    function test_apiVersion_returns110() public view {
         string memory version = ITokenizedStrategy(address(strategy)).apiVersion();
-        assertEq(keccak256(bytes(version)), keccak256(bytes("1.0.0")));
+        assertEq(keccak256(bytes(version)), keccak256(bytes("1.1.0")));
     }
 
     // --- getter functions ---
@@ -1167,10 +1171,15 @@ contract TokenizedStrategyBranchCoverageTest is Test {
     // --- emergencyAdmin can emergency withdraw ---
 
     function test_emergencyWithdraw_byEmergencyAdmin() public {
-        ITokenizedStrategy(address(strategy)).setEmergencyAdmin(address(0x55));
+        address newEmergencyAdmin = address(0x55);
+
+        ITokenizedStrategy(address(strategy)).setEmergencyAdmin(newEmergencyAdmin);
         ITokenizedStrategy(address(strategy)).shutdownStrategy();
 
-        vm.prank(address(0x55));
+        vm.expectEmit(true, false, false, true, address(strategy));
+        emit TokenizedStrategy.EmergencyWithdraw(newEmergencyAdmin, 0);
+
+        vm.prank(newEmergencyAdmin);
         ITokenizedStrategy(address(strategy)).emergencyWithdraw(0);
     }
 

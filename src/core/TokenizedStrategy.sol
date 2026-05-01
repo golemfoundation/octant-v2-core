@@ -84,6 +84,13 @@ abstract contract TokenizedStrategy {
     event StrategyShutdown();
 
     /**
+     * @notice Emitted when an emergency withdrawal is processed after shutdown.
+     * @param caller Address that initiated the emergency withdrawal
+     * @param requestedAssets Amount of assets requested to be withdrawn
+     */
+    event EmergencyWithdraw(address indexed caller, uint256 requestedAssets);
+
+    /**
      * @notice Emitted on the initialization of any new `strategy` that uses `asset`
      * with this specific `apiVersion`.
      */
@@ -459,7 +466,7 @@ abstract contract TokenizedStrategy {
 
     /// @notice API version identifier for this TokenizedStrategy implementation
     /// @dev Used for tracking strategy versions and compatibility
-    string internal constant API_VERSION = "1.0.0";
+    string internal constant API_VERSION = "1.1.0";
 
     /// @notice Reentrancy guard flag value during function execution
     /// @dev Set to 2 when a protected function is executing
@@ -1242,6 +1249,8 @@ abstract contract TokenizedStrategy {
 
         // Withdraw from the yield source.
         IBaseStrategy(address(this)).shutdownWithdraw(amount);
+
+        emit EmergencyWithdraw(msg.sender, amount);
     }
 
     /*//////////////////////////////////////////////////////////////

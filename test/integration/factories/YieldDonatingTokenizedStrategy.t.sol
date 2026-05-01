@@ -88,7 +88,7 @@ contract YieldDonatingTokenizedStrategyTest is Test {
     function testInheritedFunctions() public view {
         // Test accessing the API version
         string memory apiVersion = strategy.apiVersion();
-        assertEq(apiVersion, "1.0.0", "API version should match parent contract");
+        assertEq(apiVersion, "1.1.0", "API version should match parent contract");
     }
 
     /**
