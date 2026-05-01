@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.9](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.8..1.2.0-develop.9) - 2026-05-01
+
+### Bug Fixes
+
+- **(tokenized-strategy)** bailsec #8 emit emergency withdraw event - ([b53eaae](https://github.com/golemfoundation/octant-v2-core/commit/b53eaae7350737f3cea110c4f661117f1a0ef7ec)) - Ferit
+
+### Miscellaneous Tasks
+
+- **(tokenized-strategy)** bump API_VERSION to 1.1.0 - ([1e38f80](https://github.com/golemfoundation/octant-v2-core/commit/1e38f8010157c270c37ad2be54c02e8be4d4df57)) - Ferit
+
+
 ## [1.2.0-develop.8](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.7..1.2.0-develop.8) - 2026-05-01
 
 ### CI/CD
