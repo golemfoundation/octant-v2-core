@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.11](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.10..1.2.0-develop.11) - 2026-05-01
+
+### Bug Fixes
+
+- **(yield-donating)** harden minimum liquidity accounting - ([965acef](https://github.com/golemfoundation/octant-v2-core/commit/965acef41e44039f16e72939c77ed7cf5c040f30)) - skimaharvey
+
+
 ## [1.2.0-develop.10](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.9..1.2.0-develop.10) - 2026-05-01
 
 ### Bug Fixes
