@@ -94,16 +94,10 @@ Vendored/ported code (TokenizedStrategy, SkyCompounderStrategy, LinearAllowanceS
 - Prague opcodes (transient storage EIP-1153, blob opcodes) won't be covered by formal proofs
 - **Action**: Align Kontrol to Prague, or document the gap
 
-### Stale `.storage-layout`
-- References `src/capital-providers/PgEtherToken.sol:PgEtherToken` — contract no longer exists
-- **Action**: Regenerate with `yarn storage:generate` or delete stale entries
-
 ### Suppressed compiler warning 3860
 - `ignored_error_codes` includes `3860` (initcode too large)
 - Could mask contracts exceeding the 49KB deployment limit
 - **Action**: Remove `3860` from `ignored_error_codes` and fix any resulting warnings, or document why it's suppressed
-
-### Unused `solady-test/` remapping *(done — removed in Priority 2)*
 
 ---
 
