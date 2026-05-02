@@ -445,6 +445,31 @@ contract UniswapV4SwapperAdapterTest is Test {
         assertEq(baseToken.balanceOf(address(s)), 0, "adapter must hold zero base after swap");
         assertEq(tokenA.balanceOf(address(this)), 0, "caller spent all original input");
     }
+
+    function test_swap_singleHop_flushesPreexistingTokenInLeftover() public {
+        UniswapV4SwapperAdapter s = new UniswapV4SwapperAdapter(
+            address(pm),
+            FEE,
+            TICK_SPACING,
+            address(0),
+            address(0),
+            0,
+            0,
+            address(0)
+        );
+
+        uint256 amountIn = 1000e18;
+        uint256 leftover = 7e18;
+        tokenA.mint(address(s), leftover);
+        tokenA.mint(address(this), amountIn);
+        tokenA.approve(address(s), amountIn);
+        pm.setOutputToken(address(tokenB));
+
+        s.swap(address(tokenA), address(tokenB), amountIn, 0, receiver);
+
+        assertEq(tokenA.balanceOf(address(s)), 0, "Adapter should not retain tokenIn");
+        assertEq(tokenA.balanceOf(address(this)), leftover, "Preexisting tokenIn should be flushed to caller");
+    }
 }
 
 // ═══════════════════════════════════════════════════════════

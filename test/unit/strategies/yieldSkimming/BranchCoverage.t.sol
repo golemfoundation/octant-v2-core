@@ -23,11 +23,37 @@ contract YieldSkimmingBranchCoverageTest is Setup {
     bytes32 internal constant YS_SLOT =
         keccak256(abi.encode(uint256(keccak256("octant.yieldSkimming.exchangeRate")) - 1)) & ~bytes32(uint256(0xff));
 
+    bytes32 internal constant TS_SLOT =
+        keccak256(abi.encode(uint256(keccak256("octant.tokenized.strategy.storage")) - 1)) & ~bytes32(uint256(0xff));
+    bytes32 internal constant BALANCES_SLOT = bytes32(uint256(TS_SLOT) + 1);
+    bytes32 internal constant TOTAL_SUPPLY_SLOT = bytes32(uint256(TS_SLOT) + 8);
+    bytes32 internal constant TOTAL_ASSETS_SLOT = bytes32(uint256(TS_SLOT) + 9);
+
     function setUp() public override {
         super.setUp();
         dragon = strategy.dragonRouter();
         user1 = makeAddr("user1");
         user2 = makeAddr("user2");
+    }
+
+    function _setUserDebt(uint256 debt) internal {
+        vm.store(address(strategy), YS_SLOT, bytes32(debt));
+    }
+
+    function _setDragonDebt(uint256 debt) internal {
+        vm.store(address(strategy), bytes32(uint256(YS_SLOT) + 2), bytes32(debt));
+    }
+
+    function _setShareBalance(address account, uint256 balance) internal {
+        vm.store(address(strategy), keccak256(abi.encode(account, BALANCES_SLOT)), bytes32(balance));
+    }
+
+    function _setTotalSupply(uint256 totalSupply_) internal {
+        vm.store(address(strategy), TOTAL_SUPPLY_SLOT, bytes32(totalSupply_));
+    }
+
+    function _setTotalAssets(uint256 totalAssets_) internal {
+        vm.store(address(strategy), TOTAL_ASSETS_SLOT, bytes32(totalAssets_));
     }
 
     // ========================================================
@@ -705,9 +731,8 @@ contract YieldSkimmingBranchCoverageTest is Setup {
 
         assertTrue(IYieldSkimmingStrategy(address(strategy)).isVaultInsolvent());
 
-        // previewDeposit calls _convertToShares internally - test through previewRedeem/previewWithdraw
         // During insolvency, conversions use the parent TokenizedStrategy logic
-        uint256 preview = strategy.previewRedeem(10e18);
+        uint256 preview = strategy.convertToShares(10e18);
         assertGt(preview, 0, "Preview should return non-zero even when insolvent");
     }
 
@@ -717,12 +742,13 @@ contract YieldSkimmingBranchCoverageTest is Setup {
 
         // Set rate to 0
         MockStrategySkimming(address(strategy)).updateExchangeRate(0);
+        _setUserDebt(0);
+        _setDragonDebt(0);
 
-        // Not insolvent (rate is 0, so currentVaultValue is 0, but debts exist)
-        // This may or may not be insolvent depending on logic -- but the conversion should fall back
-        uint256 preview = strategy.previewWithdraw(10e18);
-        // Just verify no revert occurs
-        assertGe(preview, 0, "Should not revert");
+        assertFalse(IYieldSkimmingStrategy(address(strategy)).isVaultInsolvent(), "Vault should be solvent");
+
+        uint256 preview = strategy.convertToShares(10e18);
+        assertEq(preview, 10e18, "Should fall back to parent conversion");
     }
 
     /// @notice _convertToAssets: insolvent vault path uses parent logic
@@ -855,6 +881,25 @@ contract YieldSkimmingBranchCoverageTest is Setup {
 
         assertTrue(IYieldSkimmingStrategy(address(strategy)).isVaultInsolvent());
         assertGt(strategy.maxWithdraw(user1), 0, "maxWithdraw should be non-zero for user during insolvency");
+    }
+
+    /// @notice max/preview helpers return 0 when the simulated dragon burn would remove all supply
+    function test_lazyBurnViews_zeroWhenBurnWouldRemoveAllSupply() public {
+        mintAndDepositIntoStrategy(strategy, user1, 100e18);
+        vm.prank(management);
+        strategy.setEnableBurning(true);
+
+        _setShareBalance(user1, 0);
+        _setShareBalance(dragon, 100e18);
+        _setTotalSupply(100e18);
+        _setTotalAssets(0);
+        _setUserDebt(100e18);
+        _setDragonDebt(0);
+
+        assertTrue(IYieldSkimmingStrategy(address(strategy)).isVaultInsolvent(), "Vault should be insolvent");
+        assertEq(strategy.maxWithdraw(user1), 0, "maxWithdraw should be zero when post-burn supply is zero");
+        assertEq(strategy.previewWithdraw(1), 0, "previewWithdraw should be zero when total assets are zero");
+        assertEq(strategy.previewRedeem(1), 0, "previewRedeem should be zero when post-burn supply is zero");
     }
 
     /// @notice maxRedeem: returns 0 for dragon during insolvency
@@ -1060,12 +1105,14 @@ contract YieldSkimmingBranchCoverageTest is Setup {
         dragonShares = strategy.balanceOf(dragon);
         dragonDebt = IYieldSkimmingStrategy(address(strategy)).getDragonRouterDebtInAssetValue();
 
-        // Dragon tries to transfer more than its debt
-        if (dragonShares > dragonDebt) {
-            vm.prank(dragon);
-            vm.expectRevert("Insufficient dragon debt");
-            strategy.transfer(user2, dragonDebt + 1);
-        }
+        assertGt(dragonShares, 0, "Dragon should have shares");
+        assertGt(dragonDebt, 0, "Dragon should have debt");
+
+        _setDragonDebt(dragonShares - 1);
+
+        vm.prank(dragon);
+        vm.expectRevert("Insufficient dragon debt");
+        strategy.transfer(user2, dragonShares);
     }
 
     /// @notice _rebalanceDebtOnDragonTransfer: insufficient user debt reverts

@@ -363,6 +363,22 @@ contract PSMSwapperTest is Test {
         assertEq(dai.balanceOf(address(s)), 0, "Adapter must hold zero DAI after swap");
         assertEq(dai.balanceOf(address(this)), expectedDust, "Rounding dust must stay with caller");
     }
+
+    function test_swap_sellGem_flushesPreexistingTokenInLeftover() public {
+        MockPSM mockPSM = new MockPSM(address(gem), address(dai));
+        PSMSwapper s = new PSMSwapper(address(mockPSM), PSMSwapper.Route.SELL_GEM, address(gem), address(dai), 0);
+
+        uint256 amountIn = 1000e18;
+        uint256 leftover = 7e18;
+        gem.mint(address(s), leftover);
+        gem.mint(address(this), amountIn);
+        gem.approve(address(s), amountIn);
+
+        s.swap(address(gem), address(dai), amountIn, 0, receiver);
+
+        assertEq(gem.balanceOf(address(s)), 0, "Adapter should not retain tokenIn");
+        assertEq(gem.balanceOf(address(this)), leftover, "Preexisting tokenIn should be flushed to caller");
+    }
 }
 
 // ═══════════════════════════════════════════════════════════

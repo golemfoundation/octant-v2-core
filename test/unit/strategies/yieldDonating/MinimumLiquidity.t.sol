@@ -163,6 +163,16 @@ contract MinimumLiquidityTest is Setup {
         assertEq(strategy.totalAssets(), requiredAssets, "assets equal minted supply");
     }
 
+    function test_firstMintZeroSharesRevertsWithZeroAssets() public {
+        vm.prank(user);
+        vm.expectRevert("ZERO_ASSETS");
+        strategy.mint(0, user);
+    }
+
+    function test_firstMintPreviewSaturatesAtUintMax() public view {
+        assertEq(strategy.previewMint(type(uint256).max), type(uint256).max, "minimum liquidity add saturates");
+    }
+
     function test_zeroAssetTerminalStateMaxViewsReturnZero() public {
         _enterZeroAssetDustState(100 ether);
 

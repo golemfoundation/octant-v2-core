@@ -632,6 +632,20 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         vm.store(address(impl), ASSET_SLOT, bytes32(0));
     }
 
+    function _initializedLossImpl() internal returns (MockTokenizedStrategyWithLoss impl) {
+        impl = _freshLossImpl();
+        impl.initialize(
+            address(asset),
+            "Loss Strategy",
+            "LOSS",
+            address(this),
+            address(this),
+            address(this),
+            address(0x99),
+            false
+        );
+    }
+
     // --- setKeeper and setEmergencyAdmin success paths (lines 1379,1392) ---
 
     function test_setKeeper_succeeds() public {
@@ -1325,5 +1339,85 @@ contract TokenizedStrategyBranchCoverageTest is Test {
         vm.prank(user);
         vm.expectRevert("ERC20: approve from the zero address");
         ITokenizedStrategy(address(strategy)).transferFrom(address(0), user, 0);
+    }
+
+    function test_baseDeposit_maxUintUsesFullBalance() public {
+        MockTokenizedStrategyWithLoss lossImpl = _initializedLossImpl();
+        uint256 userBalance = asset.balanceOf(user);
+
+        vm.startPrank(user);
+        asset.approve(address(lossImpl), type(uint256).max);
+        uint256 shares = lossImpl.deposit(type(uint256).max, user);
+        vm.stopPrank();
+
+        assertEq(shares, userBalance, "base deposit should mint full-balance shares");
+        assertEq(asset.balanceOf(user), 0, "base deposit should consume full balance");
+    }
+
+    function test_baseDeposit_revertsWhenExceedsMaxDeposit() public {
+        MockTokenizedStrategyWithLoss lossImpl = _initializedLossImpl();
+        lossImpl.setAvailableDepositLimit(0);
+
+        vm.startPrank(user);
+        asset.approve(address(lossImpl), 1);
+        vm.expectRevert("ERC4626: deposit more than max");
+        lossImpl.deposit(1, user);
+        vm.stopPrank();
+    }
+
+    function test_baseDeposit_revertsWhenSharesAreZero() public {
+        MockTokenizedStrategyWithLoss lossImpl = _initializedLossImpl();
+
+        vm.prank(user);
+        vm.expectRevert("ZERO_SHARES");
+        lossImpl.deposit(0, user);
+    }
+
+    function test_baseMint_revertsWhenExceedsMaxMint() public {
+        MockTokenizedStrategyWithLoss lossImpl = _initializedLossImpl();
+        lossImpl.setAvailableDepositLimit(0);
+
+        vm.prank(user);
+        vm.expectRevert("ERC4626: mint more than max");
+        lossImpl.mint(1, user);
+    }
+
+    function test_baseMint_revertsWhenAssetsAreZero() public {
+        MockTokenizedStrategyWithLoss lossImpl = _initializedLossImpl();
+
+        vm.prank(user);
+        vm.expectRevert("ZERO_ASSETS");
+        lossImpl.mint(0, user);
+    }
+
+    function test_baseRedeem_revertsWhenAssetsAreZero() public {
+        MockTokenizedStrategyWithLoss lossImpl = _initializedLossImpl();
+        lossImpl.mintShares(user, 1e18);
+        lossImpl.setupTestScenario(0, 1e18, 0);
+
+        vm.prank(user);
+        vm.expectRevert("ZERO_ASSETS");
+        lossImpl.redeem(0, user, user, 10000);
+    }
+
+    function test_baseConversions_returnZeroForGhostCollateral() public {
+        MockTokenizedStrategyWithLoss lossImpl = _initializedLossImpl();
+        lossImpl.setupTestScenario(0, 1e18, 0);
+
+        assertEq(lossImpl.convertToShares(1e18), 0, "ghost assets should not price first shares");
+        assertEq(lossImpl.convertToAssets(1e18), 0, "ghost assets should not price assets");
+    }
+
+    function test_internalShareGuards_revertOnZeroAddress() public {
+        MockTokenizedStrategyWithLoss lossImpl = _initializedLossImpl();
+
+        vm.expectRevert("ERC20: transfer from the zero address");
+        lossImpl.transferShares(address(0), user, 0);
+
+        vm.expectRevert("ERC20: mint to the zero address");
+        lossImpl.mintShares(address(0), 1);
+
+        vm.expectRevert("ERC20: burn from the zero address");
+        lossImpl.burnShares(address(0), 1);
     }
 }

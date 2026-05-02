@@ -184,6 +184,14 @@ contract MockTokenizedStrategyWithLoss is TokenizedStrategy, IBaseStrategy {
     }
 
     /**
+     * @dev Transfer shares directly between addresses (for testing internal ERC20 guard branches)
+     */
+    function transferShares(address _from, address _to, uint256 _shares) external {
+        StrategyData storage S = _strategyStorage();
+        _transfer(S, _from, _to, _shares);
+    }
+
+    /**
      * @dev Burn shares directly from an address (for testing)
      */
     function burnShares(address _from, uint256 _shares) external {
