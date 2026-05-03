@@ -194,13 +194,7 @@ contract YSStrategyTest is StrategyBaseTest, YSSetup {
         _storeUInt256(address(ysStrategy), MOCK_YS_EXCHANGE_RATE_SLOT, WadRayMath.RAY);
         _storeUInt256(address(ysStrategy), YS_TOTAL_DEBT_OWED_TO_USER_SLOT, userDebt);
         _storeUInt256(address(ysStrategy), YS_DRAGON_ROUTER_DEBT_SLOT, dragonDebt);
-        _storeMappingUInt256(
-            _asset,
-            ERC20_BALANCES_SLOT,
-            uint256(uint160(address(ysStrategy))),
-            0,
-            totalAssets
-        );
+        _storeMappingUInt256(_asset, ERC20_BALANCES_SLOT, uint256(uint160(address(ysStrategy))), 0, totalAssets);
     }
 
     /*//////////////////////////////////////////////////////////////
