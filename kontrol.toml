@@ -10,7 +10,7 @@ auxiliary-lemmas           = true
 
 [prove.default]
 foundry-project-root       = '.'
-schedule                   = 'CANCUN'
+schedule                   = 'PRAGUE'
 verbose                    = false
 debug                      = false
 max-depth                  = 100000

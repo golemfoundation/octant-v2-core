@@ -18,4 +18,3 @@ There is no separate `scripts/` directory. Everything lives here.
 - `check-natspec.sh` - validates NatSpec documentation coverage on public/external functions
 - `combine-proxy-abis.sh` - merges strategy + wrapper ABIs for proxy consumption
 - `coverage.sh` - runs forge coverage with Hats Protocol patching workaround
-- `storage.sh` - generates and validates storage layout snapshots

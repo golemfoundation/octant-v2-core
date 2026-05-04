@@ -8,6 +8,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { IUniswapV2Router02 } from "@tokenized-strategy-periphery/interfaces/Uniswap/V2/IUniswapV2Router02.sol";
 import { UniswapV3Swapper } from "src/strategies/periphery/UniswapV3Swapper.sol";
 import { IStaking, ISkyCompounder } from "src/strategies/interfaces/ISky.sol";
+import { USDC_MAINNET } from "src/constants.sol";
 
 /**
  * @title Sky Compounder Strategy
@@ -43,7 +44,7 @@ contract SkyCompounderStrategy is BaseHealthCheck, UniswapV3Swapper, ISkyCompoun
     // choices for base
     address private constant USDS = 0xdC035D45d973E3EC169d2276DDab16f1e407384F;
     address private constant DAI = 0x6B175474E89094C44Da98b954EedeAC495271d0F;
-    address private constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    address private constant USDC = USDC_MAINNET;
     address private constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
 
     /// @notice Minimum asset balance threshold to skip dust amounts (100 base units)

@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 /// @title Mock METH Token
 /// @notice A mock implementation of the mETH token for testing
+/// @dev Deprecated compatibility mock retained for published package import path stability.
 contract MockMETH is ERC20 {
     address public mantleStaking;
 

@@ -41,8 +41,6 @@
     "slither:ci": "slither . --print human-summary --disable-color 2> reports/slither.txt; slither .",
     "semver:diff": "node scripts/sol-semver.mjs diff",
     "semver:check": "node scripts/sol-semver.mjs check",
-    "storage:generate": "./script/storage.sh generate",
-    "storage:check": "./script/storage.sh check",
     "init": "husky && shx chmod +x .husky/*",
     "deploy:tenderly": "bash -c 'source .env; forge script script/deployment/staging/DeployProtocol.s.sol --slow -f $RPC_URL && forge script script/deployment/staging/DeployProtocol.s.sol --slow --verify --verifier custom --broadcast -f $RPC_URL'",
     "release": "release-it",

@@ -14,8 +14,6 @@ yarn format:check         # prettier format check
 yarn format               # prettier format fix
 yarn coverage             # forge coverage (lcov)
 yarn coverage:summary     # forge coverage (summary table)
-yarn storage:check        # validate storage layout snapshots
-yarn storage:generate     # regenerate storage layout snapshots
 ```
 
 ## Directory layout

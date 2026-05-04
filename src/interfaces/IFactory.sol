@@ -6,7 +6,7 @@ pragma solidity ^0.8.25;
  * @author [Golem Foundation](https://golem.foundation)
  * @custom:security-contact security@golem.foundation
  * @notice Interface for the factory that deployed the vault
- * @dev Used to query protocol fee configuration
+ * @dev Deprecated compatibility interface retained for published package import path stability.
  */
 interface IFactory {
     /// @notice Get the protocol fee configuration

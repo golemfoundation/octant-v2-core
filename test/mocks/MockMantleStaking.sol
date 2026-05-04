@@ -5,6 +5,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 /// @title Mock Mantle Staking Contract
 /// @notice A mock implementation of the Mantle staking contract for testing
+/// @dev Deprecated compatibility mock retained for published package import path stability.
 contract MockMantleStaking {
     IERC20 public mETHToken;
     uint256 public exchangeRate = 1e18; // 1:1 ETH:mETH ratio by default

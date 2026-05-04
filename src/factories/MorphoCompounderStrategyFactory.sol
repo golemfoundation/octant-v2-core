@@ -3,6 +3,7 @@ pragma solidity >=0.8.25;
 
 import { MorphoCompounderStrategy } from "src/strategies/yieldDonating/MorphoCompounderStrategy.sol";
 import { BaseStrategyFactory } from "src/factories/BaseStrategyFactory.sol";
+import { USDC_MAINNET } from "src/constants.sol";
 
 /**
  * @title MorphoCompounderStrategyFactory
@@ -20,8 +21,8 @@ contract MorphoCompounderStrategyFactory is BaseStrategyFactory {
     /// @notice Yearn Strategy USDC vault address (target vault for deposits)
     address public constant YS_USDC = 0x074134A2784F4F66b6ceD6f68849382990Ff3215;
 
-    /// @notice USDC token address (0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48 on Ethereum mainnet)
-    address public constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    /// @notice USDC token address on Ethereum mainnet
+    address public constant USDC = USDC_MAINNET;
 
     /// @notice Emitted on successful strategy deployment
     /// @param deployer Transaction sender performing deployment

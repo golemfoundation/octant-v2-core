@@ -7,7 +7,7 @@ pragma solidity ^0.8.23;
  * @author [Golem Foundation](https://golem.foundation)
  * @custom:security-contact security@golem.foundation
  * @notice Interface for the Dragon contract, the facade to interact with an Octant-based ecosystem
- * @dev Draft interface for high-level integration entry points
+ * @dev Deprecated compatibility interface retained for published package import path stability.
  */
 interface IDragon {
     /**

@@ -6,6 +6,7 @@ import { Module } from "zodiac/core/Module.sol";
 import { Enum } from "@gnosis.pm/safe-contracts/contracts/common/Enum.sol";
 import { ERC4626Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/extensions/ERC4626Upgradeable.sol";
 
+/// @dev Deprecated compatibility mock retained for published package import path stability.
 contract MockVaultModule is Module, ERC4626Upgradeable {
     /// @dev Initialize function, will be triggered when a new proxy is deployed
     /// @param initializeParams Parameters of initialization encoded
