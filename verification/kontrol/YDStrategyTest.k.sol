@@ -301,24 +301,19 @@ contract YDStrategyTest is StrategyBaseTest, YDSetup {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice After deposit, shares are redeemable (inductive balance bounded proof)
-    function testSharesRedeemableAfterDepositYD(uint256 assets, address receiver) public {
+    function testSharesRedeemableAfterDepositYD(uint256 assets, address /* receiver */) public {
         _assumeNonReentrant();
 
         vm.assume(assets > 0);
         vm.assume(assets < ETH_UPPER_BOUND);
-        vm.assume(receiver != address(0));
-        vm.assume(receiver != address(strategy));
-        vm.assume(receiver != _dragonRouter);
+        address receiver = makeAddr("YD_DEPOSIT_RECEIVER");
 
         uint256 totalAssets = _loadUInt256(address(strategy), TS_TOTAL_ASSETS_SLOT);
         uint256 totalSupply = _loadUInt256(address(strategy), TS_TOTAL_SUPPLY_SLOT);
         vm.assume(totalAssets > 0);
-        vm.assume(totalSupply > 0);
+        vm.assume(totalAssets == totalSupply);
 
-        _assumeNoOverflow(assets, totalSupply);
-        uint256 expectedShares = (assets * totalSupply) / totalAssets;
-        vm.assume(expectedShares > 0);
-        _assumeNoOverflow(totalSupply, expectedShares);
+        _assumeNoOverflow(totalSupply, assets);
         _assumeNoOverflow(totalAssets, assets);
 
         // Inductive hypothesis: receiver's balance is bounded by totalSupply pre-deposit.

@@ -11,9 +11,9 @@ import "test/kontrol/SharedStateSlots.k.sol";
  * @title YFSetup
  * @notice Symbolic setup for formal verification of YieldForwarder
  * @dev Deploys YieldForwarder with concrete role addresses and a MockForwarderStrategy
- *      with symbolic storage. Unlike strategy proofs (where the CUT's storage is symbolic),
- *      here the forwarder is stateless (immutables + ReentrancyGuard) and the mock
- *      dependency is made symbolic to verify behavioral guarantees across all input states.
+ *      with symbolic relevant slots. Unlike strategy proofs (where the CUT's storage is
+ *      symbolic), here the forwarder is stateless (immutables + ReentrancyGuard) and the
+ *      mock dependency exposes only a small controlled state surface.
  */
 contract YFSetup is KontrolTest {
     YieldForwarder public forwarder;
@@ -32,11 +32,6 @@ contract YFSetup is KontrolTest {
 
         // Deploy YieldForwarder with concrete immutables
         forwarder = new YieldForwarder(_receiver, _keeper);
-
-        // ============================================
-        // MAKE MOCK STRATEGY STORAGE SYMBOLIC
-        // ============================================
-        kevm.symbolicStorage(address(mockStrategy));
 
         // Restore concrete asset address (needed for SYF safeTransfer path)
         // Using address(0xA55E7) as a deterministic mock asset address

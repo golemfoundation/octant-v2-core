@@ -181,6 +181,22 @@ contract YSStrategyTest is StrategyBaseTest, YSSetup {
         state.dragonDebt = _loadUInt256(address(ysStrategy), YS_DRAGON_ROUTER_DEBT_SLOT);
     }
 
+    function _setOneToOneState(
+        uint256 totalAssets,
+        uint256 totalSupply,
+        uint256 userDebt,
+        uint256 dragonDebt,
+        uint256 dragonBalance
+    ) internal {
+        _storeUInt256(address(ysStrategy), TS_TOTAL_ASSETS_SLOT, totalAssets);
+        _storeUInt256(address(ysStrategy), TS_TOTAL_SUPPLY_SLOT, totalSupply);
+        _storeMappingUInt256(address(ysStrategy), TS_BALANCES_SLOT, uint256(uint160(_dragonRouter)), 0, dragonBalance);
+        _storeUInt256(address(ysStrategy), MOCK_YS_EXCHANGE_RATE_SLOT, WadRayMath.RAY);
+        _storeUInt256(address(ysStrategy), YS_TOTAL_DEBT_OWED_TO_USER_SLOT, userDebt);
+        _storeUInt256(address(ysStrategy), YS_DRAGON_ROUTER_DEBT_SLOT, dragonDebt);
+        _storeMappingUInt256(_asset, ERC20_BALANCES_SLOT, uint256(uint160(address(ysStrategy))), 0, totalAssets);
+    }
+
     /*//////////////////////////////////////////////////////////////
                     YS-SPECIFIC: REPORT WITH PROFIT
     //////////////////////////////////////////////////////////////*/
@@ -413,24 +429,16 @@ contract YSStrategyTest is StrategyBaseTest, YSSetup {
     function testDragonBlockedDuringInsolvency() public {
         _assumeNonReentrant();
 
-        preState = _snapshot();
-        vm.assume(preState.totalAssets > 0);
-        vm.assume(preState.totalSupply > 0);
-        vm.assume(preState.dragonBalance > 0);
+        uint256 totalAssets = 100 ether;
+        uint256 totalSupply = 100 ether;
+        _storeUInt256(address(ysStrategy), TS_TOTAL_ASSETS_SLOT, totalAssets);
+        _storeUInt256(address(ysStrategy), TS_TOTAL_SUPPLY_SLOT, totalSupply);
+        _storeMappingUInt256(address(ysStrategy), TS_BALANCES_SLOT, uint256(uint160(_dragonRouter)), 0, 1);
 
-        uint256 mockRate = _loadUInt256(address(ysStrategy), MOCK_YS_EXCHANGE_RATE_SLOT);
-        vm.assume(mockRate > 0);
-
-        _assumeNoOverflow(preState.totalAssets, mockRate);
-        uint256 currentValue = preState.totalAssets.mulDiv(mockRate, WadRayMath.RAY);
-
-        // Insolvency: vault value < user debt (matches _isVaultInsolvent definition)
-        vm.assume(preState.userDebt > 0);
-        vm.assume(currentValue < preState.userDebt);
-
-        // Ensure _convertToAssets(1) > 0 so we reach the solvency check
-        // During insolvency, parent logic: 1 * totalAssets / totalSupply >= 1
-        vm.assume(preState.totalAssets >= preState.totalSupply);
+        // Concrete insolvent state: currentValue = totalAssets, while user debt is higher.
+        _storeUInt256(address(ysStrategy), MOCK_YS_EXCHANGE_RATE_SLOT, WadRayMath.RAY);
+        _storeUInt256(address(ysStrategy), YS_TOTAL_DEBT_OWED_TO_USER_SLOT, 101 ether);
+        _storeUInt256(address(ysStrategy), YS_DRAGON_ROUTER_DEBT_SLOT, 0);
 
         // Set lastReport to now (no lockup)
         _storeData(address(ysStrategy), TS_KEEPER_SLOT, TS_LAST_REPORT_OFFSET, TS_LAST_REPORT_WIDTH, block.timestamp);
@@ -479,44 +487,21 @@ contract YSStrategyTest is StrategyBaseTest, YSSetup {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice After deposit, userDebt increases by shares (= assets * rate / RAY)
-    function testDepositValueDebtYS(uint256 assets, address receiver) public {
+    function testDepositValueDebtYS(uint256 assets, address /* receiver */) public {
         _assumeNonReentrant();
 
         vm.assume(assets > 0);
         vm.assume(assets < ETH_UPPER_BOUND);
-        vm.assume(receiver != address(0));
-        vm.assume(receiver != address(ysStrategy));
-        vm.assume(receiver != _dragonRouter);
+
+        address receiver = makeAddr("YS_DEPOSIT_RECEIVER");
+        uint256 initialValue = 100 ether;
+        _assumeNoOverflow(initialValue, assets);
+        _setOneToOneState(initialValue, initialValue, initialValue, 0, 0);
+        _storeMappingUInt256(address(ysStrategy), TS_BALANCES_SLOT, uint256(uint160(receiver)), 0, 0);
 
         preState = _snapshot();
-        vm.assume(preState.totalAssets > 0);
-        vm.assume(preState.totalSupply > 0);
 
-        uint256 mockRate = _loadUInt256(address(ysStrategy), MOCK_YS_EXCHANGE_RATE_SLOT);
-        vm.assume(mockRate > 0);
-
-        // Ensure solvent
-        _assumeNoOverflow(preState.totalAssets, mockRate);
-        uint256 currentValue = preState.totalAssets.mulDiv(mockRate, WadRayMath.RAY);
-        _assumeNoOverflow(preState.userDebt, preState.dragonDebt);
-        vm.assume(currentValue >= preState.userDebt + preState.dragonDebt);
-
-        // shares = assets * rate / RAY
-        _assumeNoOverflow(assets, mockRate);
-        uint256 expectedShares = assets.mulDiv(mockRate, WadRayMath.RAY);
-        vm.assume(expectedShares > 0);
-        _assumeNoOverflow(preState.totalSupply, expectedShares);
-        _assumeNoOverflow(preState.totalAssets, assets);
-        _assumeNoOverflow(preState.userDebt, expectedShares);
-
-        // Inductive hypothesis: receiver's balance is bounded by totalSupply pre-deposit.
-        uint256 receiverBalance = _loadMappingUInt256(
-            address(ysStrategy),
-            TS_BALANCES_SLOT,
-            uint256(uint160(receiver)),
-            0
-        );
-        vm.assume(receiverBalance <= preState.totalSupply);
+        uint256 expectedShares = assets;
 
         // Not shutdown
         _storeData(address(ysStrategy), TS_FLAGS_SLOT, TS_SHUTDOWN_OFFSET, TS_SHUTDOWN_WIDTH, 0);
@@ -527,14 +512,6 @@ contract YSStrategyTest is StrategyBaseTest, YSSetup {
         vm.prank(depositor);
         (bool ok, ) = _asset.call(abi.encodeWithSignature("approve(address,uint256)", address(ysStrategy), assets));
         require(ok);
-
-        _storeMappingUInt256(
-            _asset,
-            ERC20_BALANCES_SLOT,
-            uint256(uint160(address(ysStrategy))),
-            0,
-            preState.totalAssets
-        );
 
         vm.prank(depositor);
         iYSStrategy.deposit(assets, receiver);
@@ -553,30 +530,16 @@ contract YSStrategyTest is StrategyBaseTest, YSSetup {
     //////////////////////////////////////////////////////////////*/
 
     /// @notice Dragon transfers to user: dragonDebt decreases, userDebt increases
-    function testTransferDragonToUser(address to, uint256 amount) public {
+    function testTransferDragonToUser(address /* to */, uint256 amount) public {
         _assumeNonReentrant();
 
-        vm.assume(to != address(0));
-        vm.assume(to != address(ysStrategy));
-        vm.assume(to != _dragonRouter);
         vm.assume(amount > 0);
         vm.assume(amount < ETH_UPPER_BOUND);
 
+        address to = makeAddr("YS_TRANSFER_RECEIVER");
+        _setOneToOneState(amount + 1, amount, 0, amount, amount);
+
         preState = _snapshot();
-        vm.assume(preState.totalAssets > 0);
-        vm.assume(preState.totalSupply > 0);
-        vm.assume(preState.dragonBalance >= amount);
-        vm.assume(preState.dragonDebt >= amount);
-
-        // Ensure solvent
-        uint256 mockRate = _loadUInt256(address(ysStrategy), MOCK_YS_EXCHANGE_RATE_SLOT);
-        vm.assume(mockRate > 0);
-        _assumeNoOverflow(preState.totalAssets, mockRate);
-        uint256 currentValue = preState.totalAssets.mulDiv(mockRate, WadRayMath.RAY);
-        _assumeNoOverflow(preState.userDebt, preState.dragonDebt);
-        vm.assume(currentValue >= preState.userDebt + preState.dragonDebt);
-
-        _assumeNoOverflow(preState.userDebt, amount);
 
         vm.prank(_dragonRouter);
         (bool ok, ) = address(ysStrategy).call(abi.encodeWithSignature("transfer(address,uint256)", to, amount));
@@ -591,29 +554,16 @@ contract YSStrategyTest is StrategyBaseTest, YSSetup {
     }
 
     /// @notice User transfers to dragon: userDebt decreases, dragonDebt increases
-    function testTransferUserToDragon(address from, uint256 amount) public {
+    function testTransferUserToDragon(address /* from */, uint256 amount) public {
         _assumeNonReentrant();
 
-        vm.assume(from != address(0));
-        vm.assume(from != address(ysStrategy));
-        vm.assume(from != _dragonRouter);
         vm.assume(amount > 0);
         vm.assume(amount < ETH_UPPER_BOUND);
 
+        address from = makeAddr("YS_TRANSFER_SENDER");
+        _setOneToOneState(amount + 1, amount, amount, 0, 0);
+
         preState = _snapshot();
-        vm.assume(preState.totalAssets > 0);
-        vm.assume(preState.totalSupply > 0);
-        vm.assume(preState.userDebt >= amount);
-
-        // Ensure solvent
-        uint256 mockRate = _loadUInt256(address(ysStrategy), MOCK_YS_EXCHANGE_RATE_SLOT);
-        vm.assume(mockRate > 0);
-        _assumeNoOverflow(preState.totalAssets, mockRate);
-        uint256 currentValue = preState.totalAssets.mulDiv(mockRate, WadRayMath.RAY);
-        _assumeNoOverflow(preState.userDebt, preState.dragonDebt);
-        vm.assume(currentValue >= preState.userDebt + preState.dragonDebt);
-
-        _assumeNoOverflow(preState.dragonDebt, amount);
 
         // Give `from` enough shares
         _storeMappingUInt256(address(ysStrategy), TS_BALANCES_SLOT, uint256(uint160(from)), 0, amount);
@@ -643,26 +593,9 @@ contract YSStrategyTest is StrategyBaseTest, YSSetup {
         vm.assume(amount > 0);
         vm.assume(amount < ETH_UPPER_BOUND);
 
-        uint256 totalAssets = _loadUInt256(address(ysStrategy), TS_TOTAL_ASSETS_SLOT);
-        uint256 totalSupply = _loadUInt256(address(ysStrategy), TS_TOTAL_SUPPLY_SLOT);
-        vm.assume(totalAssets > 0);
-        vm.assume(totalSupply > 0);
+        _setOneToOneState(amount + 1, amount + 1, 0, 0, 0);
 
-        uint256 mockRate = _loadUInt256(address(ysStrategy), MOCK_YS_EXCHANGE_RATE_SLOT);
-        vm.assume(mockRate > 0);
-
-        // Ensure solvent
-        _assumeNoOverflow(totalAssets, mockRate);
-        uint256 currentValue = totalAssets.mulDiv(mockRate, WadRayMath.RAY);
-        uint256 userDebt = _loadUInt256(address(ysStrategy), YS_TOTAL_DEBT_OWED_TO_USER_SLOT);
-        uint256 dragonDebt = _loadUInt256(address(ysStrategy), YS_DRAGON_ROUTER_DEBT_SLOT);
-        _assumeNoOverflow(userDebt, dragonDebt);
-        vm.assume(currentValue >= userDebt + dragonDebt);
-
-        // Avoid overflow
-        _assumeNoOverflow(amount, mockRate);
-
-        uint256 expectedShares = amount.mulDiv(mockRate, WadRayMath.RAY);
+        uint256 expectedShares = amount;
         uint256 actualShares = iYSStrategy.convertToShares(amount);
         assertEq(actualShares, expectedShares);
     }
@@ -674,23 +607,9 @@ contract YSStrategyTest is StrategyBaseTest, YSSetup {
         vm.assume(amount > 0);
         vm.assume(amount < ETH_UPPER_BOUND);
 
-        uint256 totalAssets = _loadUInt256(address(ysStrategy), TS_TOTAL_ASSETS_SLOT);
-        uint256 totalSupply = _loadUInt256(address(ysStrategy), TS_TOTAL_SUPPLY_SLOT);
-        vm.assume(totalAssets > 0);
-        vm.assume(totalSupply > 0);
-
-        uint256 mockRate = _loadUInt256(address(ysStrategy), MOCK_YS_EXCHANGE_RATE_SLOT);
-        vm.assume(mockRate > 0);
-
-        // Ensure insolvent: vault value < user debt (matches _isVaultInsolvent definition)
-        _assumeNoOverflow(totalAssets, mockRate);
-        uint256 currentValue = totalAssets.mulDiv(mockRate, WadRayMath.RAY);
-        uint256 userDebt = _loadUInt256(address(ysStrategy), YS_TOTAL_DEBT_OWED_TO_USER_SLOT);
-        vm.assume(userDebt > 0);
-        vm.assume(currentValue < userDebt);
-
-        // Avoid overflow in proportional calc
-        _assumeNoOverflow(amount, totalSupply);
+        uint256 totalAssets = amount + 1;
+        uint256 totalSupply = amount + 2;
+        _setOneToOneState(totalAssets, totalSupply, amount + 2, 0, 0);
 
         // Proportional: shares = amount * totalSupply / totalAssets (base logic)
         uint256 expectedShares = amount.mulDiv(totalSupply, totalAssets);

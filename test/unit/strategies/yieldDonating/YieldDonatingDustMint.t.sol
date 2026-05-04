@@ -93,4 +93,18 @@ contract YieldDonatingDustMintTest is Setup {
         assertEq(_countDonationMintedLogs(logs), 1, "DonationMinted emitted on real share mint");
         assertEq(strategy.balanceOf(donationAddress), 3, "dragon received 3 shares");
     }
+
+    function test_reportGhostCollateral_mintsStrategyOwnedShares() public {
+        uint256 ghostAssets = 5 ether;
+        _writeStrategyState({ totalSupply_: 0, totalAssets_: ghostAssets });
+        asset.mint(address(yieldSource), ghostAssets);
+
+        vm.prank(keeper);
+        (uint256 profit, uint256 loss) = strategy.report();
+
+        assertEq(profit, 0, "matched ghost assets are not new profit");
+        assertEq(loss, 0, "matched ghost assets are not a loss");
+        assertEq(strategy.balanceOf(address(strategy)), ghostAssets, "strategy receives ghost-collateral shares");
+        assertEq(strategy.totalSupply(), ghostAssets, "ghost-collateral shares restore supply");
+    }
 }

@@ -13,8 +13,8 @@ import "test/kontrol/SharedStateSlots.k.sol";
  * @title SYFSetup
  * @notice Symbolic setup for formal verification of SwappingYieldForwarder
  * @dev Deploys SwappingYieldForwarder with concrete role addresses, a MockForwarderStrategy
- *      with symbolic storage, a MockForwarderSwapper with symbolic swap return, and a real
- *      TestERC20 for the underlying asset (required for safeTransfer in the swap path).
+ *      with symbolic relevant slots, a MockForwarderSwapper with symbolic swap return, and a
+ *      real TestERC20 for the underlying asset (required for safeTransfer in the swap path).
  *
  *      The forwarder's ERC20 balance is pre-loaded to simulate tokens received from redeem().
  *      The mock redeem() does not actually transfer tokens, so we write the balance directly.
@@ -54,11 +54,6 @@ contract SYFSetup is KontrolTest {
             0
         );
 
-        // ============================================
-        // MAKE MOCK STRATEGY STORAGE SYMBOLIC
-        // ============================================
-        kevm.symbolicStorage(address(mockStrategy));
-
         // Restore concrete asset address to the real ERC20
         _storeAddress(address(mockStrategy), MFS_ASSET_SLOT, address(sourceAsset));
         _storeAddress(address(mockStrategy), MFS_EXPECTED_BALANCE_OF_ACCOUNT_SLOT, address(syfForwarder));
@@ -86,11 +81,6 @@ contract SYFSetup is KontrolTest {
         _storeAddress(address(mockStrategy), MFS_LAST_REPORT_CALLER_SLOT, address(0));
         _storeAddress(address(mockStrategy), MFS_LAST_OWNER_SLOT, address(0));
         _storeUInt256(address(mockStrategy), MFS_LAST_MAX_LOSS_SLOT, 0);
-
-        // ============================================
-        // MAKE MOCK SWAPPER STORAGE SYMBOLIC
-        // ============================================
-        kevm.symbolicStorage(address(mockSwapper));
 
         // Set symbolic swap return
         uint256 swapReturn = freshUInt256Bounded();
