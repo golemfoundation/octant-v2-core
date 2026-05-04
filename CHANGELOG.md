@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.12](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.11..1.2.0-develop.12) - 2026-05-04
+
+### Styling
+
+- **(kontrol)** format ys strategy proof - ([619193c](https://github.com/golemfoundation/octant-v2-core/commit/619193c78d0b3765dc7ecabbbcd9a93c9313ca30)) - skimaharvey
+
+### Testing
+
+- **(coverage)** raise branch coverage above threshold - ([d85d4ea](https://github.com/golemfoundation/octant-v2-core/commit/d85d4ea7208f1d5ff8d9bf23465253f59097909b)) - skimaharvey
+- **(kontrol)** reduce proof search space - ([5fa9ed5](https://github.com/golemfoundation/octant-v2-core/commit/5fa9ed5f27a156ed5984e9a46b8c774449ea7a24)) - skimaharvey
+
+
 ## [1.2.0-develop.11](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.10..1.2.0-develop.11) - 2026-05-01
 
 ### Bug Fixes
