@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.13](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.12..1.2.0-develop.13) - 2026-05-04
+
+### Bug Fixes
+
+- align kontrol schedule to prague and remove stale storage layout - ([88f5e58](https://github.com/golemfoundation/octant-v2-core/commit/88f5e5822866261f5b041838df99e97da283b9dc)) - skimaharvey
+
+### Miscellaneous Tasks
+
+- retain package compatibility shims - ([0895b01](https://github.com/golemfoundation/octant-v2-core/commit/0895b0149d164a4de39a947faa310fb9118cf405)) - skimaharvey
+- remove stale storage layout workflow - ([9711eb1](https://github.com/golemfoundation/octant-v2-core/commit/9711eb1793af88f946d4b94a61708b0c02d4ecbc)) - skimaharvey
+- consolidate test directories and rename test files to .t.sol - ([7b3451a](https://github.com/golemfoundation/octant-v2-core/commit/7b3451a3a45bd2292b97dbbce5d9748ebd426396)) - skimaharvey
+- remove dead code, unused interfaces, orphaned mocks, and stale deps - ([2c52b9a](https://github.com/golemfoundation/octant-v2-core/commit/2c52b9aeb33b86e7ea1dd71ffe6eacafc9991bc2)) - skimaharvey
+
+### Refactor
+
+- consolidate duplicate USDC constants, ISafe interface, and Aave interfaces - ([2dccf38](https://github.com/golemfoundation/octant-v2-core/commit/2dccf38b46371d8920d07a1fd4788dfdb325dc68)) - skimaharvey
+
+### Testing
+
+- **(poc)** replace tautological checks with fork coverage - ([ef8cb3e](https://github.com/golemfoundation/octant-v2-core/commit/ef8cb3e8b169c4ff641796b165234535ba0a498f)) - skimaharvey
+
+
 ## [1.2.0-develop.12](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.11..1.2.0-develop.12) - 2026-05-04
 
 ### Styling
