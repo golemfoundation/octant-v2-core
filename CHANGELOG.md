@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.14](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.13..1.2.0-develop.14) - 2026-05-06
+
+### CI/CD
+
+- **(kontrol)** gate develop to master proofs - ([eb9bffe](https://github.com/golemfoundation/octant-v2-core/commit/eb9bffe49e0f753bac7cca9beda17c9051742bc3)) - skimaharvey
+
+
 ## [1.2.0-develop.13](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.12..1.2.0-develop.13) - 2026-05-04
 
 ### Bug Fixes
