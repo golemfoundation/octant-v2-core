@@ -47,12 +47,12 @@ jobs:
             develop)
               if [ "$BASE_BRANCH" != "master" ]; then
                 private_ci_supported=false
-                echo "::error title=Unsupported branch name::Branch '$HEAD_BRANCH' is allowed only for production release PRs targeting master."
+                echo "::error title=Unsupported branch name::The 'develop' head branch is allowed only for production release PRs targeting master."
               fi
               ;;
             *)
               private_ci_supported=false
-              echo "::error title=Unsupported branch name::Branch '$HEAD_BRANCH' does not match the expected naming convention: $expected_branches."
+              echo "::error title=Unsupported branch name::The PR head branch does not match the expected naming convention: $expected_branches."
               ;;
           esac
 
