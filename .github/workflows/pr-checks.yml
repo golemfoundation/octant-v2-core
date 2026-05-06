@@ -2,7 +2,7 @@ name: "⚙️ PR Standards Check"
 on:
   pull_request:
     branches:
-      - main
+      - master
       - develop
     types:
       - opened
@@ -19,7 +19,10 @@ concurrency:
 jobs:
   check-formatting:
     name: Check Code Formatting
-    if: github.head_ref != 'main'
+    if: >-
+      github.base_ref != 'develop' ||
+      github.head_ref != 'master' ||
+      github.event.pull_request.head.repo.full_name != github.repository
     timeout-minutes: 15
     runs-on: ubuntu-latest
     container:
@@ -39,7 +42,10 @@ jobs:
 
   lint:
     name: Lint Code
-    if: github.head_ref != 'main'
+    if: >-
+      github.base_ref != 'develop' ||
+      github.head_ref != 'master' ||
+      github.event.pull_request.head.repo.full_name != github.repository
     timeout-minutes: 15
     runs-on: ubuntu-latest
     container:
@@ -59,7 +65,10 @@ jobs:
 
   conventional-commits:
     name: Conventional Commits
-    if: github.head_ref != 'main'
+    if: >-
+      github.base_ref != 'develop' ||
+      github.head_ref != 'master' ||
+      github.event.pull_request.head.repo.full_name != github.repository
     timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
@@ -79,7 +88,10 @@ jobs:
 
   build:
     name: Build
-    if: github.head_ref != 'main'
+    if: >-
+      github.base_ref != 'develop' ||
+      github.head_ref != 'master' ||
+      github.event.pull_request.head.repo.full_name != github.repository
     timeout-minutes: 15
     runs-on: ubuntu-latest
     container:
@@ -101,7 +113,10 @@ jobs:
 
   test:
     name: Test suite
-    if: github.head_ref != 'main'
+    if: >-
+      github.base_ref != 'develop' ||
+      github.head_ref != 'master' ||
+      github.event.pull_request.head.repo.full_name != github.repository
     timeout-minutes: 15
     runs-on: general
     container:
@@ -151,7 +166,10 @@ jobs:
 
   coverage:
     name: Code Coverage
-    if: github.head_ref != 'main'
+    if: >-
+      github.base_ref != 'develop' ||
+      github.head_ref != 'master' ||
+      github.event.pull_request.head.repo.full_name != github.repository
     timeout-minutes: 30
     runs-on: general
     container:
@@ -279,9 +297,12 @@ jobs:
 
   kontrol-proofs:
     name: Kontrol Formal Verification
-    if: github.head_ref != 'main'
+    # Run the expensive proofs only on the canonical develop -> master release PR path.
+    if: >-
+      github.base_ref == 'master' &&
+      github.head_ref == 'develop' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: general
-    continue-on-error: true
     container:
       image: runtimeverificationinc/kontrol:ubuntu-jammy-1.0.231
       options: --user root
@@ -326,7 +347,10 @@ jobs:
 
   analyze:
     name: Analyze with Slither
-    if: github.head_ref != 'main'
+    if: >-
+      github.base_ref != 'develop' ||
+      github.head_ref != 'master' ||
+      github.event.pull_request.head.repo.full_name != github.repository
     timeout-minutes: 15
     runs-on: ubuntu-latest
     container:
@@ -355,7 +379,10 @@ jobs:
 
   trivy:
     name: Vulnerability Scan
-    if: github.head_ref != 'main'
+    if: >-
+      github.base_ref != 'develop' ||
+      github.head_ref != 'master' ||
+      github.event.pull_request.head.repo.full_name != github.repository
     timeout-minutes: 15
     runs-on: ubuntu-latest
     steps:
@@ -367,7 +394,10 @@ jobs:
 
   natspec:
     name: NatSpec Documentation Check
-    if: github.head_ref != 'main'
+    if: >-
+      github.base_ref != 'develop' ||
+      github.head_ref != 'master' ||
+      github.event.pull_request.head.repo.full_name != github.repository
     timeout-minutes: 15
     runs-on: ubuntu-latest
     container:
@@ -398,7 +428,12 @@ jobs:
 
   semver-check:
     name: Contract Semver Check
-    if: github.head_ref != 'main'
+    needs: kontrol-proofs
+    if: >-
+      always() &&
+      (github.base_ref != 'develop' ||
+      github.head_ref != 'master' ||
+      github.event.pull_request.head.repo.full_name != github.repository)
     timeout-minutes: 15
     runs-on: ubuntu-latest
     container:
@@ -407,6 +442,18 @@ jobs:
         username: _json_key_base64
         password: ${{ secrets.GCP_DOCKER_IMAGES_REGISTRY_SERVICE_ACCOUNT }}
     steps:
+      - name: Require Kontrol proofs
+        if: >-
+          github.base_ref == 'master' &&
+          github.head_ref == 'develop' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          if [ "${{ needs.kontrol-proofs.result }}" != "success" ]; then
+            echo "Kontrol proofs must pass before merging develop into master."
+            echo "Kontrol result: ${{ needs.kontrol-proofs.result }}"
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
         with:
