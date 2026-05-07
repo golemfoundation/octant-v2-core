@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.15](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.14..1.2.0-develop.15) - 2026-05-06
+
+### CI/CD
+
+- **(preflight)** drop attacker-controlled head_ref from ::error lines - ([c4c1cd4](https://github.com/golemfoundation/octant-v2-core/commit/c4c1cd417f549cab990220b26adbd6dffe44a319)) - Ferit
+- **(preflight)** add fail-fast preflight for unsupported PR sources - ([b49a2ed](https://github.com/golemfoundation/octant-v2-core/commit/b49a2ed5443595c2f2d3f01cf37e8345e0f2827e)) - Ferit
+
+
 ## [1.2.0-develop.14](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.13..1.2.0-develop.14) - 2026-05-06
 
 ### CI/CD
