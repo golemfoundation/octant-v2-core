@@ -163,8 +163,8 @@ contract MorphoCompounderStrategy is BaseHealthCheck {
     function _harvestAndReport() internal view override returns (uint256 _totalAssets) {
         // Get strategy's share balance in the compounder vault
         uint256 shares = ITokenizedStrategy(compounderVault).balanceOf(address(this));
-        // EIP-4626 requires previewRedeem to reflect any exit-fee policy the target vault enforces;
-        // convertToAssets returns the gross value and would overstate totalAssets for fee-charging vaults.
+        // Fee-charging target vaults are not supported. previewRedeem is used as a defensive read
+        // so post-fee value would still be tracked correctly if one were encountered.
         uint256 vaultAssets = ITokenizedStrategy(compounderVault).previewRedeem(shares);
 
         // Include idle funds as per BaseStrategy specification

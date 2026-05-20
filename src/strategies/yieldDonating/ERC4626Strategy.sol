@@ -172,8 +172,8 @@ contract ERC4626Strategy is BaseHealthCheck {
     function _harvestAndReport() internal view override returns (uint256 _totalAssets) {
         // get strategy's balance in the vault (shares)
         uint256 shares = IERC4626(targetVault).balanceOf(address(this));
-        // EIP-4626 requires previewRedeem to reflect any exit-fee policy the target vault enforces;
-        // convertToAssets returns the gross value and would overstate totalAssets for fee-charging vaults.
+        // Fee-charging target vaults are not supported. previewRedeem is used as a defensive read
+        // so post-fee value would still be tracked correctly if one were encountered.
         uint256 vaultAssets = IERC4626(targetVault).previewRedeem(shares);
 
         uint256 idleAssets = IERC20(asset).balanceOf(address(this));
