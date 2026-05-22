@@ -172,6 +172,38 @@ contract CurveSwapperTest is Test {
             "Caller should receive the prior donation back via the flush"
         );
     }
+
+    /// @notice The adapter must forward the FULL tokenOut balance to receiver,
+    ///         including any pre-existing donation, so the delta-based
+    ///         amountOut accounting does not strand donated tokens. amountOut
+    ///         itself must remain the true swap delta -- donations must not
+    ///         inflate the reported output.
+    function test_swap_forwardsPreExistingTokenOutDonationToReceiver() public {
+        CurveSwapper s = new CurveSwapper(address(pool), INDEX_IN, INDEX_OUT, address(tokenIn), address(tokenOut));
+
+        // Pre-existing tokenOut donation sitting on the adapter at swap entry.
+        uint256 donation = 7e18;
+        tokenOut.mint(address(s), donation);
+
+        uint256 amountIn = 100e18;
+        tokenIn.mint(address(this), amountIn);
+        tokenIn.approve(address(s), amountIn);
+
+        uint256 receiverBalBefore = tokenOut.balanceOf(receiver);
+
+        uint256 amountOut = s.swap(address(tokenIn), address(tokenOut), amountIn, 0, receiver);
+
+        // amountOut reports only the swap delta, NOT delta + donation.
+        assertEq(amountOut, amountIn, "amountOut is the swap delta, donation excluded");
+        // The adapter holds zero tokenOut after the call (no stranding).
+        assertEq(tokenOut.balanceOf(address(s)), 0, "Adapter must hold zero tokenOut after swap");
+        // Receiver got the swap output AND the pre-existing donation.
+        assertEq(
+            tokenOut.balanceOf(receiver),
+            receiverBalBefore + amountIn + donation,
+            "Receiver gets swap output plus pre-existing donation"
+        );
+    }
 }
 
 // ═══════════════════════════════════════════════════════════

@@ -379,6 +379,79 @@ contract PSMSwapperTest is Test {
         assertEq(gem.balanceOf(address(s)), 0, "Adapter should not retain tokenIn");
         assertEq(gem.balanceOf(address(this)), leftover, "Preexisting tokenIn should be flushed to caller");
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // ZERO-RESIDUE INVARIANT — tokenOut (Cantina #1 reopen)
+    // ═══════════════════════════════════════════════════════════
+
+    /// @notice SELL_GEM: a pre-existing tokenOut donation must be forwarded
+    ///         to receiver instead of stranded by the delta-based amountOut
+    ///         accounting. amountOut itself must report only the swap delta.
+    function test_swap_sellGem_forwardsPreExistingTokenOutDonationToReceiver() public {
+        MockPSM mockPSM = new MockPSM(address(gem), address(dai));
+        PSMSwapper s = new PSMSwapper(address(mockPSM), PSMSwapper.Route.SELL_GEM, address(gem), address(dai), 0);
+
+        // Pre-existing tokenOut donation sitting on the adapter at swap entry.
+        uint256 donation = 7e18;
+        dai.mint(address(s), donation);
+
+        uint256 amountIn = 1000e18;
+        gem.mint(address(this), amountIn);
+        gem.approve(address(s), amountIn);
+
+        uint256 receiverBalBefore = dai.balanceOf(receiver);
+
+        uint256 amountOut = s.swap(address(gem), address(dai), amountIn, 0, receiver);
+
+        // amountOut reports only the swap delta, NOT delta + donation.
+        assertEq(amountOut, amountIn, "SELL_GEM amountOut is the swap delta, donation excluded");
+        assertEq(dai.balanceOf(address(s)), 0, "Adapter must hold zero tokenOut after swap");
+        assertEq(
+            dai.balanceOf(receiver),
+            receiverBalBefore + amountIn + donation,
+            "Receiver gets swap output plus pre-existing donation"
+        );
+    }
+
+    /// @notice BUY_GEM: a pre-existing tokenOut donation must be forwarded
+    ///         to receiver instead of stranded by the delta-based amountOut
+    ///         accounting. amountOut itself must report only the swap delta.
+    function test_swap_buyGem_forwardsPreExistingTokenOutDonationToReceiver() public {
+        MockPSM mockPSM = new MockPSM(address(dai), address(gem));
+        mockPSM.setTout(0);
+
+        PSMSwapper s = new PSMSwapper(
+            address(mockPSM),
+            PSMSwapper.Route.BUY_GEM,
+            address(dai),
+            address(gem),
+            CONVERSION_FACTOR
+        );
+
+        // Pre-existing tokenOut donation sitting on the adapter at swap entry.
+        uint256 donation = 1234;
+        gem.mint(address(s), donation);
+
+        uint256 amountIn = 1000e18;
+        dai.mint(address(this), amountIn);
+        dai.approve(address(s), amountIn);
+
+        uint256 receiverBalBefore = gem.balanceOf(receiver);
+
+        uint256 amountOut = s.swap(address(dai), address(gem), amountIn, 0, receiver);
+
+        uint256 expectedGemAmt = (amountIn * WAD) / (CONVERSION_FACTOR * WAD);
+
+        // amountOut reports only the swap delta, NOT delta + donation -- so
+        // the swap() wrapper's minAmountOut check stays honest under donation.
+        assertEq(amountOut, expectedGemAmt, "BUY_GEM amountOut is the swap delta, donation excluded");
+        assertEq(gem.balanceOf(address(s)), 0, "Adapter must hold zero tokenOut after swap");
+        assertEq(
+            gem.balanceOf(receiver),
+            receiverBalBefore + expectedGemAmt + donation,
+            "Receiver gets swap output plus pre-existing donation"
+        );
+    }
 }
 
 // ═══════════════════════════════════════════════════════════

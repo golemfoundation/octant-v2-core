@@ -133,7 +133,12 @@ contract CurveSwapper is ISwapper {
 
         IERC20(tokenIn).forceApprove(pool, 0);
 
-        IERC20(tokenOut).safeTransfer(receiver, amountOut);
+        // Forward the FULL tokenOut balance to receiver, not just the swap
+        // delta. Any pre-existing tokenOut sitting on the adapter (donation
+        // or quirk) would otherwise be stranded because balBefore subtracts
+        // it from amountOut. `amountOut` itself remains the true swap delta
+        // so callers/events do not see donation-inflated output.
+        IERC20(tokenOut).safeTransfer(receiver, IERC20(tokenOut).balanceOf(address(this)));
 
         // Curve pools normally pull the full `amountIn`, but any tokenIn that
         // ended up here -- whether from an unusual pool implementation or a

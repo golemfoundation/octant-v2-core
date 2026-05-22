@@ -470,6 +470,53 @@ contract UniswapV4SwapperAdapterTest is Test {
         assertEq(tokenA.balanceOf(address(s)), 0, "Adapter should not retain tokenIn");
         assertEq(tokenA.balanceOf(address(this)), leftover, "Preexisting tokenIn should be flushed to caller");
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // ZERO-RESIDUE INVARIANT — tokenOut (Cantina #1 reopen)
+    // ═══════════════════════════════════════════════════════════
+
+    /// @notice The PoolManager take()s tokenOut directly to receiver, so the
+    ///         adapter normally never holds tokenOut. A direct ERC20 donation
+    ///         sitting on the adapter at entry would otherwise be stranded.
+    ///         The adapter must sweep any tokenOut residue to receiver
+    ///         before returning, upholding the ISwapper "holds no tokens
+    ///         between calls" invariant on every path.
+    function test_swap_singleHop_sweepsPreExistingTokenOutDonationToReceiver() public {
+        UniswapV4SwapperAdapter s = new UniswapV4SwapperAdapter(
+            address(pm),
+            FEE,
+            TICK_SPACING,
+            address(0),
+            address(0),
+            0,
+            0,
+            address(0)
+        );
+
+        // Pre-existing tokenOut donation sitting on the adapter at swap entry.
+        uint256 donation = 7e18;
+        tokenB.mint(address(s), donation);
+
+        uint256 amountIn = 1000e18;
+        tokenA.mint(address(this), amountIn);
+        tokenA.approve(address(s), amountIn);
+        pm.setOutputToken(address(tokenB));
+
+        uint256 receiverBalBefore = tokenB.balanceOf(receiver);
+
+        uint256 amountOut = s.swap(address(tokenA), address(tokenB), amountIn, 0, receiver);
+
+        // amountOut comes from the PoolManager-reported delta (no donation
+        // inflation, since the PoolManager take()s tokenOut straight to
+        // receiver during the callback).
+        assertEq(amountOut, amountIn, "amountOut is the PoolManager-reported swap output");
+        assertEq(tokenB.balanceOf(address(s)), 0, "Adapter must hold zero tokenOut after swap");
+        assertEq(
+            tokenB.balanceOf(receiver),
+            receiverBalBefore + amountIn + donation,
+            "Receiver gets swap output plus pre-existing donation"
+        );
+    }
 }
 
 // ═══════════════════════════════════════════════════════════

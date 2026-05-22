@@ -185,6 +185,43 @@ contract UniswapV3SwapperAdapterTest is Test {
         );
         assertEq(tokenA.balanceOf(address(this)), leftover, "Caller must receive unused tokenIn");
     }
+
+    // ═══════════════════════════════════════════════════════════
+    // ZERO-RESIDUE INVARIANT — tokenOut (Cantina #1 reopen)
+    // ═══════════════════════════════════════════════════════════
+
+    /// @notice The router sends tokenOut directly to receiver, so the adapter
+    ///         normally never holds tokenOut. But a direct ERC20 donation
+    ///         sitting on the adapter at entry would be stranded without an
+    ///         explicit sweep. The adapter must flush any tokenOut residue to
+    ///         receiver before returning, upholding the ISwapper "holds no
+    ///         tokens between calls" invariant on every path.
+    function test_swap_sweepsPreExistingTokenOutDonationToReceiver() public {
+        UniswapV3SwapperAdapter s = new UniswapV3SwapperAdapter(address(router), FEE, address(0), 0);
+
+        // Pre-existing tokenOut donation sitting on the adapter at swap entry.
+        uint256 donation = 7e18;
+        tokenB.mint(address(s), donation);
+
+        uint256 amountIn = 1000e18;
+        tokenA.mint(address(this), amountIn);
+        tokenA.approve(address(s), amountIn);
+        router.setOutputToken(address(tokenB));
+
+        uint256 receiverBalBefore = tokenB.balanceOf(receiver);
+
+        uint256 amountOut = s.swap(address(tokenA), address(tokenB), amountIn, 0, receiver);
+
+        // amountOut is what the router reports (no donation inflation, since
+        // the router itself sends tokenOut directly to receiver).
+        assertEq(amountOut, amountIn, "amountOut is the router-reported swap output");
+        assertEq(tokenB.balanceOf(address(s)), 0, "Adapter must hold zero tokenOut after swap");
+        assertEq(
+            tokenB.balanceOf(receiver),
+            receiverBalBefore + amountIn + donation,
+            "Receiver gets router output plus pre-existing donation"
+        );
+    }
 }
 
 // ═══════════════════════════════════════════════════════════
