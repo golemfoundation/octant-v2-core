@@ -1062,6 +1062,10 @@ abstract contract TokenizedStrategy {
         if (maxRedeem_ == type(uint256).max) {
             maxRedeem_ = balance;
         } else {
+            // ERC-4626 deviation: a finite asset-denominated withdrawal limit can
+            // floor to dust shares that convert back to 0 assets. redeem() still
+            // rejects those with ZERO_ASSETS, so integrations should skip redeeming
+            // when previewRedeem(maxRedeem(owner)) == 0.
             maxRedeem_ = Math.min(
                 // Can't redeem more than the balance.
                 _convertToShares(S, maxRedeem_, Math.Rounding.Floor),
