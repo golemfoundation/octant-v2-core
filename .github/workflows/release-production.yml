@@ -50,7 +50,7 @@ jobs:
 
       - name: Prepare release
         id: prepare
-        uses: golemfoundation/github-actions/octant/release-prepare@0.4.9
+        uses: golemfoundation/github-actions/octant/release-prepare@0.6.4
         with:
           source: ${{ inputs.source }}
           master-branch: ${{ env.MASTER_BRANCH_NAME }}
