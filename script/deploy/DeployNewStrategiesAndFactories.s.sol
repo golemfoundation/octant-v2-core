@@ -14,6 +14,7 @@ import { LidoStrategyFactory } from "src/factories/LidoStrategyFactory.sol";
 import { MorphoCompounderStrategyFactory } from "src/factories/MorphoCompounderStrategyFactory.sol";
 import { SkyCompounderStrategyFactory } from "src/factories/SkyCompounderStrategyFactory.sol";
 import { YearnV3StrategyFactory } from "src/factories/yieldDonating/YearnV3StrategyFactory.sol";
+import { AaveV3StrategyFactory } from "src/factories/AaveV3StrategyFactory.sol";
 
 // RegenStaker ecosystem
 import { AddressSetFactory } from "src/factories/AddressSetFactory.sol";
@@ -26,7 +27,7 @@ import { RegenStakerWithoutDelegateSurrogateVotes } from "src/regen/RegenStakerW
  * @title DeployNewStrategiesAndFactories
  * @author Golem Foundation
  * @notice Deploys new tokenized strategies, factories, and RegenStaker infrastructure via Safe multisig
- * @dev Due to the EIP-7825 per-transaction gas limit of 16,777,216 gas (2^24), all 10 contracts
+ * @dev Due to the EIP-7825 per-transaction gas limit of 16,777,216 gas (2^24), all 11 contracts
  *      cannot be deployed in a single transaction. The deployment is split
  *      into three Safe MultiSend batches:
  *
@@ -37,9 +38,10 @@ import { RegenStakerWithoutDelegateSurrogateVotes } from "src/regen/RegenStakerW
  *        - LidoStrategyFactory
  *        - MorphoCompounderStrategyFactory
  *
- *      Batch 2: Remaining YieldDonating factories (2 contracts)
+ *      Batch 2: Remaining YieldDonating factories (3 contracts)
  *        - SkyCompounderStrategyFactory
  *        - YearnV3StrategyFactory
+ *        - AaveV3StrategyFactory
  *
  *      Batch 3 (~3M gas): RegenStaker infrastructure (3 contracts)
  *        - AddressSetFactory
@@ -85,6 +87,7 @@ contract DeployNewStrategiesAndFactories is Script, BatchScript {
     bytes32 public constant MORPHO_FACTORY_SALT = keccak256("MORPHO_COMPOUNDER_FACTORY_11022026");
     bytes32 public constant SKY_FACTORY_SALT = keccak256("SKY_COMPOUNDER_FACTORY_11022026");
     bytes32 public constant YEARN_V3_FACTORY_SALT = keccak256("YEARN_V3_STRATEGY_FACTORY_11022026");
+    bytes32 public constant AAVE_V3_FACTORY_SALT = keccak256("AAVE_V3_STRATEGY_FACTORY_11022026");
 
     // RegenStaker ecosystem salts
     bytes32 public constant ADDRESS_SET_FACTORY_SALT = keccak256("ADDRESS_SET_FACTORY_11022026");
@@ -106,6 +109,7 @@ contract DeployNewStrategiesAndFactories is Script, BatchScript {
     // Batch 2
     address public skyFactory;
     address public yearnV3Factory;
+    address public aaveV3Factory;
 
     // Batch 3
     address public addressSetFactory;
@@ -222,6 +226,10 @@ contract DeployNewStrategiesAndFactories is Script, BatchScript {
             YEARN_V3_FACTORY_SALT,
             keccak256(type(YearnV3StrategyFactory).creationCode)
         );
+        aaveV3Factory = _computeCreate2AddressViaFactory(
+            AAVE_V3_FACTORY_SALT,
+            keccak256(type(AaveV3StrategyFactory).creationCode)
+        );
     }
 
     function _calculateBatch3Addresses() internal {
@@ -278,6 +286,9 @@ contract DeployNewStrategiesAndFactories is Script, BatchScript {
 
         _addCreate2Deployment(YEARN_V3_FACTORY_SALT, type(YearnV3StrategyFactory).creationCode);
         console.log("- YearnV3StrategyFactory:", yearnV3Factory);
+
+        _addCreate2Deployment(AAVE_V3_FACTORY_SALT, type(AaveV3StrategyFactory).creationCode);
+        console.log("- AaveV3StrategyFactory:", aaveV3Factory);
     }
 
     function _addBatch3Deployments() internal {
@@ -324,9 +335,10 @@ contract DeployNewStrategiesAndFactories is Script, BatchScript {
     function _logBatch2Summary() internal view {
         console.log("\n=== BATCH 2 SUMMARY ===");
         console.log("Safe Address:", safe);
-        console.log("Contracts: 2 (nonce N+1)");
+        console.log("Contracts: 3 (nonce N+1)");
         console.log("  SkyCompounderStrategyFactory:", skyFactory);
         console.log("  YearnV3StrategyFactory:", yearnV3Factory);
+        console.log("  AaveV3StrategyFactory:", aaveV3Factory);
         console.log("Transaction sent to Safe for signing.\n");
     }
 
@@ -342,7 +354,7 @@ contract DeployNewStrategiesAndFactories is Script, BatchScript {
 
     function _logFullSummary() internal pure {
         console.log("=== FULL DEPLOYMENT SUMMARY ===");
-        console.log("Total contracts: 10 across 3 Safe transactions");
+        console.log("Total contracts: 11 across 3 Safe transactions");
         console.log("All transactions proposed to Safe for signing.");
         console.log("Execute batch 1, then batch 2, then batch 3.");
         console.log("================================\n");

@@ -14,6 +14,7 @@ The deployment script `DeployAllStrategiesAndFactories.s.sol` deploys the follow
 2. **SkyCompounderStrategyFactory** - Factory for deploying Sky Compounder yield donating strategies
 3. **PaymentSplitterFactory** - Factory for deploying PaymentSplitter contracts with minimal proxies
 4. **YearnV3StrategyFactory** - Factory for deploying YearnV3 yield donating strategies
+5. **AaveV3StrategyFactory** - Factory for deploying Aave V3 yield donating strategies
 
 ## Prerequisites
 
@@ -103,6 +104,7 @@ All salts use a date-based format (DDMMYYYY) for versioning:
 - SkyCompounderStrategyFactory: `keccak256("SKY_COMPOUNDER_FACTORY_05112025")`
 - PaymentSplitterFactory: `keccak256("PAYMENT_SPLITTER_FACTORY_05112025")`
 - YearnV3StrategyFactory: `keccak256("YEARN_V3_STRATEGY_FACTORY_05112025")`
+- AaveV3StrategyFactory: `keccak256("AAVE_V3_STRATEGY_FACTORY_05112025")`
 
 ## What the Script Does
 
@@ -111,7 +113,7 @@ All salts use a date-based format (DDMMYYYY) for versioning:
 3. **Safe Execution Flow**:
    - Safe calls `execTransaction` (once)
    - `execTransaction` calls `MultiSendCallOnly`
-   - `MultiSendCallOnly` makes 5 calls to CREATE2 factory at `0x4e59b44847b379578588920cA78FbF26c0B4956C`
+   - `MultiSendCallOnly` makes 6 calls to CREATE2 factory at `0x4e59b44847b379578588920cA78FbF26c0B4956C`
    - Each call uses calldata format: `salt (32 bytes) + bytecode`
    - CREATE2 factory deploys each contract deterministically
 4. **Sends to Safe Backend**: Submits the transaction to Safe's backend for owner signatures

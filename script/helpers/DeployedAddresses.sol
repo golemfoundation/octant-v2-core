@@ -31,6 +31,7 @@ contract DeployedAddresses is Script {
         address paymentSplitterFactory;
         address skyCompounderStrategyFactory;
         address morphoCompounderStrategyFactory;
+        address aaveV3StrategyFactory;
         address regenEarningPowerCalculatorFactory;
         address regenStakerFactory;
         address allocationMechanismFactory;
@@ -83,6 +84,7 @@ contract DeployedAddresses is Script {
                 paymentSplitterFactory: 0x5711765E0756B45224fc1FdA1B41ab344682bBcb,
                 skyCompounderStrategyFactory: 0xbe5352d0eCdB13D9f74c244B634FdD729480Bb6F,
                 morphoCompounderStrategyFactory: 0x052d20B0e0b141988bD32772C735085e45F357c1,
+                aaveV3StrategyFactory: address(0),
                 regenEarningPowerCalculatorFactory: 0xD916da52d277b28CaDFfEE5350bA98cf3d8fa441,
                 regenStakerFactory: 0x6a8250C95d2e866e95fe4749eD540357B8e44a9a,
                 allocationMechanismFactory: address(0),
@@ -112,6 +114,7 @@ contract DeployedAddresses is Script {
                 paymentSplitterFactory: address(0),
                 skyCompounderStrategyFactory: address(0),
                 morphoCompounderStrategyFactory: address(0),
+                aaveV3StrategyFactory: address(0),
                 regenEarningPowerCalculatorFactory: address(0),
                 regenStakerFactory: address(0),
                 allocationMechanismFactory: 0x4fc209Fbc5eFE0549cdB878f206942a91bBC17d2,
@@ -139,6 +142,7 @@ contract DeployedAddresses is Script {
                 paymentSplitterFactory: 0x5711765E0756B45224fc1FdA1B41ab344682bBcb,
                 skyCompounderStrategyFactory: 0xbe5352d0eCdB13D9f74c244B634FdD729480Bb6F,
                 morphoCompounderStrategyFactory: 0x052d20B0e0b141988bD32772C735085e45F357c1,
+                aaveV3StrategyFactory: address(0),
                 // RegenStaker and AllocationMechanism - deploy fresh (protocol-specific)
                 regenEarningPowerCalculatorFactory: 0xD916da52d277b28CaDFfEE5350bA98cf3d8fa441,
                 regenStakerFactory: 0x6a8250C95d2e866e95fe4749eD540357B8e44a9a,
@@ -169,6 +173,7 @@ contract DeployedAddresses is Script {
                 paymentSplitterFactory: address(0),
                 skyCompounderStrategyFactory: address(0),
                 morphoCompounderStrategyFactory: address(0),
+                aaveV3StrategyFactory: address(0),
                 regenEarningPowerCalculatorFactory: address(0),
                 regenStakerFactory: address(0),
                 allocationMechanismFactory: address(0),

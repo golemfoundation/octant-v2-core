@@ -12,6 +12,7 @@ import { MorphoCompounderStrategyFactory } from "src/factories/MorphoCompounderS
 import { SkyCompounderStrategyFactory } from "src/factories/SkyCompounderStrategyFactory.sol";
 import { PaymentSplitterFactory } from "src/factories/PaymentSplitterFactory.sol";
 import { YearnV3StrategyFactory } from "src/factories/yieldDonating/YearnV3StrategyFactory.sol";
+import { AaveV3StrategyFactory } from "src/factories/AaveV3StrategyFactory.sol";
 
 /**
  * @title DeployAllStrategiesAndFactories
@@ -28,6 +29,7 @@ contract DeployAllStrategiesAndFactories is Script, BatchScript {
     bytes32 public constant SKY_FACTORY_SALT = keccak256("SKY_COMPOUNDER_FACTORY_05112025");
     bytes32 public constant PAYMENT_SPLITTER_FACTORY_SALT = keccak256("PAYMENT_SPLITTER_FACTORY_05112025");
     bytes32 public constant YEARN_V3_FACTORY_SALT = keccak256("YEARN_V3_STRATEGY_FACTORY_05112025");
+    bytes32 public constant AAVE_V3_FACTORY_SALT = keccak256("AAVE_V3_STRATEGY_FACTORY_05112025");
 
     // Deployed addresses (to be logged)
     address public yieldDonatingStrategy;
@@ -35,6 +37,7 @@ contract DeployAllStrategiesAndFactories is Script, BatchScript {
     address public skyFactory;
     address public paymentSplitterFactory;
     address public yearnV3Factory;
+    address public aaveV3Factory;
 
     // Safe address
     address public safe;
@@ -92,6 +95,10 @@ contract DeployAllStrategiesAndFactories is Script, BatchScript {
         // YearnV3StrategyFactory
         bytes memory yearnV3CreationCode = type(YearnV3StrategyFactory).creationCode;
         yearnV3Factory = _computeCreate2Address(CREATE2_FACTORY, YEARN_V3_FACTORY_SALT, keccak256(yearnV3CreationCode));
+
+        // AaveV3StrategyFactory
+        bytes memory aaveV3CreationCode = type(AaveV3StrategyFactory).creationCode;
+        aaveV3Factory = _computeCreate2Address(CREATE2_FACTORY, AAVE_V3_FACTORY_SALT, keccak256(aaveV3CreationCode));
     }
 
     function _addStrategyDeployments() internal {
@@ -141,6 +148,14 @@ contract DeployAllStrategiesAndFactories is Script, BatchScript {
         );
         addToBatch(CREATE2_FACTORY, 0, yearnV3DeployData);
         console.log("- YearnV3StrategyFactory at:", yearnV3Factory);
+
+        // Deploy AaveV3StrategyFactory
+        bytes memory aaveV3DeployData = abi.encodePacked(
+            AAVE_V3_FACTORY_SALT,
+            type(AaveV3StrategyFactory).creationCode
+        );
+        addToBatch(CREATE2_FACTORY, 0, aaveV3DeployData);
+        console.log("- AaveV3StrategyFactory at:", aaveV3Factory);
     }
 
     function _logDeploymentSummary() internal view {
@@ -153,10 +168,11 @@ contract DeployAllStrategiesAndFactories is Script, BatchScript {
         console.log("- SkyCompounderStrategyFactory:", skyFactory);
         console.log("- PaymentSplitterFactory:", paymentSplitterFactory);
         console.log("- YearnV3StrategyFactory:", yearnV3Factory);
+        console.log("- AaveV3StrategyFactory:", aaveV3Factory);
         console.log("\nBatch transaction created:");
         console.log("- Safe will call execTransaction once");
         console.log("- execTransaction calls MultiSendCallOnly");
-        console.log("- MultiSendCallOnly makes 5 calls to CREATE2 factory");
+        console.log("- MultiSendCallOnly makes 6 calls to CREATE2 factory");
         console.log("- CREATE2 factory deploys each contract deterministically");
         console.log("\nTransaction sent to Safe for signing.");
         console.log("========================\n");

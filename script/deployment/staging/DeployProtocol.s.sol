@@ -8,6 +8,7 @@ import { DeployLinearAllowanceSingletonForGnosisSafe } from "script/deploy/Deplo
 import { DeployPaymentSplitterFactory } from "script/deploy/DeployPaymentSplitterFactory.sol";
 import { DeploySkyCompounderStrategyFactory } from "script/deploy/DeploySkyCompounderStrategyFactory.sol";
 import { DeployMorphoCompounderStrategyFactory } from "script/deploy/DeployMorphoCompounderStrategyFactory.sol";
+import { DeployAaveV3StrategyFactory } from "script/deploy/DeployAaveV3StrategyFactory.sol";
 import { DeployAllocationMechanismFactory } from "script/deploy/DeployAllocationMechanismFactory.sol";
 import { DeployYearnV3StrategyFactory } from "script/deploy/DeployYearnV3StrategyFactory.s.sol";
 import { DeployLidoStrategyFactory } from "script/deploy/DeployLidoStrategyFactory.sol";
@@ -24,6 +25,7 @@ contract DeployProtocol is Script {
     DeployPaymentSplitterFactory public deployPaymentSplitterFactory;
     DeploySkyCompounderStrategyFactory public deploySkyCompounderStrategyFactory;
     DeployMorphoCompounderStrategyFactory public deployMorphoCompounderStrategyFactory;
+    DeployAaveV3StrategyFactory public deployAaveV3StrategyFactory;
     DeployAllocationMechanismFactory public deployAllocationMechanismFactory;
     DeployYearnV3StrategyFactory public deployYearnV3StrategyFactory;
     DeployLidoStrategyFactory public deployLidoStrategyFactory;
@@ -36,6 +38,7 @@ contract DeployProtocol is Script {
     address public paymentSplitterFactoryAddress;
     address public skyCompounderStrategyFactoryAddress;
     address public morphoCompounderStrategyFactoryAddress;
+    address public aaveV3StrategyFactoryAddress;
     address public regenStakerFactoryAddress;
     address public allocationMechanismFactoryAddress;
     // External strategy contracts (tracked for reference, not deployed by this script)
@@ -59,6 +62,7 @@ contract DeployProtocol is Script {
         deployPaymentSplitterFactory = new DeployPaymentSplitterFactory();
         deploySkyCompounderStrategyFactory = new DeploySkyCompounderStrategyFactory();
         deployMorphoCompounderStrategyFactory = new DeployMorphoCompounderStrategyFactory();
+        deployAaveV3StrategyFactory = new DeployAaveV3StrategyFactory();
         deployAllocationMechanismFactory = new DeployAllocationMechanismFactory();
         deployYearnV3StrategyFactory = new DeployYearnV3StrategyFactory();
         deployLidoStrategyFactory = new DeployLidoStrategyFactory();
@@ -77,6 +81,7 @@ contract DeployProtocol is Script {
         paymentSplitterFactoryAddress = addresses.paymentSplitterFactory;
         skyCompounderStrategyFactoryAddress = addresses.skyCompounderStrategyFactory;
         morphoCompounderStrategyFactoryAddress = addresses.morphoCompounderStrategyFactory;
+        aaveV3StrategyFactoryAddress = addresses.aaveV3StrategyFactory;
         regenStakerFactoryAddress = addresses.regenStakerFactory;
         allocationMechanismFactoryAddress = addresses.allocationMechanismFactory;
         yieldDonatingTokenizedStrategyAddress = addresses.yieldDonatingTokenizedStrategy;
@@ -126,6 +131,13 @@ contract DeployProtocol is Script {
             if (morphoCompounderStrategyFactoryAddress == address(0)) revert DeploymentFailed();
         }
 
+        // Deploy Aave V3 Strategy Factory
+        if (aaveV3StrategyFactoryAddress == address(0)) {
+            deployAaveV3StrategyFactory.deploy();
+            aaveV3StrategyFactoryAddress = address(deployAaveV3StrategyFactory.aaveV3StrategyFactory());
+            if (aaveV3StrategyFactoryAddress == address(0)) revert DeploymentFailed();
+        }
+
         // Regen Staker Factory must be pre-deployed via Safe multisig
         // Use script/deploy/DeployRegenStakerFactory.s.sol with SAFE_ADDRESS env var
         if (regenStakerFactoryAddress == address(0)) {
@@ -159,6 +171,7 @@ contract DeployProtocol is Script {
         console2.log("Payment Splitter Factory:                 ", paymentSplitterFactoryAddress);
         console2.log("Sky Compounder Strategy Factory:          ", skyCompounderStrategyFactoryAddress);
         console2.log("Morpho Compounder Strategy Vault Factory: ", morphoCompounderStrategyFactoryAddress);
+        console2.log("Aave V3 Strategy Factory:                 ", aaveV3StrategyFactoryAddress);
         console2.log("Regen Staker Factory:                     ", regenStakerFactoryAddress);
         console2.log("Allocation Mechanism Factory:             ", allocationMechanismFactoryAddress);
         console2.log("Yearn V3 Strategy Factory:                ", yearnV3StrategyFactoryAddress);
@@ -191,6 +204,10 @@ contract DeployProtocol is Script {
                 "MORPHO_COMPOUNDER_STRATEGY_FACTORY_ADDRESS=",
                 vm.toString(morphoCompounderStrategyFactoryAddress)
             )
+        );
+        vm.writeLine(
+            contractAddressFilename,
+            string.concat("AAVE_V3_STRATEGY_FACTORY_ADDRESS=", vm.toString(aaveV3StrategyFactoryAddress))
         );
         vm.writeLine(
             contractAddressFilename,

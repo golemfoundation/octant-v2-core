@@ -18,6 +18,7 @@ import { LidoStrategyFactory } from "src/factories/LidoStrategyFactory.sol";
 import { MorphoCompounderStrategyFactory } from "src/factories/MorphoCompounderStrategyFactory.sol";
 import { SkyCompounderStrategyFactory } from "src/factories/SkyCompounderStrategyFactory.sol";
 import { YearnV3StrategyFactory } from "src/factories/yieldDonating/YearnV3StrategyFactory.sol";
+import { AaveV3StrategyFactory } from "src/factories/AaveV3StrategyFactory.sol";
 import { AddressSetFactory } from "src/factories/AddressSetFactory.sol";
 import { RegenEarningPowerCalculatorFactory } from "src/factories/RegenEarningPowerCalculatorFactory.sol";
 import { RegenStakerFactory } from "src/factories/RegenStakerFactory.sol";
@@ -101,6 +102,7 @@ contract DeployProtocol is Script, BatchScript {
     bytes32 internal _morphoFactorySalt;
     bytes32 internal _skyFactorySalt;
     bytes32 internal _yearnV3FactorySalt;
+    bytes32 internal _aaveV3FactorySalt;
     bytes32 internal _addressSetFactorySalt;
     bytes32 internal _calcFactorySalt;
     bytes32 internal _stakerFactorySalt;
@@ -116,7 +118,7 @@ contract DeployProtocol is Script, BatchScript {
     //  INITIALIZATION
     // ═════════════════════════════════════════════════════════════════════════
 
-    /// @dev Resolves SAFE_ADDRESS and SALT_TIMESTAMP from env, computes all 15
+    /// @dev Resolves SAFE_ADDRESS and SALT_TIMESTAMP from env, computes all 16
     ///      salts, and logs the full deployment configuration. Guarded by
     ///      _initialized to run exactly once.
     function _initialize() internal {
@@ -139,6 +141,7 @@ contract DeployProtocol is Script, BatchScript {
         _morphoFactorySalt = keccak256(abi.encodePacked("MORPHO_COMPOUNDER_FACTORY_", _saltTimestamp));
         _skyFactorySalt = keccak256(abi.encodePacked("SKY_COMPOUNDER_FACTORY_", _saltTimestamp));
         _yearnV3FactorySalt = keccak256(abi.encodePacked("YEARN_V3_STRATEGY_FACTORY_", _saltTimestamp));
+        _aaveV3FactorySalt = keccak256(abi.encodePacked("AAVE_V3_STRATEGY_FACTORY_", _saltTimestamp));
         _addressSetFactorySalt = keccak256(abi.encodePacked("ADDRESS_SET_FACTORY_", _saltTimestamp));
         _calcFactorySalt = keccak256(abi.encodePacked("REGEN_EARNING_POWER_CALCULATOR_FACTORY_", _saltTimestamp));
         _stakerFactorySalt = keccak256(abi.encodePacked("REGEN_STAKER_FACTORY_", _saltTimestamp));
@@ -263,7 +266,7 @@ contract DeployProtocol is Script, BatchScript {
         return address(uint160(uint256(hash)));
     }
 
-    /// @notice Compute and log all 15 deterministic addresses from CREATE2 math.
+    /// @notice Compute and log all 16 deterministic addresses from CREATE2 math.
     ///         Requires SAFE_ADDRESS env var. Uses SALT_TIMESTAMP if set,
     ///         otherwise auto-generates via FFI.
     ///
@@ -303,6 +306,10 @@ contract DeployProtocol is Script, BatchScript {
             "EXPECTED_YEARN_FACTORY:",
             _computeCreate2AddressViaFactory(_yearnV3FactorySalt, type(YearnV3StrategyFactory).creationCode)
         );
+        console.log(
+            "EXPECTED_AAVE_FACTORY:",
+            _computeCreate2AddressViaFactory(_aaveV3FactorySalt, type(AaveV3StrategyFactory).creationCode)
+        );
         console.log("EXPECTED_ADDRESS_SET_FACTORY:", _addressSetFactoryAddress());
         console.log(
             "EXPECTED_CALC_FACTORY:",
@@ -323,7 +330,7 @@ contract DeployProtocol is Script, BatchScript {
     // ═════════════════════════════════════════════════════════════════════════
     //  PHASE A: Factory Deployment (3 Safe Transactions)
     //
-    //  All 10 contracts deployed via Nick's CREATE2 factory (0x4e59b44...56C).
+    //  All 11 contracts deployed via Nick's CREATE2 factory (0x4e59b44...56C).
     //  Split into 3 batches due to the EIP-7825 per-tx gas limit of ~16.78M.
     // ═════════════════════════════════════════════════════════════════════════
 
@@ -377,9 +384,10 @@ contract DeployProtocol is Script, BatchScript {
         executeBatch(_shouldSend());
     }
 
-    /// @notice Tx 2: 2 contracts
+    /// @notice Tx 2: 3 contracts
     ///         - SkyCompounderStrategyFactory
     ///         - YearnV3StrategyFactory
+    ///         - AaveV3StrategyFactory
     function phaseA_batch2() external isBatch(_initAndGetSafe()) {
         address deployed;
         address expected;
@@ -393,6 +401,11 @@ contract DeployProtocol is Script, BatchScript {
         expected = _computeCreate2AddressViaFactory(_yearnV3FactorySalt, type(YearnV3StrategyFactory).creationCode);
         require(deployed == expected, "YearnFactory address mismatch");
         console.log("YearnV3StrategyFactory:", deployed);
+
+        deployed = _addCreate2Deployment(_aaveV3FactorySalt, type(AaveV3StrategyFactory).creationCode);
+        expected = _computeCreate2AddressViaFactory(_aaveV3FactorySalt, type(AaveV3StrategyFactory).creationCode);
+        require(deployed == expected, "AaveV3Factory address mismatch");
+        console.log("AaveV3StrategyFactory:", deployed);
 
         executeBatch(_shouldSend());
     }
@@ -584,7 +597,7 @@ contract DeployProtocol is Script, BatchScript {
 // ═════════════════════════════════════════════════════════════════════════════
 
 /// @title VerifyProtocolSourceCode
-/// @notice Verifies all 15 Octant v2 protocol contracts on Etherscan and Sourcify.
+/// @notice Verifies all 16 Octant v2 protocol contracts on Etherscan and Sourcify.
 ///         Uses deterministic addresses computed at runtime from SAFE_ADDRESS and
 ///         SALT_TIMESTAMP env vars, reusing DeployProtocol address-computation helpers.
 ///
@@ -613,6 +626,7 @@ contract VerifyProtocolSourceCode is DeployProtocol {
     string constant SKY_FACTORY_PATH = "src/factories/SkyCompounderStrategyFactory.sol:SkyCompounderStrategyFactory";
     string constant YEARN_FACTORY_PATH =
         "src/factories/yieldDonating/YearnV3StrategyFactory.sol:YearnV3StrategyFactory";
+    string constant AAVE_FACTORY_PATH = "src/factories/AaveV3StrategyFactory.sol:AaveV3StrategyFactory";
     string constant ADDRESS_SET_FACTORY_PATH = "src/factories/AddressSetFactory.sol:AddressSetFactory";
     string constant CALC_FACTORY_PATH =
         "src/factories/RegenEarningPowerCalculatorFactory.sol:RegenEarningPowerCalculatorFactory";
@@ -626,13 +640,13 @@ contract VerifyProtocolSourceCode is DeployProtocol {
     //  ENTRY POINTS
     // ═════════════════════════════════════════════════════════════════════════
 
-    /// @notice Verify all 15 contracts on Etherscan. Requires ETHERSCAN_API_KEY env var.
+    /// @notice Verify all 16 contracts on Etherscan. Requires ETHERSCAN_API_KEY env var.
     function verifyEtherscan() external {
         _initialize();
         _verifyAll("etherscan");
     }
 
-    /// @notice Verify all 15 contracts on Sourcify. No API key needed.
+    /// @notice Verify all 16 contracts on Sourcify. No API key needed.
     function verifySourcify() external {
         _initialize();
         _verifyAll("sourcify");
@@ -643,7 +657,7 @@ contract VerifyProtocolSourceCode is DeployProtocol {
     // ═════════════════════════════════════════════════════════════════════════
 
     function _verifyAll(string memory verifier) internal {
-        console.log("=== VERIFYING ALL 15 PROTOCOL CONTRACTS ===");
+        console.log("=== VERIFYING ALL 16 PROTOCOL CONTRACTS ===");
         console.log("Verifier:", verifier);
         console.log("");
 
@@ -696,6 +710,12 @@ contract VerifyProtocolSourceCode is DeployProtocol {
             _computeCreate2AddressViaFactory(_yearnV3FactorySalt, type(YearnV3StrategyFactory).creationCode),
             YEARN_FACTORY_PATH,
             "YearnV3StrategyFactory",
+            verifier
+        );
+        _verifyNoArgs(
+            _computeCreate2AddressViaFactory(_aaveV3FactorySalt, type(AaveV3StrategyFactory).creationCode),
+            AAVE_FACTORY_PATH,
+            "AaveV3StrategyFactory",
             verifier
         );
         _verifyNoArgs(_addressSetFactoryAddress(), ADDRESS_SET_FACTORY_PATH, "AddressSetFactory", verifier);
@@ -861,8 +881,9 @@ contract VerifyProtocolSourceCode is DeployProtocol {
 
 /// @title VerifyProtocolDeployment
 /// @notice Fork test that validates all deployed mainnet contracts are correctly
-///         deployed and functionally operational. Covers all 10 Phase A
-///         factory/implementation contracts, all 5 Phase B instance contracts.
+///         deployed and functionally operational. Covers all Phase A
+///         factory/implementation contracts available via env/defaults and all
+///         5 Phase B instance contracts.
 ///
 ///         All addresses are read from env vars with production defaults, so the
 ///         test works both for production verification (run with no env vars) and
@@ -888,6 +909,7 @@ contract VerifyProtocolDeployment is Test {
     MorphoCompounderStrategyFactory internal morphoFactory;
     SkyCompounderStrategyFactory internal skyFactory;
     YearnV3StrategyFactory internal yearnFactory;
+    AaveV3StrategyFactory internal aaveFactory;
     AddressSetFactory internal addressSetFactory;
     RegenEarningPowerCalculatorFactory internal calculatorFactory;
     RegenStakerFactory internal regenStakerFactory;
@@ -941,6 +963,7 @@ contract VerifyProtocolDeployment is Test {
         yearnFactory = YearnV3StrategyFactory(
             vm.envOr("EXPECTED_YEARN_FACTORY", address(0xd5338eb7DFFE2e16cd217e8b0FA3d762024f614C))
         );
+        aaveFactory = AaveV3StrategyFactory(vm.envOr("EXPECTED_AAVE_FACTORY", address(0)));
         addressSetFactory = AddressSetFactory(
             vm.envOr("EXPECTED_ADDRESS_SET_FACTORY", address(0x94e05a2bEd3a6bD2809cF8Dcb7dc85b57019F714))
         );
@@ -973,6 +996,9 @@ contract VerifyProtocolDeployment is Test {
         allContracts.push(address(morphoFactory));
         allContracts.push(address(skyFactory));
         allContracts.push(address(yearnFactory));
+        if (address(aaveFactory) != address(0)) {
+            allContracts.push(address(aaveFactory));
+        }
         allContracts.push(address(addressSetFactory));
         allContracts.push(address(calculatorFactory));
         allContracts.push(address(regenStakerFactory));
@@ -984,7 +1010,7 @@ contract VerifyProtocolDeployment is Test {
     }
 
     // -----------------------------------------------------------------------
-    // Test 1: All 15 contracts have code on-chain
+    // Test 1: All configured contracts have code on-chain
     // -----------------------------------------------------------------------
 
     function test_allContractsHaveCode() public view {
@@ -1034,6 +1060,15 @@ contract VerifyProtocolDeployment is Test {
             _yieldDonating,
             address(7)
         );
+
+        if (address(aaveFactory) != address(0)) {
+            assertEq(
+                aaveFactory.AAVE_ADDRESSES_PROVIDER(),
+                0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e,
+                "AaveFactory: wrong AAVE_ADDRESSES_PROVIDER"
+            );
+            assertEq(aaveFactory.USDC(), 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48, "AaveFactory: wrong USDC");
+        }
 
         // AddressSetFactory: predictAddress returns non-zero
         address predicted = addressSetFactory.predictAddress(bytes32(uint256(1)), address(this));
