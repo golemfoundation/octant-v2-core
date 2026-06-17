@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.16](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.15..1.2.0-develop.16) - 2026-06-17
+
+### CI/CD
+
+- bump release-prepare action to 0.6.4 [skip ci] - ([12ba6f5](https://github.com/golemfoundation/octant-v2-core/commit/12ba6f57ba1bf460c7c879932f502fbb0e8307dd)) - Michał Kluczek
+
+### Documentation
+
+- **(strategy)** note maxRedeem dust deviation - ([86bbbf9](https://github.com/golemfoundation/octant-v2-core/commit/86bbbf9f28d3310b8557c00f99b11eddb3b6890d)) - Maxime
+
+
 ## [1.2.0-develop.15](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.14..1.2.0-develop.15) - 2026-05-06
 
 ### CI/CD
