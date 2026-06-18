@@ -24,7 +24,8 @@ interface ISwapper {
     /// @param amountIn Maximum amount of tokenIn to pull from msg.sender
     /// @param minAmountOut Minimum acceptable output amount (reverts if not met)
     /// @param receiver Address to receive the output tokens
-    /// @return amountOut Actual amount of tokenOut sent to receiver
+    /// @return amountOut Net amount produced by the swap (the tokenOut balance delta), excluding
+    ///         any pre-existing tokenOut residue that may also be swept to receiver
     function swap(
         address tokenIn,
         address tokenOut,
