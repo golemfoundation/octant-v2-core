@@ -354,71 +354,78 @@ contract QuadraticVotingTimelockEnforcementTest is Test {
         assertEq(bobAssets, expectedAssetsPerRecipient);
     }
 
-    /// @notice Test edge cases in timelock enforcement
-    // function testTimelockEnforcement_EdgeCases() public {
-    //     uint256 startBlock = _tokenized(address(mechanism)).startBlock();
-    //     vm.roll(startBlock - 1);
+    /// @notice Test edge cases in timelock enforcement: inclusive window boundaries,
+    ///         share transfer to a new owner, and approved (allowance-based) redemption.
+    function testTimelockEnforcement_EdgeCases() public {
+        // Start with clean timestamp
+        vm.warp(40);
 
-    //     // Start with clean timestamp
-    //     vm.warp(400000); // Different timestamp to avoid interference
+        // Get absolute timeline from contract
+        uint256 deploymentTime = block.timestamp;
+        uint256 votingDelay = _tokenized(address(mechanism)).votingDelay();
+        uint256 votingPeriod = _tokenized(address(mechanism)).votingPeriod();
+        uint256 votingStartTime = deploymentTime + votingDelay;
+        uint256 votingEndTime = votingStartTime + votingPeriod;
 
-    //     // Setup
-    //     vm.startPrank(alice);
-    //     token.approve(address(mechanism), LARGE_DEPOSIT);
-    //     _tokenized(address(mechanism)).signup(LARGE_DEPOSIT);
-    //     uint256 pid = _tokenized(address(mechanism)).propose(charlie, "Charlie's Edge Case Project");
-    //     vm.stopPrank();
+        // Setup successful proposal for charlie
+        vm.startPrank(alice);
+        token.approve(address(mechanism), LARGE_DEPOSIT);
+        _tokenized(address(mechanism)).signup(LARGE_DEPOSIT);
+        uint256 pid = _tokenized(address(mechanism)).propose(charlie, "Charlie's Edge Case Project");
+        vm.stopPrank();
 
-    //     vm.roll(startBlock + VOTING_DELAY + 1);
+        vm.warp(votingStartTime + 1);
 
-    //     vm.prank(alice);
-    //     _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30); // 30^2 = 900 > 500 quorum
+        vm.prank(alice);
+        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, charlie); // 30^2 = 900 > 500 quorum
 
-    //     vm.roll(startBlock + VOTING_DELAY + VOTING_PERIOD + 1);
-    //     (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
-    //     require(success, "Finalization failed");
+        vm.warp(votingEndTime + 1);
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        require(success, "Finalization failed");
 
-    //     uint256 queueTime = block.timestamp;
-    //     (bool success2,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
-    //     require(success2, "Queue failed");
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
+        require(success2, "Queue failed");
 
-    //     // Test 1: Exactly at boundary moments
+        uint256 redeemableTime = _tokenized(address(mechanism)).globalRedemptionStart();
 
-    //     // Exactly at timelock expiry
-    //     vm.warp(queueTime + TIMELOCK_DELAY);
-    //     assertEq(_tokenized(address(mechanism)).maxRedeem(charlie), 900);
+        // Test 1: Inclusive window boundaries [start, start + gracePeriod]
+        // Exactly at redemption start - full balance redeemable
+        vm.warp(redeemableTime);
+        assertEq(_tokenized(address(mechanism)).maxRedeem(charlie), 900);
 
-    //     // Exactly at grace period expiry
-    //     vm.warp(queueTime + TIMELOCK_DELAY + GRACE_PERIOD);
-    //     assertEq(_tokenized(address(mechanism)).maxRedeem(charlie), 0);
+        // Exactly at grace period expiry - still redeemable (window end is inclusive)
+        vm.warp(redeemableTime + GRACE_PERIOD);
+        assertEq(_tokenized(address(mechanism)).maxRedeem(charlie), 900);
 
-    //     // Test 2: Transfer shares and check timelock enforcement for new owner
-    //     vm.warp(queueTime + TIMELOCK_DELAY + GRACE_PERIOD / 2); // Valid window
+        // One second past grace period expiry - no longer redeemable
+        vm.warp(redeemableTime + GRACE_PERIOD + 1);
+        assertEq(_tokenized(address(mechanism)).maxRedeem(charlie), 0);
 
-    //     address newOwner = address(0x999);
-    //     vm.prank(charlie);
-    //     _tokenized(address(mechanism)).transfer(newOwner, 300);
+        // Test 2: Transfer shares and check the new owner can redeem within the window
+        vm.warp(redeemableTime + GRACE_PERIOD / 2); // Valid window
 
-    //     // New owner should also respect charlie's original timelock
-    //     assertEq(_tokenized(address(mechanism)).maxRedeem(newOwner), 300);
+        address newOwner = address(0x999);
+        vm.prank(charlie);
+        _tokenized(address(mechanism)).transfer(newOwner, 300);
 
-    //     vm.prank(newOwner);
-    //     uint256 newOwnerAssets = _tokenized(address(mechanism)).redeem(300, newOwner, newOwner);
+        // Redemption is gated by the global window, so the new owner can redeem their balance
+        assertEq(_tokenized(address(mechanism)).maxRedeem(newOwner), 300);
 
-    //     // With matching pool: total assets = 1000 (alice) + 2000 (matching pool) = 3000 ether
-    //     // 300 shares out of 900 total = (300/900) × 3000 = 1000 ether
-    //     uint256 expectedAssets = 1000 ether;
-    //     assertEq(newOwnerAssets, expectedAssets);
+        vm.prank(newOwner);
+        uint256 newOwnerAssets = _tokenized(address(mechanism)).redeem(300, newOwner, newOwner);
 
-    //     // Test 3: Approved redemption
-    //     vm.prank(charlie);
-    //     _tokenized(address(mechanism)).approve(newOwner, 300); // Approve 300 of the 600 remaining shares
+        // total assets = 1000 (alice) + 2000 (matching pool) = 3000 ether
+        // 300 shares out of 900 total = (300/900) × 3000 = 1000 ether
+        assertEq(newOwnerAssets, 1000 ether);
 
-    //     vm.prank(newOwner);
-    //     uint256 approvedAssets = _tokenized(address(mechanism)).redeem(300, newOwner, charlie);
+        // Test 3: Approved (allowance-based) redemption on behalf of charlie
+        vm.prank(charlie);
+        _tokenized(address(mechanism)).approve(newOwner, 300);
 
-    //     // Same calculation: 300 shares out of 900 total = (300/900) × 3000 = 1000 ether
-    //     uint256 expectedApprovedAssets = 1000 ether;
-    //     assertEq(approvedAssets, expectedApprovedAssets);
-    // }
+        vm.prank(newOwner);
+        uint256 approvedAssets = _tokenized(address(mechanism)).redeem(300, newOwner, charlie);
+
+        // 300 shares out of the remaining 600 total = (300/600) × 2000 = 1000 ether
+        assertEq(approvedAssets, 1000 ether);
+    }
 }
