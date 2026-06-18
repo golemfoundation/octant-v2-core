@@ -42,13 +42,14 @@ import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
  *      blanket security guarantee.
  *
  *      FEE-CHARGING TARGET VAULTS — NOT SUPPORTED:
- *      Do NOT deploy against a target ERC-4626 vault that charges a withdrawal
- *      or exit fee. Deposit accounting credits the full pre-fee amount; new
- *      depositors can exit before the next `report()` and drain existing users.
+ *      Do NOT deploy against a target ERC-4626 vault that charges an
+ *      entry/deposit or withdrawal/exit fee. Deposit accounting credits the
+ *      full pre-fee amount; new depositors can exit before the next `report()`
+ *      and drain existing users.
  *
  * @custom:security ERC4626 vault convertToAssets must be manipulation-resistant
  * @custom:security Target vault must be audited individually before deployment
- * @custom:security Target vault must NOT charge withdrawal/exit fees
+ * @custom:security Target vault must NOT charge entry/deposit or withdrawal/exit fees
  */
 contract ERC4626Strategy is BaseHealthCheck {
     using SafeERC20 for IERC20;
@@ -172,8 +173,8 @@ contract ERC4626Strategy is BaseHealthCheck {
     function _harvestAndReport() internal view override returns (uint256 _totalAssets) {
         // get strategy's balance in the vault (shares)
         uint256 shares = IERC4626(targetVault).balanceOf(address(this));
-        // Fee-charging target vaults are not supported. previewRedeem is used as a defensive read
-        // so post-fee value would still be tracked correctly if one were encountered.
+        // EIP-4626 requires previewRedeem to reflect any exit-fee policy the target vault enforces;
+        // convertToAssets returns the gross value and would overstate totalAssets for fee-charging vaults.
         uint256 vaultAssets = IERC4626(targetVault).previewRedeem(shares);
 
         uint256 idleAssets = IERC20(asset).balanceOf(address(this));

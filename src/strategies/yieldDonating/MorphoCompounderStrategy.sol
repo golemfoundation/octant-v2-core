@@ -30,12 +30,12 @@ import { ITokenizedStrategy } from "src/core/interfaces/ITokenizedStrategy.sol";
  *      - MultistrategyVault enforces actual loss limits via updateDebt
  *
  *      FEE-CHARGING TARGET VAULTS — NOT SUPPORTED:
- *      Do NOT deploy against a Morpho vault that charges a withdrawal or exit fee.
- *      Deposit accounting credits the full pre-fee amount; new depositors can exit
- *      before the next `report()` and drain existing users.
+ *      Do NOT deploy against a Morpho vault that charges an entry/deposit or
+ *      withdrawal/exit fee. Deposit accounting credits the full pre-fee amount;
+ *      new depositors can exit before the next `report()` and drain existing users.
  *
  * @custom:security Morpho vault convertToAssets must be manipulation-resistant
- * @custom:security Morpho vault must NOT charge withdrawal/exit fees
+ * @custom:security Morpho vault must NOT charge entry/deposit or withdrawal/exit fees
  */
 contract MorphoCompounderStrategy is BaseHealthCheck {
     using SafeERC20 for IERC20;
@@ -169,8 +169,8 @@ contract MorphoCompounderStrategy is BaseHealthCheck {
     function _harvestAndReport() internal view override returns (uint256 _totalAssets) {
         // Get strategy's share balance in the compounder vault
         uint256 shares = ITokenizedStrategy(compounderVault).balanceOf(address(this));
-        // Fee-charging target vaults are not supported. previewRedeem is used as a defensive read
-        // so post-fee value would still be tracked correctly if one were encountered.
+        // EIP-4626 requires previewRedeem to reflect any exit-fee policy the target vault enforces;
+        // convertToAssets returns the gross value and would overstate totalAssets for fee-charging vaults.
         uint256 vaultAssets = ITokenizedStrategy(compounderVault).previewRedeem(shares);
 
         // Include idle funds as per BaseStrategy specification
