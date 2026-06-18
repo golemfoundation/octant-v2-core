@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.17](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.16..1.2.0-develop.17) - 2026-06-18
+
+### Documentation
+
+- add Bailsec Strategies audit report - ([c52caad](https://github.com/golemfoundation/octant-v2-core/commit/c52caad0efbeff21dadbab53893234d05a33a3ca)) - skimaharvey
+
+
 ## [1.2.0-develop.16](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.15..1.2.0-develop.16) - 2026-06-17
 
 ### CI/CD
