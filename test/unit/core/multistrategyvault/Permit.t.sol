@@ -148,7 +148,7 @@ contract PermitTest is Test {
         // Change name
         string memory newName = "New Vault Name";
         vm.prank(bunny); // bunny is roleManager
-        vault.set_name(newName);
+        vault.setName(newName);
 
         // Verify domain separator changed
         bytes32 newDomainSeparator = vault.DOMAIN_SEPARATOR();
@@ -177,7 +177,7 @@ contract PermitTest is Test {
 
         // Change name before using permit
         vm.prank(bunny);
-        vault.set_name("New Name");
+        vault.setName("New Name");
 
         // Old permit should fail (wrong domain separator)
         vm.expectRevert(IMultistrategyVault.InvalidSignature.selector);
@@ -188,7 +188,7 @@ contract PermitTest is Test {
     function testPermitWorksAfterNameChange() public {
         // Change name first
         vm.prank(bunny);
-        vault.set_name("New Name");
+        vault.setName("New Name");
 
         address owner = vm.addr(PRIVATE_KEY);
         uint256 deadline = block.timestamp + 3600;

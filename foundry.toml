@@ -4,8 +4,10 @@ out = "out"
 libs = ["dependencies"]
 evm_version = "prague"
 optimizer = true
+
 # Default runs target balanced gas/size; size-limited contracts override below.
 optimizer_runs = 1
+
 
 via_ir = false
 solc = "0.8.33"
@@ -24,6 +26,7 @@ no_match_path = "{test/kontrol/*,test/mainnet/*,script/prod/*}"
 fuzz = { runs = 256, max_test_rejects = 65536, seed = "0xDEADC0DE" }
 deny = "warnings"
 ignored_error_codes = [2424, 3860, 4591, 5574, 8429, 9207, 9170]
+
 lint = { severity = ["high"], exclude_lints = ["erc20-unchecked-transfer", "unsafe-typecast", "incorrect-shift"] }
 ignored_warnings_from = ["dependencies"]
 

@@ -23,6 +23,7 @@ contract LockedVaultTest is Test {
     address public fish = address(0x2);
     address public feeRecipient = address(0x3);
     address constant ZERO_ADDRESS = address(0);
+    uint256 internal constant RAGE_QUIT_COOLDOWN_CHANGE_DELAY = 14 days;
 
     uint256 public fishAmount = 10_000e18;
     uint256 public defaultProfitMaxUnlockTime = 7 days;
@@ -86,7 +87,7 @@ contract LockedVaultTest is Test {
         assertEq(vault.pendingRageQuitCooldownPeriod(), cooldownPeriod, "Pending period should be set");
 
         // Fast forward past delay period
-        vm.warp(block.timestamp + vault.RAGE_QUIT_COOLDOWN_CHANGE_DELAY() + 1);
+        vm.warp(block.timestamp + RAGE_QUIT_COOLDOWN_CHANGE_DELAY + 1);
 
         vault.finalizeRageQuitCooldownPeriodChange();
         assertEq(vault.rageQuitCooldownPeriod(), cooldownPeriod, "Rage quit cooldown period should be updated");
@@ -260,7 +261,7 @@ contract LockedVaultTest is Test {
         vault.proposeRageQuitCooldownPeriodChange(10 days);
 
         // Warp past the delay
-        vm.warp(block.timestamp + vault.RAGE_QUIT_COOLDOWN_CHANGE_DELAY() + 1);
+        vm.warp(block.timestamp + RAGE_QUIT_COOLDOWN_CHANGE_DELAY + 1);
 
         vm.expectRevert(IMultistrategyLockedVault.RageQuitCooldownPeriodChangeDelayElapsed.selector);
         vault.cancelRageQuitCooldownPeriodChange();
@@ -328,14 +329,16 @@ contract LockedVaultTest is Test {
 
         uint256 balance = vault.balanceOf(fish);
 
-        // No custody - all shares transferable
-        assertEq(vault.getTransferableShares(fish), balance, "All shares should be transferable");
+        // No custody - all shares transferable (balance - lockedShares)
+        (uint256 lockedShares, ) = vault.custodyInfo(fish);
+        assertEq(balance - lockedShares, balance, "All shares should be transferable");
 
         // Lock half
         vm.prank(fish);
         vault.initiateRageQuit(balance / 2);
 
-        assertEq(vault.getTransferableShares(fish), balance - balance / 2, "Half should be transferable");
+        (lockedShares, ) = vault.custodyInfo(fish);
+        assertEq(balance - lockedShares, balance - balance / 2, "Half should be transferable");
     }
 
     function test_GetRageQuitableShares() public {
@@ -346,14 +349,16 @@ contract LockedVaultTest is Test {
         uint256 balance = vault.balanceOf(fish);
 
         // No custody - all shares rage quitable
-        assertEq(vault.getRageQuitableShares(fish), balance, "All shares should be rage quitable");
+        (uint256 lockedShares, ) = vault.custodyInfo(fish);
+        assertEq(lockedShares, 0, "All shares should be rage quitable");
 
         // Lock some
         vm.prank(fish);
         vault.initiateRageQuit(balance / 2);
 
-        // Already has active custody - returns 0
-        assertEq(vault.getRageQuitableShares(fish), 0, "Should return 0 with active custody");
+        // Already has active custody
+        (lockedShares, ) = vault.custodyInfo(fish);
+        assertGt(lockedShares, 0, "Should have active custody");
     }
 
     function test_SetRegenGovernance_NotGovernance_Reverts() public {
@@ -535,7 +540,7 @@ contract LockedVaultTest is Test {
         vm.stopPrank();
         vm.startPrank(gov);
         vault.proposeRageQuitCooldownPeriodChange(newCooldown);
-        vm.warp(block.timestamp + vault.RAGE_QUIT_COOLDOWN_CHANGE_DELAY() + 1);
+        vm.warp(block.timestamp + RAGE_QUIT_COOLDOWN_CHANGE_DELAY + 1);
         vault.finalizeRageQuitCooldownPeriodChange();
         vm.stopPrank();
 
@@ -699,24 +704,24 @@ contract LockedVaultTest is Test {
     //  Coverage: getter functions and edge case branches
     // ========================================================
 
-    function test_getPendingRageQuitCooldownPeriod_returnsValue() public {
+    function test_pendingRageQuitCooldownPeriod_returnsValue() public {
         // Before any proposal, should be 0
-        assertEq(vault.getPendingRageQuitCooldownPeriod(), 0);
+        assertEq(vault.pendingRageQuitCooldownPeriod(), 0);
 
         // After proposal, should return the pending value
         vm.prank(gov);
         vault.proposeRageQuitCooldownPeriodChange(14 days);
-        assertEq(vault.getPendingRageQuitCooldownPeriod(), 14 days);
+        assertEq(vault.pendingRageQuitCooldownPeriod(), 14 days);
     }
 
-    function test_getRageQuitCooldownPeriodChangeTimestamp_returnsValue() public {
+    function test_rageQuitCooldownPeriodChangeTimestamp_returnsValue() public {
         // Before any proposal, should be 0
-        assertEq(vault.getRageQuitCooldownPeriodChangeTimestamp(), 0);
+        assertEq(vault.rageQuitCooldownPeriodChangeTimestamp(), 0);
 
         // After proposal, should return the timestamp
         vm.prank(gov);
         vault.proposeRageQuitCooldownPeriodChange(14 days);
-        assertGt(vault.getRageQuitCooldownPeriodChangeTimestamp(), 0);
+        assertGt(vault.rageQuitCooldownPeriodChangeTimestamp(), 0);
     }
 
     function test_processCustodyWithdrawal_insufficientBalance() public {
@@ -740,9 +745,9 @@ contract LockedVaultTest is Test {
         // Now balanceOf(fish) < shares but lockedShares == shares
         assertLt(vault.balanceOf(fish), shares);
 
-        // Try to redeem - should hit InsufficientBalance
+        // Try to redeem - balance < shares triggers InsufficientSharesToRedeem in base vault
         vm.prank(fish);
-        vm.expectRevert(IMultistrategyLockedVault.InsufficientBalance.selector);
+        vm.expectRevert(IMultistrategyVault.InsufficientSharesToRedeem.selector);
         vault.redeem(shares, fish, fish, 0, new address[](0));
     }
 }
