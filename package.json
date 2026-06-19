@@ -38,7 +38,7 @@
     "coverage:genhtml": "genhtml lcov.info --branch-coverage --output-dir coverage --ignore-errors inconsistent,corrupt,category",
     "slither:setup": "python3 -m venv .venv && .venv/bin/pip3 install slither-analyzer",
     "slither": ".venv/bin/slither . --print human-summary",
-    "slither:ci": "slither . --print human-summary --disable-color 2> reports/slither.txt; slither .",
+    "slither:ci": "bash script/slither-ci.sh",
     "semver:diff": "node scripts/sol-semver.mjs diff",
     "semver:check": "node scripts/sol-semver.mjs check",
     "init": "husky && shx chmod +x .husky/*",
