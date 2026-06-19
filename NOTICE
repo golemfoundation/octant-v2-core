@@ -1,0 +1,9 @@
+Octant V2 Core
+
+Original Octant V2 Core source files are licensed under AGPL-3.0-or-later
+unless a file-level SPDX-License-Identifier states otherwise.
+
+This repository also includes files derived from, adapted from, or interfacing
+with third-party projects. Those files retain their own SPDX license headers,
+including MIT, GPL-2.0-or-later, GPL-3.0, AGPL-3.0, and AGPL-3.0-only where
+applicable.
