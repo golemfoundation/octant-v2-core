@@ -109,7 +109,7 @@
 3. ❌ Duplicating NatSpec instead of using `@inheritdoc`
 4. ❌ Specifying units for standard ERC-4626 parameters
 5. ❌ Skipping validation on user inputs
-6. ❌ Using blocklists instead of allowlists for critical operations
+6. ❌ Using blocksets instead of allowsets for critical operations
 7. ❌ Hardcoding addresses instead of immutables/constants
 8. ❌ State updates after external calls (CEI violation)
 9. ❌ Missing events on asset movements or admin actions
@@ -176,7 +176,7 @@
 
 ## Octant-Specific Requirements
 
-- **Safe/Dragon Modules**: ALL privileged execution verifies sender/module context. Module functions have full Safe permissions.
+- **Safe/Zodiac Modules**: ALL privileged execution verifies sender/module context. Module functions have full Safe permissions.
 - **Factories**: ALL deployments transfer control to Safe/multisig (NEVER EOA)
 - **Yield/Donation**: Assets redirected MUST update accounting
 
@@ -195,7 +195,7 @@
 All strategies MUST implement:
 - `_deployFunds(uint256 amount)` - Deploy assets to protocol
 - `_freeFunds(uint256 amount)` - Withdraw assets from protocol
-- `_harvestAndReport()` returns `(uint256 profit, uint256 loss)` - Report performance
+- `_harvestAndReport()` returns `uint256 totalAssets` - Report total managed assets
 
 **CRITICAL `_harvestAndReport()` Requirements:**
 - MUST account for idle assets (not just deployed assets)
@@ -253,7 +253,7 @@ All strategies MUST implement:
 All strategies MUST implement:
 - `_deployFunds(uint256 amount)` - Deploy to yield source
 - `_freeFunds(uint256 amount)` - Withdraw from yield source
-- `_harvestAndReport()` returns `(uint256 profit, uint256 loss)` - Harvest and report
+- `_harvestAndReport()` returns `uint256 totalAssets` - Harvest and report total managed assets
 
 ### Yield Donating Pattern
 - ALL yield goes to beneficiary
@@ -292,7 +292,7 @@ All strategies MUST implement:
 
 ---
 
-## Dragon Protocol (Safe Modules)
+## Safe/Zodiac Modules
 
 ### Critical Security Warning
 **MODULE DANGER**: Module functions execute arbitrary code through Safe with full permissions. Validate ALL inputs rigorously.
@@ -305,17 +305,12 @@ All strategies MUST implement:
 
 ### Access Control Patterns
 
-#### Allowlist/Blocklist
-- Enum: `AccessMode { Allowlist, Blocklist, Open }`
-- Allowlist: Only listed addresses can call
-- Blocklist: All except listed addresses can call
-- Open: Anyone can call
-- **CRITICAL**: Prefer Allowlist for high-value operations
-
-#### Passport System
-- Track: `isActive`, `expiresAt`, `hasPermission` mapping
-- Validate: passport active, not expired, has required permission
-- Grant permissions via admin function
+#### Allowset/Blockset
+- Enum: `AccessMode { NONE, ALLOWSET, BLOCKSET }`
+- `ALLOWSET`: Only listed addresses can call
+- `BLOCKSET`: All except listed addresses can call
+- `NONE`: No address-set gate
+- **CRITICAL**: Prefer `ALLOWSET` for high-value operations
 
 ### Lockup Mechanism
 - Track: `shares` locked, `unlockTimestamp`
@@ -342,7 +337,7 @@ All strategies MUST implement:
 - Revert entire batch if any operation fails (atomic)
 
 ### Security Requirements
-- ALL operations validate target against allowlist
+- ALL operations validate target against allowset
 - Implement rate limiting for value transfers
 - Use multi-sig threshold for adapter registration
 - Log all executions with indexed events
@@ -354,10 +349,10 @@ All strategies MUST implement:
 - Update state BEFORE calling `execTransactionFromModule`
 
 ### Access Control Layering
-- Layer 1: Passport check (if using passports)
-- Layer 2: Allowlist check
-- Layer 3: Rate limit check
-- Layer 4: Value limit check
+- Layer 1: Allowset check
+- Layer 2: Rate limit check
+- Layer 3: Value limit check
+- Layer 4: Safe/module context check
 - Multiple layers provide defense in depth
 
 ---
@@ -471,10 +466,10 @@ All strategies MUST implement:
 6. ❌ Not handling different token decimals
 7. ❌ Assuming protocol solvency (always verify actual balances)
 
-### Dragon Protocol
-1. ❌ Using blocklist instead of allowlist for critical operations
+### Safe/Zodiac Modules
+1. ❌ Using blockset instead of allowset for critical operations
 2. ❌ Skipping rate limiting on high-value operations
-3. ❌ Not validating operation targets against allowlist
+3. ❌ Not validating operation targets against allowset
 4. ❌ Forgetting reentrancy protection (module calls can reenter)
 5. ❌ Allowing adapter registration without multi-sig approval
 6. ❌ Not implementing emergency pause/shutdown
