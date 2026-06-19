@@ -15,12 +15,11 @@ ast = true
 fs_permissions = [
     { access = "read-write", path = "./cache/test-artifacts/" },
     { access = "read", path = "./out/" },
-    { access = "read-write", path = "./ci/" },
     { access = "read-write", path = "./partners/" }
 ]
 build_info = true
 extra_output = ["storageLayout"]
-no_match_path = "{test/kontrol/*,test/mainnet/*,script/prod/*}"
+no_match_path = "{test/kontrol/*,script/prod/*}"
 fuzz = { runs = 256, max_test_rejects = 65536, seed = "0xDEADC0DE" }
 deny = "warnings"
 ignored_error_codes = [2424, 3860, 4591, 5574, 8429, 9207, 9170]
@@ -29,7 +28,7 @@ ignored_warnings_from = ["dependencies"]
 
 
 [profile.mainnet]
-match_path = "{test/mainnet/*,script/prod/*}"
+match_path = "script/prod/*"
 no_match_path = "test/kontrol/*"
 
 [profile.local]
