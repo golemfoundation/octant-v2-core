@@ -1268,7 +1268,7 @@ contract AccountingTest is Setup {
         // User deposits
         mintAndDepositIntoStrategy(strategy, user1, depositAmount);
 
-        // make sure we dont burn dragon shares
+        // make sure we don't burn dragon shares
         vm.startPrank(management);
         strategy.setEnableBurning(false);
         vm.stopPrank();

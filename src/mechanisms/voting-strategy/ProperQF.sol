@@ -80,31 +80,37 @@ abstract contract ProperQF {
 
     /// @notice Returns project aggregated sums
     /// @param projectId ID of the project to query
+    /// @return The aggregated quadratic-funding sums stored for the given project
     function projects(uint256 projectId) public view returns (Project memory) {
         return _getProperQFStorage().projects[projectId];
     }
 
     /// @notice Returns alpha numerator
+    /// @return The numerator of the alpha matching coefficient
     function alphaNumerator() public view returns (uint256) {
         return _getProperQFStorage().alphaNumerator;
     }
 
     /// @notice Returns alpha denominator
+    /// @return The denominator of the alpha matching coefficient
     function alphaDenominator() public view returns (uint256) {
         return _getProperQFStorage().alphaDenominator;
     }
 
     /// @notice Returns total quadratic sum across all projects
+    /// @return The total quadratic sum across all projects
     function totalQuadraticSum() public view returns (uint256) {
         return _getProperQFStorage().totalQuadraticSum;
     }
 
     /// @notice Returns total linear sum across all projects
+    /// @return The total linear sum across all projects
     function totalLinearSum() public view returns (uint256) {
         return _getProperQFStorage().totalLinearSum;
     }
 
     /// @notice Returns alpha-weighted total funding across all projects
+    /// @return The alpha-weighted total funding across all projects
     function totalFunding() public view returns (uint256) {
         return _getProperQFStorage().totalFunding;
     }
