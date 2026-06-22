@@ -1,8 +1,8 @@
 # Scripts used by Octant v2
 
-This directory contains all scripts used by Octant v2: both Foundry Solidity scripts (`.s.sol`) and bash shell utilities (`.sh`).
-
-There is no separate `scripts/` directory. Everything lives here.
+This directory contains Foundry Solidity scripts (`.s.sol`) and bash shell
+utilities (`.sh`) used by Octant v2. Node.js repository tooling lives under
+`../scripts/`.
 
 ## Solidity script directories
 
