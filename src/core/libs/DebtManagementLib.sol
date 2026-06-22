@@ -187,7 +187,7 @@ library DebtManagementLib {
             // Respect minimum total idle in vault
             if (vars.totalIdle + vars.assetsToWithdraw < vars.minimumTotalIdle) {
                 vars.assetsToWithdraw = vars.minimumTotalIdle - vars.totalIdle;
-                // Cant withdraw more than the strategy has.
+                // Can't withdraw more than the strategy has.
                 if (vars.assetsToWithdraw > vars.currentDebt) {
                     vars.assetsToWithdraw = vars.currentDebt;
                 }
