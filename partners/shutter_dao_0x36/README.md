@@ -11,6 +11,12 @@ Shutter DAO 0x36 will integrate with Octant v2 through the **SHUGrantPool Strate
 
 > **Architecture Note**: The strategy IS the ERC-4626 vault. No MultistrategyVault wrapper is needed since only one strategy is approved by the DAO. This simplifies deployment, reduces gas costs, and eliminates unnecessary complexity.
 
+## Plan HTML
+
+The committed `plan/template.html` and `plan/fonts/*.b64` files are the source
+for the standalone HTML plan. Run `plan/build.sh` to regenerate `plan.html`;
+the generated export is ignored and should not be committed.
+
 ---
 
 ## Prerequisites
