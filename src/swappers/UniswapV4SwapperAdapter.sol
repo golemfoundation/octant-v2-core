@@ -27,6 +27,7 @@ interface IV4PoolManager {
 
     /// @dev Returns BalanceDelta (a packed int256: upper 128 bits = amount0, lower 128 bits = amount1).
     ///      Negative = caller must settle (pay), Positive = caller may take (receive).
+    /// @return swapDelta BalanceDelta packed as an int256 (upper 128 bits = amount0, lower 128 bits = amount1)
     function swap(
         PoolKey memory key,
         SwapParams memory params,
