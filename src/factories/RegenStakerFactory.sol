@@ -159,6 +159,7 @@ contract RegenStakerFactory {
 
     /// @notice Returns all RegenStakers deployed by a specific address
     /// @param deployer Deployer address
+    /// @return Array of StakerInfo entries for every RegenStaker deployed by the given deployer
     function getStakersByDeployer(address deployer) external view returns (StakerInfo[] memory) {
         return stakers[deployer];
     }

@@ -57,6 +57,7 @@ contract AddressSetFactory {
 
     /// @notice Returns all AddressSets deployed by a specific address
     /// @param deployer Deployer address
+    /// @return Array of AddressSetInfo entries for every AddressSet deployed by the given deployer
     function getAddressSetsByDeployer(address deployer) external view returns (AddressSetInfo[] memory) {
         return addressSets[deployer];
     }
