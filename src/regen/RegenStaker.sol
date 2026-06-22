@@ -11,7 +11,7 @@ import { DelegationSurrogateVotes } from "staker/DelegationSurrogateVotes.sol";
 import { IERC20Delegates } from "staker/interfaces/IERC20Delegates.sol";
 
 // === Base Imports ===
-import { RegenStakerBase, Staker, SafeERC20, IERC20, DelegationSurrogate, IAddressSet, IEarningPowerCalculator } from "src/regen/RegenStakerBase.sol";
+import { RegenStakerBase, SafeERC20, IERC20, DelegationSurrogate, IAddressSet, IEarningPowerCalculator } from "src/regen/RegenStakerBase.sol";
 import { AccessMode } from "src/constants.sol";
 
 // === Contract Header ===

@@ -7,7 +7,7 @@ pragma solidity ^0.8.0;
 
 // === Base Imports ===
 
-import { RegenStakerBase, Staker, IERC20, DelegationSurrogate, IAddressSet, IEarningPowerCalculator } from "src/regen/RegenStakerBase.sol";
+import { RegenStakerBase, IERC20, DelegationSurrogate, IAddressSet, IEarningPowerCalculator } from "src/regen/RegenStakerBase.sol";
 import { AccessMode } from "src/constants.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
