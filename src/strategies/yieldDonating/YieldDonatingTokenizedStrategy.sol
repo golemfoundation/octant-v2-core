@@ -181,6 +181,9 @@ contract YieldDonatingTokenizedStrategy is TokenizedStrategy {
      *      happen, but it does not block tend() or report(). No on-chain cap on reporting cadence
      *      is enforced — that would constrain legitimate operation for a threat the trust model
      *      already accepts.
+     *
+     * @return profit Notional amount of gain since last report, in terms of `asset`
+     * @return loss Notional loss in terms of `asset`, subject to override-specific semantics
      */
     function report()
         public
