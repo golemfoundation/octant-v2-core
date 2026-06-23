@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.23](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.22..1.2.0-develop.23) - 2026-06-23
+
+### Documentation
+
+- add @notice to IV4PoolManager interface functions - ([445e7d9](https://github.com/golemfoundation/octant-v2-core/commit/445e7d9ca511ec43b8369769fa8d9d685d819659)) - Maxime
+- complete missing @return docs on three functions - ([4d8c3c7](https://github.com/golemfoundation/octant-v2-core/commit/4d8c3c7a580d2ef8ec77fbbbcccd5ac92761d219)) - Maxime
+
+
 ## [1.2.0-develop.22](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.21..1.2.0-develop.22) - 2026-06-23
 
 ### Bug Fixes
