@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.21](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.20..1.2.0-develop.21) - 2026-06-23
+
+### Documentation
+
+- fix "Cant" -> "Can't" in code comments - ([a50738a](https://github.com/golemfoundation/octant-v2-core/commit/a50738a087853330fab3f3073e227792fd558fc0)) - Maxime
+- fix malformed @param NatSpec in DebtManagementLib.updateDebt - ([237bfa3](https://github.com/golemfoundation/octant-v2-core/commit/237bfa3e37a2c440b06a68aeb1001280276667f1)) - Maxime
+- document report() return values in YieldDonatingTokenizedStrategy - ([b0a5656](https://github.com/golemfoundation/octant-v2-core/commit/b0a56563cfd332faddb2914f63ce9aceabde509d)) - Maxime
+
+
 ## [1.2.0-develop.20](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.19..1.2.0-develop.20) - 2026-06-23
 
 ### Documentation
