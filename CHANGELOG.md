@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.20](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.19..1.2.0-develop.20) - 2026-06-23
+
+### Documentation
+
+- add @return docs to factory getByDeployer getters - ([b60ecf9](https://github.com/golemfoundation/octant-v2-core/commit/b60ecf9c791c934a303e4f6204b9c91efba6fe7a)) - Maxime
+
+
 ## [1.2.0-develop.19](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.18..1.2.0-develop.19) - 2026-06-23
 
 ### Documentation
