@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.19](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.18..1.2.0-develop.19) - 2026-06-23
+
+### Documentation
+
+- document owner/return on maxWithdraw & maxRedeem ABI-compat overloads - ([9d16792](https://github.com/golemfoundation/octant-v2-core/commit/9d16792548398043feee3d57d642fd661da6fd7a)) - Maxime
+- document params and returns on MultistrategyLockedVault withdraw/redeem - ([e7f2425](https://github.com/golemfoundation/octant-v2-core/commit/e7f2425666304be5193d8353f6374b758e31a963)) - Maxime
+
+
 ## [1.2.0-develop.18](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.17..1.2.0-develop.18) - 2026-06-23
 
 ### CI/CD
