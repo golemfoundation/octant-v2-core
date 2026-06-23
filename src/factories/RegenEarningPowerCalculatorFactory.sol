@@ -91,6 +91,7 @@ contract RegenEarningPowerCalculatorFactory {
 
     /// @notice Returns all calculators deployed by a specific address
     /// @param deployer Deployer address
+    /// @return Array of CalculatorInfo entries for every calculator deployed by the given deployer
     function getCalculatorsByDeployer(address deployer) external view returns (CalculatorInfo[] memory) {
         return calculators[deployer];
     }
