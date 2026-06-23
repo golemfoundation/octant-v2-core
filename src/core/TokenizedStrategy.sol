@@ -932,6 +932,8 @@ abstract contract TokenizedStrategy {
      * @notice Variable `maxLoss` is ignored.
      * @dev Accepts a `maxLoss` variable in order to match the multi
      * strategy vaults ABI.
+     * @param owner Address that owns the shares
+     * @return Maximum assets that can be withdrawn (the `maxLoss` argument is ignored)
      */
     function maxWithdraw(address owner, uint256 /*maxLoss*/) external view returns (uint256) {
         return _maxWithdraw(_strategyStorage(), owner);
@@ -950,6 +952,8 @@ abstract contract TokenizedStrategy {
      * @notice Variable `maxLoss` is ignored.
      * @dev Accepts a `maxLoss` variable in order to match the multi
      * strategy vaults ABI.
+     * @param owner Address that owns the shares
+     * @return Maximum shares that can be redeemed (the `maxLoss` argument is ignored)
      */
     function maxRedeem(address owner, uint256 /*maxLoss*/) external view returns (uint256) {
         return _maxRedeem(_strategyStorage(), owner);
