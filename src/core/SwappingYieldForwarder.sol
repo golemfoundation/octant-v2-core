@@ -12,6 +12,7 @@ import { YieldForwarder, IRedeemable, IReportable } from "./YieldForwarder.sol";
 /// @notice Minimal ERC4626 interface to read a strategy's underlying asset
 interface IERC4626Asset {
     /// @notice Returns the address of the underlying asset
+    /// @return The address of the strategy's underlying ERC4626 asset
     function asset() external view returns (address);
 }
 

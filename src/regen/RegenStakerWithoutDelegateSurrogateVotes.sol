@@ -124,6 +124,7 @@ contract RegenStakerWithoutDelegateSurrogateVotes is RegenStakerBase {
     /// @dev WARNING: Deviates from standard surrogate pattern. Always returns address(this).
     ///      Integrators expecting separate surrogate contracts will fail. Do not assume external
     ///      surrogate contracts exist when integrating with this variant.
+    /// @return The delegation surrogate, which is always this contract (address(this)) in this variant
     function surrogates(address /* _delegatee */) public view override returns (DelegationSurrogate) {
         return DelegationSurrogate(address(this));
     }
