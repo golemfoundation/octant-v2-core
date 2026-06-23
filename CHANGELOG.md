@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.18](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.17..1.2.0-develop.18) - 2026-06-23
+
+### CI/CD
+
+- capture slither output once - ([7f502b4](https://github.com/golemfoundation/octant-v2-core/commit/7f502b4ab5fe7df22c27a3e89bebf70e0df03d8e)) - Maxime
+
+### Documentation
+
+- fix script directory inventory - ([6dd753d](https://github.com/golemfoundation/octant-v2-core/commit/6dd753d2fda298281c9d0e1c0000b98e23b8a2fd)) - Maxime
+- refresh repository inventory - ([2ea1e64](https://github.com/golemfoundation/octant-v2-core/commit/2ea1e64524e7ddcbfe4160861c0ed6bb1b38a570)) - Maxime
+
+### Miscellaneous Tasks
+
+- **(nouns)** remove stale partner bundle - ([9476a5c](https://github.com/golemfoundation/octant-v2-core/commit/9476a5cfdba2801cea3508acc70b1f4b485c4a5f)) - Maxime
+- **(shutter)** stop tracking generated plan export - ([8989f0a](https://github.com/golemfoundation/octant-v2-core/commit/8989f0a1727eb3c5d1439dd15cd46d0b3bf00974)) - Maxime
+- prune stale repository paths - ([a915791](https://github.com/golemfoundation/octant-v2-core/commit/a9157919078accb2a56bd90bc68ce9256015893b)) - Maxime
+- align repository license metadata - ([99def64](https://github.com/golemfoundation/octant-v2-core/commit/99def649e878e5341b98b3375c88d664637e3756)) - Maxime
+
+### Refactor
+
+- remove unused imports - ([03caa19](https://github.com/golemfoundation/octant-v2-core/commit/03caa19f5d6427e252018cabce56586a59279386)) - Maxime
+
+
 ## [1.2.0-develop.17](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.16..1.2.0-develop.17) - 2026-06-18
 
 ### Documentation
