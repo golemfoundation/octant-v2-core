@@ -23,8 +23,10 @@ interface IV4PoolManager {
         uint160 sqrtPriceLimitX96;
     }
 
+    /// @notice Unlocks the PoolManager and calls back into the caller's `unlockCallback` to perform pool operations
     function unlock(bytes calldata data) external returns (bytes memory);
 
+    /// @notice Executes a swap against the given pool
     /// @dev Returns BalanceDelta (a packed int256: upper 128 bits = amount0, lower 128 bits = amount1).
     ///      Negative = caller must settle (pay), Positive = caller may take (receive).
     /// @return swapDelta BalanceDelta packed as an int256 (upper 128 bits = amount0, lower 128 bits = amount1)
@@ -34,8 +36,13 @@ interface IV4PoolManager {
         bytes calldata hookData
     ) external returns (int256 swapDelta);
 
+    /// @notice Records the PoolManager's current reserve of `currency` so a subsequent settle() can measure what was paid
     function sync(address currency) external;
+
+    /// @notice Settles the currency owed to the PoolManager and returns the amount paid
     function settle() external payable returns (uint256 paid);
+
+    /// @notice Transfers `amount` of `currency` out of the PoolManager to `to`
     function take(address currency, address to, uint256 amount) external;
 }
 
