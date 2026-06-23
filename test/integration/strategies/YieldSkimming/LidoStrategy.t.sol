@@ -1358,7 +1358,7 @@ contract LidoStrategyTest is Test {
     }
 
     /// @notice Test dragon router withdrawal followed by rate recovery - user should have no loss
-    /// @dev Sequence: d1 -> r1.5 -> report (mint DR) -> wDR -> r1.0 -> report (cant burn shares) -> r1.5 -> report -> w1 (no loss)
+    /// @dev Sequence: d1 -> r1.5 -> report (mint DR) -> wDR -> r1.0 -> report (can't burn shares) -> r1.5 -> report -> w1 (no loss)
     function test_dragonRouterWithdrawal_rateRecovery_userNoLoss() public {
         DragonWithdrawalTestData memory data;
 
@@ -1429,7 +1429,7 @@ contract LidoStrategyTest is Test {
         // Step 5: r1.0 - Rate drops back to 1.0
         vm.mockCall(WSTETH, abi.encodeWithSignature("stEthPerToken()"), abi.encode(data.decreasedRate));
 
-        // Step 6: report (cant burn shares) - Report with no dragon shares to burn
+        // Step 6: report (can't burn shares) - Report with no dragon shares to burn
         vm.startPrank(keeper);
         (data.profit2, data.loss2) = vault.report();
         vm.stopPrank();
@@ -1491,7 +1491,7 @@ contract LidoStrategyTest is Test {
     }
 
     /// @notice Test dragon router withdrawal followed by rate decline - user should experience loss
-    /// @dev Sequence: d1 -> r1.5 -> report (mint DR) -> wDR -> r1.0 -> report (cant burn shares) -> r0.9 -> w1 (loss)
+    /// @dev Sequence: d1 -> r1.5 -> report (mint DR) -> wDR -> r1.0 -> report (can't burn shares) -> r0.9 -> w1 (loss)
     function test_dragonRouterWithdrawal_rateDecline_userLoss() public {
         DragonWithdrawalTestData memory data;
 
@@ -1563,7 +1563,7 @@ contract LidoStrategyTest is Test {
         // Step 5: r1.0 - Rate drops back to 1.0
         vm.mockCall(WSTETH, abi.encodeWithSignature("stEthPerToken()"), abi.encode(data.decreasedRate));
 
-        // Step 6: report (cant burn shares) - Report with no dragon shares to burn
+        // Step 6: report (can't burn shares) - Report with no dragon shares to burn
         vm.startPrank(keeper);
         (data.profit2, data.loss2) = vault.report();
         vm.stopPrank();
