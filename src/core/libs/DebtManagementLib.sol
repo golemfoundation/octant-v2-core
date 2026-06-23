@@ -135,7 +135,7 @@ library DebtManagementLib {
      * @param totalIdle Current vault idle assets
      * @param totalDebt Current total debt across all strategies
      * @param strategy Strategy address to rebalance
-     * @param targetDebt Target debt for strategy,  or type(uint256).max for max)
+     * @param targetDebt Target debt for strategy, or type(uint256).max for max
      * @param maxLoss Maximum acceptable loss in basis points (0-10000)
      * @param minimumTotalIdle Minimum idle to maintain in vault
      * @param asset Vault's asset token address
