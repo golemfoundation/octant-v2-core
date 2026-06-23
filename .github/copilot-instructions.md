@@ -104,19 +104,17 @@ Test conversion symmetry in every vault implementation.
 
 **Yield Skimming** - Retain baseline yield rate, donate excess. More complex accounting with time-based expected returns.
 
-### Dragon Protocol
-**Safe Modules** - Execute arbitrary code through Gnosis Safe with full permissions. This is extremely powerful and dangerous. Every input must be validated rigorously. Use allowlists, never blocklists. Module calls can reenter.
+### Safe/Zodiac Modules
+**Safe Modules** - Execute through Gnosis Safe module permissions. This is extremely powerful and dangerous. Every input must be validated rigorously. Use allowsets for critical paths. Module calls can reenter.
 
 ### Access Control Patterns
-**Allowlist/Blocklist** - `AccessMode` enum determines who can call. Prefer allowlists for high-value operations.
-
-**Passport System** - Track active status, expiration, and granular permissions per address.
+**Allowset/Blockset** - `AccessMode` enum determines who can call. Prefer allowsets for high-value operations.
 
 **Role Bitmasks** - Efficient multi-role management using bitwise operations.
 
 ## Domain Terms
 
-- **Dragon Protocol**: Safe module for cross-protocol DeFi operations
+- **Safe/Zodiac Modules**: Safe module integrations and compatibility contracts
 - **RegenStaker**: Regenerative staking with delegation
 - **Allowset/Blockset**: Access control lists (`AccessMode` enum)
 - **Lockup**: Token locking with time-based unlock
@@ -137,4 +135,3 @@ Test conversion symmetry in every vault implementation.
 - [CONTRIBUTING.md](../CONTRIBUTING.md) - Contribution workflow and standards
 
 **Config**: See `foundry.toml`
-

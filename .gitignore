@@ -29,5 +29,8 @@ gasreport.txt
 output.json
 package.tgz
 
+# Generated partner plan exports
+partners/shutter_dao_0x36/plan.html
+
 # Private/temporary files - do not commit
 _*.md

@@ -5,7 +5,6 @@
 .yarn/
 assets/
 cache/
-ci/
 dependencies/
 doc/
 docs/
@@ -25,4 +24,3 @@ flake.*
 Dockerfile
 Makefile
 *.md
-
