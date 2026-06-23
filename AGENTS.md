@@ -21,14 +21,15 @@ yarn coverage:summary     # forge coverage (summary table)
 | Directory | Contents |
 |-----------|----------|
 | `src/` | Production Solidity contracts |
-| `script/` | All scripts: Foundry `.s.sol` in subdirectories, bash `.sh` at root level |
+| `script/` | Foundry/bash scripts: `.s.sol` in subdirectories, bash `.sh` at root level |
+| `scripts/` | Node.js tooling (e.g. `sol-semver.mjs` for Solidity semver checks) |
 | `test/unit/` | Unit tests |
 | `test/integration/` | Integration tests (forked mainnet) |
 | `test/kontrol/` | Kontrol formal verification tests |
 | `verification/` | Formal verification support (Kontrol K definitions) |
 | `dependencies/` | Soldeer-managed dependencies |
 
-**There is no `scripts/` directory.** All scripts (Solidity and bash) live under `script/`.
+**Note the singular vs plural:** `script/` holds Foundry/bash scripts; `scripts/` holds Node.js tooling. They are distinct directories.
 
 ## Key references
 
@@ -40,7 +41,7 @@ yarn coverage:summary     # forge coverage (summary table)
 
 - Foundry toolchain (`forge`, `cast`, `anvil`); Soldeer for dependency management
 - Conventional commits: `type(scope): message`
-- Solidity `^0.8.24`; optimizer enabled
+- Solidity `^0.8.25`; compiled with solc `0.8.33` (pinned in `foundry.toml`); optimizer enabled
 - AGPL-3.0-or-later license for original code; preserve upstream licenses for ported/adapted code
 - NatSpec required on all public/external functions; use `@inheritdoc` for overrides
 - Tests follow Arrange-Act-Assert pattern

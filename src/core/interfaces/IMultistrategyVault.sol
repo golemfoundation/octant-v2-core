@@ -415,7 +415,7 @@ interface IMultistrategyVault {
 
     // ERC20 & ERC4626 Functions
     function deposit(uint256 assets, address receiver) external returns (uint256);
-    // function mint(uint256 shares, address receiver) external returns (uint256);
+    function mint(uint256 shares, address receiver) external returns (uint256);
     function withdraw(
         uint256 assets,
         address receiver,

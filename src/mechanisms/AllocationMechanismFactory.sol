@@ -7,7 +7,6 @@ import { OctantQFMechanism } from "./mechanism/OctantQFMechanism.sol";
 import { AllocationConfig } from "./BaseAllocationMechanism.sol";
 import { IAddressSet } from "src/utils/IAddressSet.sol";
 import { AccessMode } from "src/constants.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { Create2 } from "@openzeppelin/contracts/utils/Create2.sol";
 
 /**
