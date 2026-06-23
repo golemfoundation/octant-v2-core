@@ -361,6 +361,12 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
 
     /**
      * @notice Override withdrawal functions to handle custodied shares
+     * @param assets Amount of assets to withdraw
+     * @param receiver Address to receive the withdrawn assets
+     * @param owner Address whose shares will be burned
+     * @param maxLoss Maximum acceptable loss in basis points (0-10000, default 0 = no loss)
+     * @param strategiesArray Optional custom withdrawal queue (empty = use default)
+     * @return Amount of shares actually burned from owner
      */
     function withdraw(
         uint256 assets,
@@ -377,6 +383,12 @@ contract MultistrategyLockedVault is MultistrategyVault, IMultistrategyLockedVau
 
     /**
      * @notice Override redeem function to handle custodied shares
+     * @param shares Exact amount of shares to burn
+     * @param receiver Address to receive the withdrawn assets
+     * @param owner Address whose shares will be burned
+     * @param maxLoss Maximum acceptable loss in basis points (0-10000, default 10000 = accept all)
+     * @param strategiesArray Optional custom withdrawal queue (empty = use default)
+     * @return Amount of assets actually withdrawn and sent to receiver
      */
     function redeem(
         uint256 shares,
