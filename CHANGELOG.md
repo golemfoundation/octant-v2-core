@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.22](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.21..1.2.0-develop.22) - 2026-06-23
+
+### Bug Fixes
+
+- **(interfaces)** declare mint() in IMultistrategyVault to match implementation - ([0638d3e](https://github.com/golemfoundation/octant-v2-core/commit/0638d3ec1ba9e7d9a58e6dee152b73834075887d)) - Maxime
+
+### Documentation
+
+- **(agents)** correct scripts directory and Solidity version references - ([45d797c](https://github.com/golemfoundation/octant-v2-core/commit/45d797cf46f4da55d1e93dfd4e68a247109c6258)) - Maxime
+
+### Refactor
+
+- **(mechanisms)** remove unused IERC20 import in AllocationMechanismFactory - ([94e1ac3](https://github.com/golemfoundation/octant-v2-core/commit/94e1ac374553ae55843201fa2893572db5ecca50)) - Maxime
+
+### Testing
+
+- **(allocation)** restore timelock edge-case test on current API - ([9a22d2c](https://github.com/golemfoundation/octant-v2-core/commit/9a22d2c43f331932605d5509892b46bf442c3915)) - Maxime
+
+
 ## [1.2.0-develop.21](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.20..1.2.0-develop.21) - 2026-06-23
 
 ### Documentation
