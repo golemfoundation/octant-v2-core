@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.24](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.23..1.2.0-develop.24) - 2026-06-24
+
+### Documentation
+
+- fix "wont" -> "won't" in BaseStrategy fallback NatSpec - ([c744a42](https://github.com/golemfoundation/octant-v2-core/commit/c744a42b428b723a77448d5bc26fdf9d79799aa1)) - Maxime
+- fix garbled "to the that" phrasing in BaseStrategy NatSpec - ([4cc0f39](https://github.com/golemfoundation/octant-v2-core/commit/4cc0f39f9b728b81fae03f053261e3cbc111107f)) - Maxime
+- document @return for rage-quit cooldown getters in IMultistrategyLockedVault - ([094c35d](https://github.com/golemfoundation/octant-v2-core/commit/094c35d126b50ba2406f284e14a113262e6be006)) - Maxime
+- documentation cleanup (ProperQF @return docs + comment typo) - ([f16149e](https://github.com/golemfoundation/octant-v2-core/commit/f16149e08a2aec76ddc4f0aa5b8283e2c5e5ddb1)) - Maxime
+
+
 ## [1.2.0-develop.23](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.22..1.2.0-develop.23) - 2026-06-23
 
 ### Documentation
