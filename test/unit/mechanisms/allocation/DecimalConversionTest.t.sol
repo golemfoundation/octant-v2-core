@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "forge-std/Test.sol";
-import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
-import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
-import { AllocationConfig } from "src/mechanisms/BaseAllocationMechanism.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {QuadraticVotingMechanism} from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
+import {AllocationMechanismFactory} from "src/mechanisms/AllocationMechanismFactory.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {AllocationTestHelpers} from "./utils/AllocationTestHelpers.sol";
 
 /// @title Mock ERC20 token with configurable decimals
 contract MockTokenWithDecimals is ERC20 {
@@ -27,17 +25,13 @@ contract MockTokenWithDecimals is ERC20 {
 }
 
 /// @title Test decimal conversion in voting power calculation
-contract DecimalConversionTest is Test {
+contract DecimalConversionTest is AllocationTestHelpers {
     AllocationMechanismFactory factory;
     MockTokenWithDecimals token6; // 6 decimals (USDC-like)
     MockTokenWithDecimals token8; // 8 decimals (Bitcoin-like)
     MockTokenWithDecimals token18; // 18 decimals (ETH-like)
 
     address alice = address(0x1);
-
-    function _tokenized(address _mechanism) internal pure returns (TokenizedAllocationMechanism) {
-        return TokenizedAllocationMechanism(_mechanism);
-    }
 
     function setUp() public {
         factory = new AllocationMechanismFactory();
@@ -53,20 +47,22 @@ contract DecimalConversionTest is Test {
     }
 
     function deployQuadraticMechanismWithToken(IERC20 asset) internal returns (QuadraticVotingMechanism) {
-        AllocationConfig memory config = AllocationConfig({
-            asset: asset,
-            name: "Test Quadratic Mechanism",
-            symbol: "TESTQ",
-            votingDelay: 100,
-            votingPeriod: 1000,
-            quorumShares: 500,
-            timelockDelay: 1 days,
-            gracePeriod: 7 days,
-            owner: address(0)
-        });
-
-        address mechanismAddr = factory.deployQuadraticVotingMechanism(config, 50, 100);
-        return QuadraticVotingMechanism(payable(mechanismAddr));
+        return _deployQuadraticVoting(
+            factory,
+            _config({
+                asset: asset,
+                name: "Test Quadratic Mechanism",
+                symbol: "TESTQ",
+                votingDelay: 100,
+                votingPeriod: 1000,
+                quorumShares: 500,
+                timelockDelay: 1 days,
+                gracePeriod: 7 days,
+                owner: address(0)
+            }),
+            50,
+            100
+        );
     }
 
     /// @notice Test that 6-decimal tokens are properly scaled to 18 decimals (Quadratic)

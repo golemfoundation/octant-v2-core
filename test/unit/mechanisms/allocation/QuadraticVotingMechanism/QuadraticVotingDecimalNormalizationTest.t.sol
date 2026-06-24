@@ -1,15 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "forge-std/Test.sol";
 import "forge-std/console.sol";
-import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
-import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
-import { AllocationConfig } from "src/mechanisms/BaseAllocationMechanism.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
-import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {TokenizedAllocationMechanism} from "src/mechanisms/TokenizedAllocationMechanism.sol";
+import {QuadraticVotingMechanism} from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
+import {AllocationMechanismFactory} from "src/mechanisms/AllocationMechanismFactory.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {AllocationTestHelpers} from "../utils/AllocationTestHelpers.sol";
 
 /// @title Mock ERC20 with configurable decimals
 contract MockToken is ERC20 {
@@ -32,7 +30,7 @@ contract MockToken is ERC20 {
 /// @notice Tests that calculateOptimalAlpha() works correctly with tokens of different decimal configurations
 /// @dev Demonstrates the fix for the decimal normalization bug where compareOptimalAlpha() would
 ///      incorrectly compare raw token amounts with 18-decimal normalized quadratic/linear sums
-contract QuadraticVotingDecimalNormalizationTest is Test {
+contract QuadraticVotingDecimalNormalizationTest is AllocationTestHelpers {
     AllocationMechanismFactory factory;
     MockToken token6Decimals; // USDC-like token
     MockToken token18Decimals; // ETH-like token
@@ -54,10 +52,6 @@ contract QuadraticVotingDecimalNormalizationTest is Test {
     uint256 constant GRACE_PERIOD = 7 days;
     uint256 constant QUORUM_REQUIREMENT = 100 ether; // In 18 decimals
 
-    function _tokenized(address _mechanism) internal pure returns (TokenizedAllocationMechanism) {
-        return TokenizedAllocationMechanism(_mechanism);
-    }
-
     function setUp() public {
         factory = new AllocationMechanismFactory();
 
@@ -76,20 +70,22 @@ contract QuadraticVotingDecimalNormalizationTest is Test {
     }
 
     function _deployMechanism(MockToken token) internal returns (QuadraticVotingMechanism) {
-        AllocationConfig memory config = AllocationConfig({
-            asset: IERC20(address(token)),
-            name: string.concat("QV Mechanism ", token.symbol()),
-            symbol: string.concat("QV", token.symbol()),
-            votingDelay: VOTING_DELAY,
-            votingPeriod: VOTING_PERIOD,
-            quorumShares: QUORUM_REQUIREMENT,
-            timelockDelay: TIMELOCK_DELAY,
-            gracePeriod: GRACE_PERIOD,
-            owner: address(this)
-        });
-
-        address mechanismAddr = factory.deployQuadraticVotingMechanism(config, 1, 2); // Alpha = 0.5
-        return QuadraticVotingMechanism(payable(mechanismAddr));
+        return _deployQuadraticVoting(
+            factory,
+            _config({
+                asset: IERC20(address(token)),
+                name: string.concat("QV Mechanism ", token.symbol()),
+                symbol: string.concat("QV", token.symbol()),
+                votingDelay: VOTING_DELAY,
+                votingPeriod: VOTING_PERIOD,
+                quorumShares: QUORUM_REQUIREMENT,
+                timelockDelay: TIMELOCK_DELAY,
+                gracePeriod: GRACE_PERIOD,
+                owner: address(this)
+            }),
+            1,
+            2
+        );
     }
 
     function _fundUsers() internal {
@@ -104,7 +100,7 @@ contract QuadraticVotingDecimalNormalizationTest is Test {
 
         // Fund each user for each token
         address[3] memory users = [alice, bob, charlie];
-        for (uint i = 0; i < users.length; i++) {
+        for (uint256 i = 0; i < users.length; i++) {
             token6Decimals.mint(users[i], amount6 * 10); // Extra for testing
             token18Decimals.mint(users[i], amount18 * 10);
             token8Decimals.mint(users[i], amount8 * 10);
@@ -185,10 +181,8 @@ contract QuadraticVotingDecimalNormalizationTest is Test {
         console.log("Total assets (6 decimals):", totalAssets);
         console.log("Total assets normalized (18 decimals):", totalAssets * 10 ** 12);
 
-        (uint256 alphaNumerator, uint256 alphaDenominator) = mechanism6.calculateOptimalAlpha(
-            smallMatchingPool,
-            smallUserDeposits
-        );
+        (uint256 alphaNumerator, uint256 alphaDenominator) =
+            mechanism6.calculateOptimalAlpha(smallMatchingPool, smallUserDeposits);
 
         console.log("Calculated alpha:", alphaNumerator, "/", alphaDenominator);
 
@@ -219,7 +213,7 @@ contract QuadraticVotingDecimalNormalizationTest is Test {
 
         // Users register and approve tokens
         address[3] memory users = [alice, bob, charlie];
-        for (uint i = 0; i < users.length; i++) {
+        for (uint256 i = 0; i < users.length; i++) {
             vm.startPrank(users[i]);
             token.approve(address(mechanism), depositAmount);
             _tokenized(address(mechanism)).signup(depositAmount);
@@ -249,8 +243,8 @@ contract QuadraticVotingDecimalNormalizationTest is Test {
         address[3] memory users = [alice, bob, charlie];
         QuadraticVotingMechanism[3] memory mechanisms = [mechanism6, mechanism18, mechanism8];
 
-        for (uint m = 0; m < mechanisms.length; m++) {
-            for (uint i = 0; i < users.length; i++) {
+        for (uint256 m = 0; m < mechanisms.length; m++) {
+            for (uint256 i = 0; i < users.length; i++) {
                 vm.startPrank(users[i]);
 
                 // Vote on proposal 1 and 2 with weight 10 each
@@ -277,7 +271,7 @@ contract QuadraticVotingDecimalNormalizationTest is Test {
         // Cast votes on the mechanism
         address[3] memory users = [alice, bob, charlie];
 
-        for (uint i = 0; i < users.length; i++) {
+        for (uint256 i = 0; i < users.length; i++) {
             vm.startPrank(users[i]);
 
             // Vote on proposal 1 and 2 with weight 10 each
