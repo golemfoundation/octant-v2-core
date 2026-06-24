@@ -108,9 +108,11 @@ interface IMultistrategyLockedVault is IMultistrategyVault {
      */
     function cancelRageQuitCooldownPeriodChange() external;
     /// @notice Get the pending rage quit cooldown period awaiting governance timelock
+    /// @return The pending rage quit cooldown period, in seconds, awaiting finalization after the timelock
     function getPendingRageQuitCooldownPeriod() external view returns (uint256);
 
     /// @notice Get the timestamp when the rage quit cooldown period change was initiated
+    /// @return The block timestamp at which the pending cooldown period change was initiated
     function getRageQuitCooldownPeriodChangeTimestamp() external view returns (uint256);
 
     /**
