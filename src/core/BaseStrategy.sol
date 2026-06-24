@@ -103,7 +103,7 @@ abstract contract BaseStrategy {
      * contract that will be used by all strategies to handle the
      * accounting, logic, storage etc.
      *
-     * Any external calls to the that don't hit one of the functions
+     * Any external calls to the strategy that don't hit one of the functions
      * defined in this base or the strategy will end up being forwarded
      * through the fallback function, which will delegateCall this address.
      *
