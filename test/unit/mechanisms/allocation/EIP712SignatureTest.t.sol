@@ -2,12 +2,12 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/console.sol";
-import {TokenizedAllocationMechanism} from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import {QuadraticVotingMechanism} from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
-import {AllocationMechanismFactory} from "src/mechanisms/AllocationMechanismFactory.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
-import {AllocationTestHelpers} from "./utils/AllocationTestHelpers.sol";
+import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
+import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
+import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import { AllocationTestHelpers } from "./utils/AllocationTestHelpers.sol";
 
 /// @title EIP712 Signature Tests
 /// @notice Comprehensive tests for EIP-2612 style signature functionality
@@ -18,9 +18,10 @@ contract EIP712SignatureTest is AllocationTestHelpers {
         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
     bytes32 private constant SIGNUP_TYPEHASH =
         keccak256("Signup(address user,address payer,uint256 deposit,uint256 nonce,uint256 deadline)");
-    bytes32 private constant CAST_VOTE_TYPEHASH = keccak256(
-        "CastVote(address voter,uint256 proposalId,uint8 choice,uint256 weight,address expectedRecipient,uint256 nonce,uint256 deadline)"
-    );
+    bytes32 private constant CAST_VOTE_TYPEHASH =
+        keccak256(
+            "CastVote(address voter,uint256 proposalId,uint8 choice,uint256 weight,address expectedRecipient,uint256 nonce,uint256 deadline)"
+        );
     string private constant EIP712_VERSION = "1";
 
     // Test contracts
@@ -81,17 +82,24 @@ contract EIP712SignatureTest is AllocationTestHelpers {
     // ============ EIP712 Helper Functions ============
 
     function _computeDomainSeparator(string memory name, address verifyingContract) internal view returns (bytes32) {
-        return keccak256(
-            abi.encode(
-                TYPE_HASH, keccak256(bytes(name)), keccak256(bytes(EIP712_VERSION)), block.chainid, verifyingContract
-            )
-        );
+        return
+            keccak256(
+                abi.encode(
+                    TYPE_HASH,
+                    keccak256(bytes(name)),
+                    keccak256(bytes(EIP712_VERSION)),
+                    block.chainid,
+                    verifyingContract
+                )
+            );
     }
 
-    function _getSignupDigest(address user, uint256 deposit, uint256 nonce, uint256 deadline)
-        internal
-        returns (bytes32)
-    {
+    function _getSignupDigest(
+        address user,
+        uint256 deposit,
+        uint256 nonce,
+        uint256 deadline
+    ) internal returns (bytes32) {
         bytes32 structHash = keccak256(abi.encode(SIGNUP_TYPEHASH, user, user, deposit, nonce, deadline));
         bytes32 domainSeparator = _tokenized(address(mechanism)).DOMAIN_SEPARATOR();
         return keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
@@ -308,10 +316,17 @@ contract EIP712SignatureTest is AllocationTestHelpers {
         (uint8 v, bytes32 r, bytes32 s) = _signDigest(digest, ALICE_PRIVATE_KEY);
 
         // Cast vote with signature
-        _tokenized(address(mechanism))
-            .castVoteWithSignature(
-                alice, pid, TokenizedAllocationMechanism.VoteType.For, weight, address(0x123), deadline, v, r, s
-            );
+        _tokenized(address(mechanism)).castVoteWithSignature(
+            alice,
+            pid,
+            TokenizedAllocationMechanism.VoteType.For,
+            weight,
+            address(0x123),
+            deadline,
+            v,
+            r,
+            s
+        );
 
         // Verify vote was recorded
         assertEq(
@@ -361,14 +376,28 @@ contract EIP712SignatureTest is AllocationTestHelpers {
                 uint8 choice = uint8(voteTypes[i]);
                 uint256 weight = 50;
 
-                bytes32 digest =
-                    _getCastVoteDigest(users[i], pids[i], choice, weight, address(uint160(0x100 + i)), nonce, deadline);
+                bytes32 digest = _getCastVoteDigest(
+                    users[i],
+                    pids[i],
+                    choice,
+                    weight,
+                    address(uint160(0x100 + i)),
+                    nonce,
+                    deadline
+                );
                 (uint8 v, bytes32 r, bytes32 s) = _signDigest(digest, privateKeys[i]);
 
-                _tokenized(address(mechanism))
-                    .castVoteWithSignature(
-                        users[i], pids[i], voteTypes[i], weight, address(uint160(0x100 + i)), deadline, v, r, s
-                    );
+                _tokenized(address(mechanism)).castVoteWithSignature(
+                    users[i],
+                    pids[i],
+                    voteTypes[i],
+                    weight,
+                    address(uint160(0x100 + i)),
+                    deadline,
+                    v,
+                    r,
+                    s
+                );
             }
 
             // Verify votes were recorded - each user voted with weight 50, so cost is 50*50 = 2500
@@ -403,10 +432,17 @@ contract EIP712SignatureTest is AllocationTestHelpers {
         s = bytes32(0);
 
         vm.expectRevert(abi.encodeWithSelector(TokenizedAllocationMechanism.InvalidSigner.selector, address(0), alice));
-        _tokenized(address(mechanism))
-            .castVoteWithSignature(
-                alice, pid, TokenizedAllocationMechanism.VoteType.For, 100, address(0x123), deadline, v, r, s
-            );
+        _tokenized(address(mechanism)).castVoteWithSignature(
+            alice,
+            pid,
+            TokenizedAllocationMechanism.VoteType.For,
+            100,
+            address(0x123),
+            deadline,
+            v,
+            r,
+            s
+        );
     }
 
     function test_CastVoteWithSignature_ExpiredDeadline() public {
@@ -429,10 +465,17 @@ contract EIP712SignatureTest is AllocationTestHelpers {
         vm.expectRevert(
             abi.encodeWithSelector(TokenizedAllocationMechanism.ExpiredSignature.selector, deadline, block.timestamp)
         );
-        _tokenized(address(mechanism))
-            .castVoteWithSignature(
-                alice, pid, TokenizedAllocationMechanism.VoteType.For, 100, address(0x123), deadline, v, r, s
-            );
+        _tokenized(address(mechanism)).castVoteWithSignature(
+            alice,
+            pid,
+            TokenizedAllocationMechanism.VoteType.For,
+            100,
+            address(0x123),
+            deadline,
+            v,
+            r,
+            s
+        );
     }
 
     function test_CastVoteWithSignature_ReplayAttack() public {
@@ -454,17 +497,31 @@ contract EIP712SignatureTest is AllocationTestHelpers {
         (uint8 v, bytes32 r, bytes32 s) = _signDigest(digest, ALICE_PRIVATE_KEY);
 
         // First vote succeeds
-        _tokenized(address(mechanism))
-            .castVoteWithSignature(
-                alice, pid1, TokenizedAllocationMechanism.VoteType.For, 100, address(0x123), deadline, v, r, s
-            );
+        _tokenized(address(mechanism)).castVoteWithSignature(
+            alice,
+            pid1,
+            TokenizedAllocationMechanism.VoteType.For,
+            100,
+            address(0x123),
+            deadline,
+            v,
+            r,
+            s
+        );
 
         // Try to replay - should fail due to nonce mismatch
         vm.expectRevert();
-        _tokenized(address(mechanism))
-            .castVoteWithSignature(
-                alice, pid1, TokenizedAllocationMechanism.VoteType.For, 100, address(0x123), deadline, v, r, s
-            );
+        _tokenized(address(mechanism)).castVoteWithSignature(
+            alice,
+            pid1,
+            TokenizedAllocationMechanism.VoteType.For,
+            100,
+            address(0x123),
+            deadline,
+            v,
+            r,
+            s
+        );
     }
 
     // ============ Integration Tests ============
@@ -497,14 +554,23 @@ contract EIP712SignatureTest is AllocationTestHelpers {
         (uint8 vv, bytes32 vr, bytes32 vs) = _signDigest(voteDigest, ALICE_PRIVATE_KEY);
 
         vm.prank(relayer);
-        _tokenized(address(mechanism))
-            .castVoteWithSignature(
-                alice, pid, TokenizedAllocationMechanism.VoteType.For, 200, address(0x123), voteDeadline, vv, vr, vs
-            );
+        _tokenized(address(mechanism)).castVoteWithSignature(
+            alice,
+            pid,
+            TokenizedAllocationMechanism.VoteType.For,
+            200,
+            address(0x123),
+            voteDeadline,
+            vv,
+            vr,
+            vs
+        );
 
         // Verify final state
         assertEq(
-            _tokenized(address(mechanism)).votingPower(alice), DEPOSIT_AMOUNT - 200 * 200, "Voting power incorrect"
+            _tokenized(address(mechanism)).votingPower(alice),
+            DEPOSIT_AMOUNT - 200 * 200,
+            "Voting power incorrect"
         );
         assertEq(_tokenized(address(mechanism)).nonces(alice), signupNonce + 2, "Nonce should increment twice");
     }
@@ -545,10 +611,17 @@ contract EIP712SignatureTest is AllocationTestHelpers {
         bytes32 bobVoteDigest = _getCastVoteDigest(bob, pid, 1, 150, address(0x123), bobVoteNonce, bobVoteDeadline);
         (uint8 vv, bytes32 vr, bytes32 vs) = _signDigest(bobVoteDigest, BOB_PRIVATE_KEY);
 
-        _tokenized(address(mechanism))
-            .castVoteWithSignature(
-                bob, pid, TokenizedAllocationMechanism.VoteType.For, 150, address(0x123), bobVoteDeadline, vv, vr, vs
-            );
+        _tokenized(address(mechanism)).castVoteWithSignature(
+            bob,
+            pid,
+            TokenizedAllocationMechanism.VoteType.For,
+            150,
+            address(0x123),
+            bobVoteDeadline,
+            vv,
+            vr,
+            vs
+        );
 
         // Verify both votes recorded - Alice voted 100 (cost 100^2=10000), Bob voted 150 (cost 150^2=22500)
         assertEq(
@@ -593,10 +666,17 @@ contract EIP712SignatureTest is AllocationTestHelpers {
         bytes32 voteDigest = _getCastVoteDigest(alice, pid, 1, 50, address(0x123), voteNonce, voteDeadline);
         (uint8 vv, bytes32 vr, bytes32 vs) = _signDigest(voteDigest, ALICE_PRIVATE_KEY);
 
-        _tokenized(address(mechanism))
-            .castVoteWithSignature(
-                alice, pid, TokenizedAllocationMechanism.VoteType.For, 50, address(0x123), voteDeadline, vv, vr, vs
-            );
+        _tokenized(address(mechanism)).castVoteWithSignature(
+            alice,
+            pid,
+            TokenizedAllocationMechanism.VoteType.For,
+            50,
+            address(0x123),
+            voteDeadline,
+            vv,
+            vr,
+            vs
+        );
 
         assertEq(_tokenized(address(mechanism)).nonces(alice), initialNonce + 2, "Nonce should increment after vote");
     }

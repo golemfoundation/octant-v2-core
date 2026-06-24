@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/console.sol";
-import {TokenizedAllocationMechanism} from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import {QuadraticVotingTestBase} from "../utils/QuadraticVotingTestBase.sol";
+import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
+import { QuadraticVotingTestBase } from "../utils/QuadraticVotingTestBase.sol";
 
 /// @title Admin Journey Integration Tests
 /// @notice Comprehensive tests for admin user journey covering deployment, monitoring, and execution
@@ -103,11 +103,11 @@ contract QuadraticVotingAdminJourneyTest is QuadraticVotingTestBase {
         _castVote(bob, pid2, 18, dave);
 
         // Admin checks real-time vote tallies using getTally() from ProperQF
-        (,, uint256 p1QuadraticFunding, uint256 p1LinearFunding) = mechanism.getTally(pid1);
+        (, , uint256 p1QuadraticFunding, uint256 p1LinearFunding) = mechanism.getTally(pid1);
         uint256 p1For = p1QuadraticFunding + p1LinearFunding;
         assertEq(p1For, 724); // QuadraticFunding: (22+8)² × 0.5 + linear portion = 724
 
-        (,, uint256 p2QuadraticFunding, uint256 p2LinearFunding) = mechanism.getTally(pid2);
+        (, , uint256 p2QuadraticFunding, uint256 p2LinearFunding) = mechanism.getTally(pid2);
         uint256 p2For = p2QuadraticFunding + p2LinearFunding;
         assertEq(p2For, 972); // QuadraticFunding: (18+18)² × 0.5 + linear portion = 972
 
@@ -164,20 +164,24 @@ contract QuadraticVotingAdminJourneyTest is QuadraticVotingTestBase {
 
         // Advance past voting period
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         // Queue successful proposal
         assertEq(
-            uint256(_tokenized().state(pidSuccessful)), uint256(TokenizedAllocationMechanism.ProposalState.Succeeded)
+            uint256(_tokenized().state(pidSuccessful)),
+            uint256(TokenizedAllocationMechanism.ProposalState.Succeeded)
         );
 
         uint256 timestampBefore = block.timestamp;
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pidSuccessful));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pidSuccessful));
         require(success2, "Queue successful proposal failed");
 
         // Verify queuing effects
-        assertEq(uint256(_tokenized().state(pidSuccessful)), uint256(TokenizedAllocationMechanism.ProposalState.Queued));
+        assertEq(
+            uint256(_tokenized().state(pidSuccessful)),
+            uint256(TokenizedAllocationMechanism.ProposalState.Queued)
+        );
         // QuadraticFunding calculation: pidSuccessful gets proportional shares based on weighted funding
         // Alice(25) + Bob(15) = (40)² × 0.5 + contributions × 0.5 = approx 1225 weighted funding
         // Exact shares depend on total funding across all proposals
@@ -202,7 +206,7 @@ contract QuadraticVotingAdminJourneyTest is QuadraticVotingTestBase {
         // Test pause mechanism
         assertFalse(_tokenized().paused());
 
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("pause()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("pause()"));
         require(success, "Pause failed");
         assertTrue(_tokenized().paused());
 
@@ -212,17 +216,17 @@ contract QuadraticVotingAdminJourneyTest is QuadraticVotingTestBase {
         _tokenized().signup(100 ether);
 
         // Unpause mechanism
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("unpause()"));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("unpause()"));
         require(success2, "Unpause failed");
         assertFalse(_tokenized().paused());
 
         // Transfer ownership
-        (bool success3,) = address(mechanism).call(abi.encodeWithSignature("transferOwnership(address)", newOwner));
+        (bool success3, ) = address(mechanism).call(abi.encodeWithSignature("transferOwnership(address)", newOwner));
         require(success3, "Transfer ownership failed");
 
         // New owner accepts ownership
         vm.prank(newOwner);
-        (bool success3b,) = address(mechanism).call(abi.encodeWithSignature("acceptOwnership()"));
+        (bool success3b, ) = address(mechanism).call(abi.encodeWithSignature("acceptOwnership()"));
         require(success3b, "Accept ownership failed");
         assertEq(_tokenized().owner(), newOwner);
 
@@ -232,7 +236,7 @@ contract QuadraticVotingAdminJourneyTest is QuadraticVotingTestBase {
 
         // New owner can perform owner functions
         vm.startPrank(newOwner);
-        (bool success5,) = address(mechanism).call(abi.encodeWithSignature("pause()"));
+        (bool success5, ) = address(mechanism).call(abi.encodeWithSignature("pause()"));
         require(success5, "New owner pause failed");
         assertTrue(_tokenized().paused());
         vm.stopPrank();
@@ -252,7 +256,7 @@ contract QuadraticVotingAdminJourneyTest is QuadraticVotingTestBase {
         _castVote(alice, pid, 20, charlie);
 
         // Emergency pause during voting
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("pause()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("pause()"));
         require(success, "Pause failed");
 
         // All operations blocked
@@ -261,7 +265,7 @@ contract QuadraticVotingAdminJourneyTest is QuadraticVotingTestBase {
         _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 8, charlie);
 
         // Resume operations
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("unpause()"));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("unpause()"));
         require(success2, "Unpause failed");
 
         // Operations work again - use bob since alice already voted
@@ -269,24 +273,25 @@ contract QuadraticVotingAdminJourneyTest is QuadraticVotingTestBase {
 
         // Ownership transfer during crisis
         address emergencyAdmin = newOwner;
-        (bool success3,) =
-            address(mechanism).call(abi.encodeWithSignature("transferOwnership(address)", emergencyAdmin));
+        (bool success3, ) = address(mechanism).call(
+            abi.encodeWithSignature("transferOwnership(address)", emergencyAdmin)
+        );
         require(success3, "Transfer ownership failed");
 
         // New owner accepts ownership
         vm.prank(emergencyAdmin);
-        (bool success3b,) = address(mechanism).call(abi.encodeWithSignature("acceptOwnership()"));
+        (bool success3b, ) = address(mechanism).call(abi.encodeWithSignature("acceptOwnership()"));
         require(success3b, "Accept ownership failed");
 
         // New owner manages crisis
         vm.startPrank(emergencyAdmin);
-        (bool success4,) = address(mechanism).call(abi.encodeWithSignature("pause()"));
+        (bool success4, ) = address(mechanism).call(abi.encodeWithSignature("pause()"));
         require(success4, "Emergency admin pause failed");
         vm.stopPrank();
 
         // System recovery after crisis
         vm.startPrank(emergencyAdmin);
-        (bool success5,) = address(mechanism).call(abi.encodeWithSignature("unpause()"));
+        (bool success5, ) = address(mechanism).call(abi.encodeWithSignature("unpause()"));
         require(success5, "Recovery unpause failed");
         vm.stopPrank();
 
@@ -294,10 +299,10 @@ contract QuadraticVotingAdminJourneyTest is QuadraticVotingTestBase {
         vm.warp(block.timestamp + VOTING_PERIOD + 1);
 
         vm.startPrank(emergencyAdmin);
-        (bool success6,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success6, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success6, "Emergency finalization failed");
 
-        (bool success7,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
+        (bool success7, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success7, "Emergency queuing failed");
         vm.stopPrank();
 

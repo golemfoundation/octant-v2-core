@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/console.sol";
-import {QuadraticVotingTestBase} from "../utils/QuadraticVotingTestBase.sol";
+import { QuadraticVotingTestBase } from "../utils/QuadraticVotingTestBase.sol";
 
 contract QuadraticVotingTimelockDebugTest is QuadraticVotingTestBase {
     function setUp() public {
@@ -27,7 +27,7 @@ contract QuadraticVotingTimelockDebugTest is QuadraticVotingTestBase {
         _vote(alice, pid, 31, charlie); // 31^2 = 961 > 500 quorum
 
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         console.log("Before queuing:");
@@ -36,7 +36,7 @@ contract QuadraticVotingTimelockDebugTest is QuadraticVotingTestBase {
         console.log("  Block timestamp:", block.timestamp);
 
         uint256 queueTime = block.timestamp;
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success2, "Queue failed");
 
         console.log("After queuing:");

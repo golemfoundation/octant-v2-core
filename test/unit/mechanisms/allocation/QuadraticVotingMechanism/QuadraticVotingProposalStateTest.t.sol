@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {TokenizedAllocationMechanism} from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import {QuadraticVotingTestBase} from "../utils/QuadraticVotingTestBase.sol";
+import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
+import { QuadraticVotingTestBase } from "../utils/QuadraticVotingTestBase.sol";
 
 /// @title Proposal State Journey Tests
 /// @notice Comprehensive tests for all possible proposal states and recipient experiences
@@ -96,7 +96,7 @@ contract QuadraticVotingProposalStateTest is QuadraticVotingTestBase {
         vm.prank(alice);
         _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, dave);
 
-        (,, uint256 quadraticFunding, uint256 linearFunding) = mechanism.getTally(pid);
+        (, , uint256 quadraticFunding, uint256 linearFunding) = mechanism.getTally(pid);
         uint256 forVotes = quadraticFunding + linearFunding;
         assertEq(forVotes, 900);
 
@@ -184,13 +184,17 @@ contract QuadraticVotingProposalStateTest is QuadraticVotingTestBase {
 
         // Finalize voting
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         // Verify DEFEATED states
-        assertEq(uint256(_tokenized().state(pidLowVotes)), uint256(TokenizedAllocationMechanism.ProposalState.Defeated));
         assertEq(
-            uint256(_tokenized().state(pidNegativeVotes)), uint256(TokenizedAllocationMechanism.ProposalState.Defeated)
+            uint256(_tokenized().state(pidLowVotes)),
+            uint256(TokenizedAllocationMechanism.ProposalState.Defeated)
+        );
+        assertEq(
+            uint256(_tokenized().state(pidNegativeVotes)),
+            uint256(TokenizedAllocationMechanism.ProposalState.Defeated)
         );
 
         // Recipients get nothing from defeated proposals
@@ -228,7 +232,7 @@ contract QuadraticVotingProposalStateTest is QuadraticVotingTestBase {
         _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, henry);
 
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         // Verify SUCCEEDED state
@@ -242,7 +246,7 @@ contract QuadraticVotingProposalStateTest is QuadraticVotingTestBase {
         assertFalse(proposal.canceled);
 
         // Verify vote tallies are correct using getTally() from ProperQF
-        (,, uint256 quadraticFunding, uint256 linearFunding) = mechanism.getTally(pid);
+        (, , uint256 quadraticFunding, uint256 linearFunding) = mechanism.getTally(pid);
         uint256 forVotes = quadraticFunding + linearFunding;
         uint256 againstVotes = 0; // QuadraticVoting only supports For votes
         assertEq(forVotes, 900);
@@ -272,12 +276,12 @@ contract QuadraticVotingProposalStateTest is QuadraticVotingTestBase {
         _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, charlie);
 
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         // Queue the proposal
         uint256 timestampBefore = block.timestamp;
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success2, "Queue failed");
 
         // Verify QUEUED state
@@ -300,7 +304,7 @@ contract QuadraticVotingProposalStateTest is QuadraticVotingTestBase {
 
         // Cannot queue again
         vm.expectRevert(TokenizedAllocationMechanism.AlreadyQueued.selector);
-        (bool success3,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
+        (bool success3, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         assertFalse(success3);
     }
 
@@ -326,10 +330,10 @@ contract QuadraticVotingProposalStateTest is QuadraticVotingTestBase {
         _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, dave);
 
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success2, "Queue failed");
 
         // Fast forward past timelock
@@ -380,10 +384,10 @@ contract QuadraticVotingProposalStateTest is QuadraticVotingTestBase {
         _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, eve);
 
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success2, "Queue failed");
 
         // Fast forward past timelock + grace period
@@ -436,21 +440,28 @@ contract QuadraticVotingProposalStateTest is QuadraticVotingTestBase {
 
         // Start with all in PENDING
         assertEq(
-            uint256(_tokenized().state(pidSuccessful)), uint256(TokenizedAllocationMechanism.ProposalState.Pending)
+            uint256(_tokenized().state(pidSuccessful)),
+            uint256(TokenizedAllocationMechanism.ProposalState.Pending)
         );
         assertEq(uint256(_tokenized().state(pidDefeated)), uint256(TokenizedAllocationMechanism.ProposalState.Pending));
         assertEq(uint256(_tokenized().state(pidCanceled)), uint256(TokenizedAllocationMechanism.ProposalState.Pending));
 
         // Move to ACTIVE
         vm.warp(votingStartTime + 1);
-        assertEq(uint256(_tokenized().state(pidSuccessful)), uint256(TokenizedAllocationMechanism.ProposalState.Active));
+        assertEq(
+            uint256(_tokenized().state(pidSuccessful)),
+            uint256(TokenizedAllocationMechanism.ProposalState.Active)
+        );
         assertEq(uint256(_tokenized().state(pidDefeated)), uint256(TokenizedAllocationMechanism.ProposalState.Active));
         assertEq(uint256(_tokenized().state(pidCanceled)), uint256(TokenizedAllocationMechanism.ProposalState.Active));
 
         // Cancel one proposal
         vm.prank(alice);
         _tokenized().cancelProposal(pidCanceled);
-        assertEq(uint256(_tokenized().state(pidCanceled)), uint256(TokenizedAllocationMechanism.ProposalState.Canceled));
+        assertEq(
+            uint256(_tokenized().state(pidCanceled)),
+            uint256(TokenizedAllocationMechanism.ProposalState.Canceled)
+        );
 
         // Vote on remaining proposals
         vm.prank(alice);
@@ -461,21 +472,31 @@ contract QuadraticVotingProposalStateTest is QuadraticVotingTestBase {
 
         // Finalize
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         // Check final states
         assertEq(
-            uint256(_tokenized().state(pidSuccessful)), uint256(TokenizedAllocationMechanism.ProposalState.Succeeded)
+            uint256(_tokenized().state(pidSuccessful)),
+            uint256(TokenizedAllocationMechanism.ProposalState.Succeeded)
         );
-        assertEq(uint256(_tokenized().state(pidDefeated)), uint256(TokenizedAllocationMechanism.ProposalState.Defeated));
-        assertEq(uint256(_tokenized().state(pidCanceled)), uint256(TokenizedAllocationMechanism.ProposalState.Canceled));
+        assertEq(
+            uint256(_tokenized().state(pidDefeated)),
+            uint256(TokenizedAllocationMechanism.ProposalState.Defeated)
+        );
+        assertEq(
+            uint256(_tokenized().state(pidCanceled)),
+            uint256(TokenizedAllocationMechanism.ProposalState.Canceled)
+        );
 
         // Queue successful proposal
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pidSuccessful));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pidSuccessful));
         require(success2, "Queue failed");
 
-        assertEq(uint256(_tokenized().state(pidSuccessful)), uint256(TokenizedAllocationMechanism.ProposalState.Queued));
+        assertEq(
+            uint256(_tokenized().state(pidSuccessful)),
+            uint256(TokenizedAllocationMechanism.ProposalState.Queued)
+        );
 
         // Verify recipient outcomes
         assertEq(_tokenized().balanceOf(charlie), 900); // Success

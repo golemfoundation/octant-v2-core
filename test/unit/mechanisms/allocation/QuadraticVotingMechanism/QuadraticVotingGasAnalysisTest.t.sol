@@ -2,11 +2,11 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/console.sol";
-import {QuadraticVotingMechanism} from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
-import {AllocationMechanismFactory} from "src/mechanisms/AllocationMechanismFactory.sol";
-import {TokenizedAllocationMechanism} from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
-import {AllocationTestHelpers} from "../utils/AllocationTestHelpers.sol";
+import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
+import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
+import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
+import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import { AllocationTestHelpers } from "../utils/AllocationTestHelpers.sol";
 
 /// @title Gas Analysis Test for Cold vs Warm Storage Operations
 /// @notice Analyzes gas costs for voting on new projects (cold storage) vs existing projects (warm storage)
@@ -437,7 +437,11 @@ contract QuadraticVotingGasAnalysisTest is AllocationTestHelpers {
             uint256 penaltyPercent = (firstVotePenalty * 100) / gasUsed[0];
             console.log("First vote penalty:", firstVotePenalty, "gas");
             emit GasComparison(
-                "First_vs_Avg_Subsequent_Votes", gasUsed[0], avgSubsequent, firstVotePenalty, penaltyPercent
+                "First_vs_Avg_Subsequent_Votes",
+                gasUsed[0],
+                avgSubsequent,
+                firstVotePenalty,
+                penaltyPercent
             );
         }
 

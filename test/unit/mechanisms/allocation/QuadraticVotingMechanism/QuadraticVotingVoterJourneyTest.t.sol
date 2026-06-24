@@ -2,9 +2,9 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/console.sol";
-import {TokenizedAllocationMechanism} from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import {QuadraticVotingMechanism} from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
-import {QuadraticVotingTestBase} from "../utils/QuadraticVotingTestBase.sol";
+import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
+import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
+import { QuadraticVotingTestBase } from "../utils/QuadraticVotingTestBase.sol";
 
 /// @title Voter Journey Integration Tests
 /// @notice Comprehensive tests for voter user journey with full branch coverage
@@ -18,7 +18,15 @@ contract QuadraticVotingVoterJourneyTest is QuadraticVotingTestBase {
 
     function setUp() public {
         _setUpQuadraticVoting(
-            "Voter Journey Test", "VJTEST", VOTING_DELAY, VOTING_PERIOD, QUORUM_REQUIREMENT, 1 days, 7 days, 50, 100
+            "Voter Journey Test",
+            "VJTEST",
+            VOTING_DELAY,
+            VOTING_PERIOD,
+            QUORUM_REQUIREMENT,
+            1 days,
+            7 days,
+            50,
+            100
         );
 
         // Mint tokens to test actors

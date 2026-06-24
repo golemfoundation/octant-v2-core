@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {TokenizedAllocationMechanism} from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import {QuadraticVotingMechanism} from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
-import {QuadraticVotingTestBase} from "./utils/QuadraticVotingTestBase.sol";
+import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
+import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
+import { QuadraticVotingTestBase } from "./utils/QuadraticVotingTestBase.sol";
 
 /// @title Recipient Verification Tests
 /// @notice Tests for recipient verification functionality that prevents reorganization attacks
@@ -23,7 +23,15 @@ contract RecipientVerificationTest is QuadraticVotingTestBase {
 
     function setUp() public {
         _setUpQuadraticVoting(
-            "Recipient Verification Test", "RVTEST", VOTING_DELAY, VOTING_PERIOD, QUORUM_SHARES, 1 days, 7 days, 50, 100
+            "Recipient Verification Test",
+            "RVTEST",
+            VOTING_DELAY,
+            VOTING_PERIOD,
+            QUORUM_SHARES,
+            1 days,
+            7 days,
+            50,
+            100
         );
 
         // Fund test accounts
@@ -51,13 +59,12 @@ contract RecipientVerificationTest is QuadraticVotingTestBase {
             )
         );
         vm.prank(alice);
-        _tokenized()
-            .castVote(
-                pid,
-                TokenizedAllocationMechanism.VoteType.For,
-                10, // Small weight to minimize cost
-                recipientB // Wrong recipient - should cause mismatch
-            );
+        _tokenized().castVote(
+            pid,
+            TokenizedAllocationMechanism.VoteType.For,
+            10, // Small weight to minimize cost
+            recipientB // Wrong recipient - should cause mismatch
+        );
     }
 
     /// @notice Test valid recipient - voting with correct expected recipient should succeed
@@ -71,17 +78,20 @@ contract RecipientVerificationTest is QuadraticVotingTestBase {
 
         // Vote with correct expected recipient - should succeed
         vm.prank(alice);
-        _tokenized()
-            .castVote(
-                pid,
-                TokenizedAllocationMechanism.VoteType.For,
-                10, // weight=10, cost=100 (quadratic)
-                recipientA // Correct recipient - should succeed
-            );
+        _tokenized().castVote(
+            pid,
+            TokenizedAllocationMechanism.VoteType.For,
+            10, // weight=10, cost=100 (quadratic)
+            recipientA // Correct recipient - should succeed
+        );
 
         // Verify vote was recorded successfully
         uint256 alicePowerAfter = _tokenized().votingPower(alice);
-        assertEq(alicePowerBefore - alicePowerAfter, 100, "Voting power should be reduced by quadratic cost (10^2=100)");
+        assertEq(
+            alicePowerBefore - alicePowerAfter,
+            100,
+            "Voting power should be reduced by quadratic cost (10^2=100)"
+        );
     }
 
     /// @notice Test multiple proposals with different recipients
@@ -134,7 +144,10 @@ contract RecipientVerificationTest is QuadraticVotingTestBase {
         // Try to vote on pid1 expecting recipientB (from pid2) - should fail
         vm.expectRevert(
             abi.encodeWithSelector(
-                TokenizedAllocationMechanism.RecipientMismatch.selector, pid1, recipientB, recipientA
+                TokenizedAllocationMechanism.RecipientMismatch.selector,
+                pid1,
+                recipientB,
+                recipientA
             )
         );
         vm.prank(alice);
@@ -143,7 +156,10 @@ contract RecipientVerificationTest is QuadraticVotingTestBase {
         // Try to vote on pid2 expecting recipientC (from pid3) - should fail
         vm.expectRevert(
             abi.encodeWithSelector(
-                TokenizedAllocationMechanism.RecipientMismatch.selector, pid2, recipientC, recipientB
+                TokenizedAllocationMechanism.RecipientMismatch.selector,
+                pid2,
+                recipientC,
+                recipientB
             )
         );
         vm.prank(bob);
@@ -251,7 +267,10 @@ contract RecipientVerificationTest is QuadraticVotingTestBase {
         // Test failed vote with wrong recipient - use different user to avoid "already voted" error
         vm.expectRevert(
             abi.encodeWithSelector(
-                TokenizedAllocationMechanism.RecipientMismatch.selector, pid1, recipientB, recipientA
+                TokenizedAllocationMechanism.RecipientMismatch.selector,
+                pid1,
+                recipientB,
+                recipientA
             )
         );
         vm.prank(bob); // Bob hasn't voted on pid1 yet, so this tests recipient mismatch specifically
@@ -286,7 +305,10 @@ contract RecipientVerificationTest is QuadraticVotingTestBase {
         // This should FAIL due to recipient verification
         vm.expectRevert(
             abi.encodeWithSelector(
-                TokenizedAllocationMechanism.RecipientMismatch.selector, pid2, recipientA, recipientB
+                TokenizedAllocationMechanism.RecipientMismatch.selector,
+                pid2,
+                recipientA,
+                recipientB
             )
         );
         vm.prank(bob); // Bob tries to vote expecting recipientA but proposal is for recipientB

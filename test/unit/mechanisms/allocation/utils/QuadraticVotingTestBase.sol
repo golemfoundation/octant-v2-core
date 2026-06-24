@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {TokenizedAllocationMechanism} from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import {QuadraticVotingMechanism} from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
-import {AllocationMechanismFactory} from "src/mechanisms/AllocationMechanismFactory.sol";
-import {AllocationConfig} from "src/mechanisms/BaseAllocationMechanism.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
-import {AllocationTestHelpers} from "./AllocationTestHelpers.sol";
+import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
+import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
+import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
+import { AllocationConfig } from "src/mechanisms/BaseAllocationMechanism.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import { AllocationTestHelpers } from "./AllocationTestHelpers.sol";
 
 abstract contract QuadraticVotingTestBase is AllocationTestHelpers {
     AllocationMechanismFactory internal factory;
@@ -91,17 +91,18 @@ abstract contract QuadraticVotingTestBase is AllocationTestHelpers {
 
     function _defaultConfig() internal returns (AllocationConfig memory) {
         token = new ERC20Mock();
-        return _config({
-            asset: IERC20(address(token)),
-            name: "Quadratic Voting Test",
-            symbol: "QVT",
-            votingDelay: DEFAULT_VOTING_DELAY,
-            votingPeriod: DEFAULT_VOTING_PERIOD,
-            quorumShares: DEFAULT_QUORUM,
-            timelockDelay: DEFAULT_TIMELOCK_DELAY,
-            gracePeriod: DEFAULT_GRACE_PERIOD,
-            owner: address(0)
-        });
+        return
+            _config({
+                asset: IERC20(address(token)),
+                name: "Quadratic Voting Test",
+                symbol: "QVT",
+                votingDelay: DEFAULT_VOTING_DELAY,
+                votingPeriod: DEFAULT_VOTING_PERIOD,
+                quorumShares: DEFAULT_QUORUM,
+                timelockDelay: DEFAULT_TIMELOCK_DELAY,
+                gracePeriod: DEFAULT_GRACE_PERIOD,
+                owner: address(0)
+            });
     }
 
     function _standardConfig(
@@ -112,17 +113,18 @@ abstract contract QuadraticVotingTestBase is AllocationTestHelpers {
         uint256 gracePeriod
     ) internal returns (AllocationConfig memory) {
         token = new ERC20Mock();
-        return _config({
-            asset: IERC20(address(token)),
-            name: name,
-            symbol: symbol,
-            votingDelay: DEFAULT_VOTING_DELAY,
-            votingPeriod: DEFAULT_VOTING_PERIOD,
-            quorumShares: quorumShares,
-            timelockDelay: timelockDelay,
-            gracePeriod: gracePeriod,
-            owner: address(0)
-        });
+        return
+            _config({
+                asset: IERC20(address(token)),
+                name: name,
+                symbol: symbol,
+                votingDelay: DEFAULT_VOTING_DELAY,
+                votingPeriod: DEFAULT_VOTING_PERIOD,
+                quorumShares: quorumShares,
+                timelockDelay: timelockDelay,
+                gracePeriod: gracePeriod,
+                owner: address(0)
+            });
     }
 
     function _setRoles(address keeper, address management) internal {
@@ -158,10 +160,11 @@ abstract contract QuadraticVotingTestBase is AllocationTestHelpers {
         pid = _createProposal(mechanism, proposer, recipient, description);
     }
 
-    function _createProposal(address proposer, address recipient, string memory description)
-        internal
-        returns (uint256 pid)
-    {
+    function _createProposal(
+        address proposer,
+        address recipient,
+        string memory description
+    ) internal returns (uint256 pid) {
         pid = _propose(proposer, recipient, description);
     }
 
@@ -173,10 +176,12 @@ abstract contract QuadraticVotingTestBase is AllocationTestHelpers {
         _castVote(mechanism, voter, pid, weight, recipient);
     }
 
-    function _castVote(address voter, uint256 pid, uint256 weight, address recipient)
-        internal
-        returns (uint256 previousPower, uint256 newPower)
-    {
+    function _castVote(
+        address voter,
+        uint256 pid,
+        uint256 weight,
+        address recipient
+    ) internal returns (uint256 previousPower, uint256 newPower) {
         previousPower = _tokenized().votingPower(voter);
         _vote(voter, pid, weight, recipient);
         newPower = _tokenized().votingPower(voter);

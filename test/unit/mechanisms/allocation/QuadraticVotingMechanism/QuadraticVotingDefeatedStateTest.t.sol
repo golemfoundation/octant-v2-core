@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/console.sol";
-import {TokenizedAllocationMechanism} from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import {QuadraticVotingTestBase} from "../utils/QuadraticVotingTestBase.sol";
+import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
+import { QuadraticVotingTestBase } from "../utils/QuadraticVotingTestBase.sol";
 
 contract QuadraticVotingDefeatedStateTest is QuadraticVotingTestBase {
     uint256 constant LARGE_DEPOSIT = 1000 ether;
@@ -13,7 +13,15 @@ contract QuadraticVotingDefeatedStateTest is QuadraticVotingTestBase {
 
     function setUp() public {
         _setUpQuadraticVoting(
-            "Debug Defeated", "DEBUG", VOTING_DELAY, VOTING_PERIOD, QUORUM_REQUIREMENT, 1 days, 7 days, 50, 100
+            "Debug Defeated",
+            "DEBUG",
+            VOTING_DELAY,
+            VOTING_PERIOD,
+            QUORUM_REQUIREMENT,
+            1 days,
+            7 days,
+            50,
+            100
         );
         token.mint(alice, 2000 ether);
         _tokenized().setKeeper(alice);
@@ -55,7 +63,7 @@ contract QuadraticVotingDefeatedStateTest is QuadraticVotingTestBase {
         console.log("Vote weight: 10, quadratic cost: 100 voting power");
 
         // Check vote tally before finalization using getTally() from ProperQF
-        (,, uint256 quadraticFunding, uint256 linearFunding) = mechanism.getTally(pid);
+        (, , uint256 quadraticFunding, uint256 linearFunding) = mechanism.getTally(pid);
         uint256 forVotes = quadraticFunding + linearFunding;
         uint256 againstVotes = 0; // QuadraticVoting only supports For votes
         uint256 abstainVotes = 0; // QuadraticVoting only supports For votes
@@ -66,11 +74,11 @@ contract QuadraticVotingDefeatedStateTest is QuadraticVotingTestBase {
         // Warp to absolute voting end time for finalization (not relative)
         vm.warp(votingEndTime + 1);
         console.log("Warped to finalization time:", block.timestamp);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         // Check if proposal has quorum
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("hasQuorumHook(uint256)", pid));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("hasQuorumHook(uint256)", pid));
         console.log("hasQuorumHook call success:", success2);
 
         // Check QuadraticFunding weighted total for quorum

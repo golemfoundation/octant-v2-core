@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/console.sol";
-import {TokenizedAllocationMechanism} from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import {QuadraticVotingTestBase} from "../utils/QuadraticVotingTestBase.sol";
+import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
+import { QuadraticVotingTestBase } from "../utils/QuadraticVotingTestBase.sol";
 
 contract QuadraticVotingSimpleTimelockTest is QuadraticVotingTestBase {
     function setUp() public {
@@ -32,14 +32,16 @@ contract QuadraticVotingSimpleTimelockTest is QuadraticVotingTestBase {
         _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 25, charlie); // Cost: 25^2 = 625
 
         // Debug: Check what quadratic funding this generates
-        (uint256 sumContributions,, uint256 quadraticFunding, uint256 linearFunding) = mechanism.getProposalFunding(pid);
+        (uint256 sumContributions, , uint256 quadraticFunding, uint256 linearFunding) = mechanism.getProposalFunding(
+            pid
+        );
         console.log("Funding amounts:");
         console.log("  sumContributions:", sumContributions);
         console.log("  quadraticFunding:", quadraticFunding);
         console.log("  linearFunding:", linearFunding);
 
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         console.log("=== BEFORE QUEUING ===");
@@ -49,7 +51,7 @@ contract QuadraticVotingSimpleTimelockTest is QuadraticVotingTestBase {
         console.log("Charlie maxRedeem:", _tokenized().maxRedeem(charlie));
 
         uint256 queueTime = block.timestamp;
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success2, "Queue failed");
 
         console.log("=== AFTER QUEUING ===");
@@ -101,8 +103,8 @@ contract QuadraticVotingSimpleTimelockTest is QuadraticVotingTestBase {
         _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 20, charlie); // Cost: 20^2 = 400
 
         // Verify proposal has non-zero funding before cancellation
-        (uint256 sumContributions, uint256 sumSquareRoots, uint256 quadraticFunding, uint256 linearFunding) =
-            mechanism.getProposalFunding(pid);
+        (uint256 sumContributions, uint256 sumSquareRoots, uint256 quadraticFunding, uint256 linearFunding) = mechanism
+            .getProposalFunding(pid);
         assertTrue(sumContributions > 0, "Should have contributions before cancellation");
         assertTrue(sumSquareRoots > 0, "Should have square roots before cancellation");
         assertTrue(quadraticFunding > 0, "Should have quadratic funding before cancellation");
@@ -149,7 +151,7 @@ contract QuadraticVotingSimpleTimelockTest is QuadraticVotingTestBase {
         _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, charlie); // High vote to meet quorum
 
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         // Queue the proposal to set redemption period

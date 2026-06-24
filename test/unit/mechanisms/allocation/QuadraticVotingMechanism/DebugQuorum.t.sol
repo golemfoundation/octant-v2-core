@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/console.sol";
-import {QuadraticVotingTestBase} from "../utils/QuadraticVotingTestBase.sol";
+import { QuadraticVotingTestBase } from "../utils/QuadraticVotingTestBase.sol";
 
 contract DebugQuorum is QuadraticVotingTestBase {
     function setUp() public {
@@ -42,7 +42,10 @@ contract DebugQuorum is QuadraticVotingTestBase {
         uint256 linearFunding;
 
         try mechanism.getProposalFunding(pid) returns (
-            uint256 _sumContributions, uint256 _sumSquareRoots, uint256 _quadraticFunding, uint256 _linearFunding
+            uint256 _sumContributions,
+            uint256 _sumSquareRoots,
+            uint256 _quadraticFunding,
+            uint256 _linearFunding
         ) {
             sumContributions = _sumContributions;
             sumSquareRoots = _sumSquareRoots;
@@ -59,20 +62,23 @@ contract DebugQuorum is QuadraticVotingTestBase {
         // Calculate weighted funding (what quorum check uses - WRONG VERSION)
         uint256 alphaNumerator = 50;
         uint256 alphaDenominator = 100;
-        uint256 projectWeightedFunding = (quadraticFunding * alphaNumerator) / alphaDenominator
-            + (linearFunding * (alphaDenominator - alphaNumerator)) / alphaDenominator;
+        uint256 projectWeightedFunding = (quadraticFunding * alphaNumerator) /
+            alphaDenominator +
+            (linearFunding * (alphaDenominator - alphaNumerator)) /
+            alphaDenominator;
         console.log("Project weighted funding (WRONG - double alpha):", projectWeightedFunding);
         console.log("Meets quorum (wrong calc)?", projectWeightedFunding >= 200 ether);
 
         // Correct calculation: getTally already returns alpha-weighted quadratic
-        uint256 correctWeightedFunding =
-            quadraticFunding + (linearFunding * (alphaDenominator - alphaNumerator)) / alphaDenominator;
+        uint256 correctWeightedFunding = quadraticFunding +
+            (linearFunding * (alphaDenominator - alphaNumerator)) /
+            alphaDenominator;
         console.log("Project weighted funding (CORRECT):", correctWeightedFunding);
         console.log("Meets quorum (correct calc)?", correctWeightedFunding >= 200 ether);
 
         // Try to finalize
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         // Check if we can queue
@@ -88,7 +94,7 @@ contract DebugQuorum is QuadraticVotingTestBase {
     }
 
     function tryQueue(uint256 pid) external {
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success, "Queue failed");
     }
 }

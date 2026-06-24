@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {TokenizedAllocationMechanism} from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import {QuadraticVotingTestBase} from "../utils/QuadraticVotingTestBase.sol";
+import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
+import { QuadraticVotingTestBase } from "../utils/QuadraticVotingTestBase.sol";
 
 /// @title Recipient Journey Integration Tests
 /// @notice Comprehensive tests for recipient user journey covering advocacy, allocation, and redemption
@@ -214,27 +214,30 @@ contract QuadraticVotingRecipientJourneyTest is QuadraticVotingTestBase {
         _castVote(frank, currentTestCtx.pidEve, 8, eve);
 
         // Recipients can monitor progress in real-time using getTally() from ProperQF
-        (,, currentTestCtx.charlieQuadraticFunding, currentTestCtx.charlieLinearFunding) =
-            mechanism.getTally(currentTestCtx.pidCharlie);
+        (, , currentTestCtx.charlieQuadraticFunding, currentTestCtx.charlieLinearFunding) = mechanism.getTally(
+            currentTestCtx.pidCharlie
+        );
         currentTestCtx.charlieFor = currentTestCtx.charlieQuadraticFunding + currentTestCtx.charlieLinearFunding;
         // Charlie: Alice(25) + Bob(12) = (37)² × 0.5 = 684.5, rounded funding calculation
         assertTrue(currentTestCtx.charlieFor > 0, "Charlie should have funding from QuadraticFunding calculation");
 
-        (,, currentTestCtx.daveQuadraticFunding, currentTestCtx.daveLinearFunding) =
-            mechanism.getTally(currentTestCtx.pidDave);
+        (, , currentTestCtx.daveQuadraticFunding, currentTestCtx.daveLinearFunding) = mechanism.getTally(
+            currentTestCtx.pidDave
+        );
         currentTestCtx.daveFor = currentTestCtx.daveQuadraticFunding + currentTestCtx.daveLinearFunding;
         // Dave: Bob(10) = (10)² × 0.5 = 50
         assertTrue(currentTestCtx.daveFor > 0, "Dave should have some funding");
 
-        (,, currentTestCtx.eveQuadraticFunding, currentTestCtx.eveLinearFunding) =
-            mechanism.getTally(currentTestCtx.pidEve);
+        (, , currentTestCtx.eveQuadraticFunding, currentTestCtx.eveLinearFunding) = mechanism.getTally(
+            currentTestCtx.pidEve
+        );
         currentTestCtx.eveFor = currentTestCtx.eveQuadraticFunding + currentTestCtx.eveLinearFunding;
         // Eve: Alice(12) + Frank(8) = (20)² × 0.5 = 200
         assertTrue(currentTestCtx.eveFor > 0, "Eve should have funding from For votes");
 
         // End voting and finalize
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         // Test outcome tracking
@@ -275,7 +278,7 @@ contract QuadraticVotingRecipientJourneyTest is QuadraticVotingTestBase {
         _castVote(bob, pid, 20, charlie);
 
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         // Share allocation on queuing
@@ -283,7 +286,7 @@ contract QuadraticVotingRecipientJourneyTest is QuadraticVotingTestBase {
         assertEq(_tokenized().totalSupply(), 0);
 
         uint256 timestampBefore = block.timestamp;
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success2, "Queue proposal failed");
 
         // Verify share allocation based on QuadraticFunding calculation
@@ -359,7 +362,7 @@ contract QuadraticVotingRecipientJourneyTest is QuadraticVotingTestBase {
         _castVote(bob, currentTestCtx.pid2, 25, dave);
 
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         // Queue both proposals at the same time to ensure same timelock schedule
@@ -367,14 +370,16 @@ contract QuadraticVotingRecipientJourneyTest is QuadraticVotingTestBase {
 
         // Warp to a specific time BEFORE queuing to ensure both get the same timestamp
         vm.warp(currentTestCtx.queueTime);
-        (bool success1,) =
-            address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", currentTestCtx.pid1));
+        (bool success1, ) = address(mechanism).call(
+            abi.encodeWithSignature("queueProposal(uint256)", currentTestCtx.pid1)
+        );
         require(success1, "Queue proposal 1 failed");
 
         // Reset to same timestamp for second proposal
         vm.warp(currentTestCtx.queueTime);
-        (bool success2,) =
-            address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", currentTestCtx.pid2));
+        (bool success2, ) = address(mechanism).call(
+            abi.encodeWithSignature("queueProposal(uint256)", currentTestCtx.pid2)
+        );
         require(success2, "Queue proposal 2 failed");
 
         // Verify both recipients received shares based on QuadraticFunding calculations
@@ -402,9 +407,13 @@ contract QuadraticVotingRecipientJourneyTest is QuadraticVotingTestBase {
         // With matching pool: calculate expected assets based on share-to-asset ratio
         currentTestCtx.totalAssets = LARGE_DEPOSIT + MEDIUM_DEPOSIT + 2000 ether; // 3500 ether
         currentTestCtx.expectedCharlieAssets1 =
-            (currentTestCtx.charliePartialRedeem * currentTestCtx.totalAssets) / currentTestCtx.totalSupply;
+            (currentTestCtx.charliePartialRedeem * currentTestCtx.totalAssets) /
+            currentTestCtx.totalSupply;
         assertApproxEqAbs(
-            currentTestCtx.charlieAssets1, currentTestCtx.expectedCharlieAssets1, 1, "Charlie assets1 within 1 wei"
+            currentTestCtx.charlieAssets1,
+            currentTestCtx.expectedCharlieAssets1,
+            1,
+            "Charlie assets1 within 1 wei"
         );
 
         // Dave full redemption - use maxRedeem to handle any rounding issues
@@ -414,10 +423,14 @@ contract QuadraticVotingRecipientJourneyTest is QuadraticVotingTestBase {
 
         currentTestCtx.daveRemainingShares = currentTestCtx.daveShares - currentTestCtx.daveMaxRedeemShares;
         assertEq(_tokenized().balanceOf(dave), currentTestCtx.daveRemainingShares);
-        assertEq(_tokenized().totalSupply(), currentTestCtx.charlieRemainingShares + currentTestCtx.daveRemainingShares);
+        assertEq(
+            _tokenized().totalSupply(),
+            currentTestCtx.charlieRemainingShares + currentTestCtx.daveRemainingShares
+        );
 
         currentTestCtx.expectedDaveAssets =
-            (currentTestCtx.daveMaxRedeemShares * currentTestCtx.totalAssets) / currentTestCtx.totalSupply;
+            (currentTestCtx.daveMaxRedeemShares * currentTestCtx.totalAssets) /
+            currentTestCtx.totalSupply;
         assertApproxEqAbs(currentTestCtx.daveAssets, currentTestCtx.expectedDaveAssets, 1, "Dave assets within 1 wei");
 
         // Charlie remaining redemption - redeem whatever is left and allowed
@@ -441,9 +454,13 @@ contract QuadraticVotingRecipientJourneyTest is QuadraticVotingTestBase {
         assertEq(_tokenized().totalSupply(), currentTestCtx.daveRemainingShares);
 
         currentTestCtx.expectedCharlieAssets2 =
-            (currentTestCtx.charlieMaxRedeem2 * currentTestCtx.totalAssets) / currentTestCtx.totalSupply;
+            (currentTestCtx.charlieMaxRedeem2 * currentTestCtx.totalAssets) /
+            currentTestCtx.totalSupply;
         assertApproxEqAbs(
-            currentTestCtx.charlieAssets2, currentTestCtx.expectedCharlieAssets2, 2, "Charlie assets2 within 2 wei"
+            currentTestCtx.charlieAssets2,
+            currentTestCtx.expectedCharlieAssets2,
+            2,
+            "Charlie assets2 within 2 wei"
         );
 
         // Let Dave redeem any remaining shares too
@@ -459,7 +476,8 @@ contract QuadraticVotingRecipientJourneyTest is QuadraticVotingTestBase {
         // Verify total assets redeemed correctly with matching pool conversion using inline computation
         {
             currentTestCtx.charlieSharesRedeemed =
-                currentTestCtx.charliePartialRedeem + currentTestCtx.charlieMaxRedeem2;
+                currentTestCtx.charliePartialRedeem +
+                currentTestCtx.charlieMaxRedeem2;
             if (currentTestCtx.charlieAssets3 > 0) {
                 currentTestCtx.charlieSharesRedeemed += currentTestCtx.charlieRemainingAfterSecond;
             }
@@ -476,8 +494,12 @@ contract QuadraticVotingRecipientJourneyTest is QuadraticVotingTestBase {
         assertTrue(currentTestCtx.totalRemainingShares <= 1, "Should have at most 1 remaining share due to rounding");
 
         // Verify total assets conservation - almost all assets should be redeemed
-        currentTestCtx.totalAssetsRedeemed = currentTestCtx.charlieAssets1 + currentTestCtx.charlieAssets2
-            + currentTestCtx.charlieAssets3 + currentTestCtx.daveAssets + currentTestCtx.daveAssets2;
+        currentTestCtx.totalAssetsRedeemed =
+            currentTestCtx.charlieAssets1 +
+            currentTestCtx.charlieAssets2 +
+            currentTestCtx.charlieAssets3 +
+            currentTestCtx.daveAssets +
+            currentTestCtx.daveAssets2;
         assertApproxEqAbs(
             currentTestCtx.totalAssetsRedeemed,
             currentTestCtx.totalAssets,
@@ -509,10 +531,10 @@ contract QuadraticVotingRecipientJourneyTest is QuadraticVotingTestBase {
         _castVote(alice, pid, 30, charlie);
 
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success2, "Queue proposal failed");
 
         // Charlie receives shares from QuadraticFunding calculation

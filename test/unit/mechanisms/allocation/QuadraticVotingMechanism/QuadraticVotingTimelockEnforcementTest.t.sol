@@ -2,8 +2,8 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/console.sol";
-import {TokenizedAllocationMechanism} from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import {QuadraticVotingTestBase} from "../utils/QuadraticVotingTestBase.sol";
+import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
+import { QuadraticVotingTestBase } from "../utils/QuadraticVotingTestBase.sol";
 
 /// @title Timelock Enforcement Test
 /// @notice Tests timelock and grace period enforcement through availableWithdrawLimit hook
@@ -63,11 +63,11 @@ contract QuadraticVotingTimelockEnforcementTest is QuadraticVotingTestBase {
         _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, charlie); // 30^2 = 900 > 500 quorum
 
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         uint256 queueTime = block.timestamp;
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success2, "Queue failed");
 
         // Verify shares minted - QuadraticVoting: vote weight 30 produces 900 funding
@@ -128,11 +128,11 @@ contract QuadraticVotingTimelockEnforcementTest is QuadraticVotingTestBase {
         _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, charlie); // 30^2 = 900 > 500 quorum
 
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         uint256 queueTime = block.timestamp;
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success2, "Queue failed");
 
         uint256 charlieShares = 900; // Vote weight 30 produces 900 shares
@@ -198,11 +198,11 @@ contract QuadraticVotingTimelockEnforcementTest is QuadraticVotingTestBase {
         _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, charlie); // 30^2 = 900 > 500 quorum
 
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         uint256 queueTime = block.timestamp;
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success2, "Queue failed");
 
         uint256 charlieShares = 900; // Vote weight 30 produces 900 shares
@@ -275,16 +275,16 @@ contract QuadraticVotingTimelockEnforcementTest is QuadraticVotingTestBase {
         _tokenized().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 30, bob); // 30^2 = 900 > 500 quorum
 
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         // Queue first proposal
-        (bool success1,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid1));
+        (bool success1, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid1));
         require(success1, "Queue 1 failed");
 
         // Wait some time then queue second proposal
         vm.warp(block.timestamp + 2 hours);
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid2));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid2));
         require(success2, "Queue 2 failed");
 
         // Test different timelock schedules
@@ -356,10 +356,10 @@ contract QuadraticVotingTimelockEnforcementTest is QuadraticVotingTestBase {
         _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 30, charlie); // 30^2 = 900 > 500 quorum
 
         vm.warp(votingEndTime + 1);
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success2, "Queue failed");
 
         uint256 redeemableTime = _tokenized().globalRedemptionStart();

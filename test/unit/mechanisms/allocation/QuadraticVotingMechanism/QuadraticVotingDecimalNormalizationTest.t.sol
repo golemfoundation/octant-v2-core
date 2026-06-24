@@ -2,12 +2,12 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/console.sol";
-import {TokenizedAllocationMechanism} from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import {QuadraticVotingMechanism} from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
-import {AllocationMechanismFactory} from "src/mechanisms/AllocationMechanismFactory.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import {AllocationTestHelpers} from "../utils/AllocationTestHelpers.sol";
+import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
+import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
+import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import { AllocationTestHelpers } from "../utils/AllocationTestHelpers.sol";
 
 /// @title Mock ERC20 with configurable decimals
 contract MockToken is ERC20 {
@@ -70,22 +70,23 @@ contract QuadraticVotingDecimalNormalizationTest is AllocationTestHelpers {
     }
 
     function _deployMechanism(MockToken token) internal returns (QuadraticVotingMechanism) {
-        return _deployQuadraticVoting(
-            factory,
-            _config({
-                asset: IERC20(address(token)),
-                name: string.concat("QV Mechanism ", token.symbol()),
-                symbol: string.concat("QV", token.symbol()),
-                votingDelay: VOTING_DELAY,
-                votingPeriod: VOTING_PERIOD,
-                quorumShares: QUORUM_REQUIREMENT,
-                timelockDelay: TIMELOCK_DELAY,
-                gracePeriod: GRACE_PERIOD,
-                owner: address(this)
-            }),
-            1,
-            2
-        );
+        return
+            _deployQuadraticVoting(
+                factory,
+                _config({
+                    asset: IERC20(address(token)),
+                    name: string.concat("QV Mechanism ", token.symbol()),
+                    symbol: string.concat("QV", token.symbol()),
+                    votingDelay: VOTING_DELAY,
+                    votingPeriod: VOTING_PERIOD,
+                    quorumShares: QUORUM_REQUIREMENT,
+                    timelockDelay: TIMELOCK_DELAY,
+                    gracePeriod: GRACE_PERIOD,
+                    owner: address(this)
+                }),
+                1,
+                2
+            );
     }
 
     function _fundUsers() internal {
@@ -181,8 +182,10 @@ contract QuadraticVotingDecimalNormalizationTest is AllocationTestHelpers {
         console.log("Total assets (6 decimals):", totalAssets);
         console.log("Total assets normalized (18 decimals):", totalAssets * 10 ** 12);
 
-        (uint256 alphaNumerator, uint256 alphaDenominator) =
-            mechanism6.calculateOptimalAlpha(smallMatchingPool, smallUserDeposits);
+        (uint256 alphaNumerator, uint256 alphaDenominator) = mechanism6.calculateOptimalAlpha(
+            smallMatchingPool,
+            smallUserDeposits
+        );
 
         console.log("Calculated alpha:", alphaNumerator, "/", alphaDenominator);
 

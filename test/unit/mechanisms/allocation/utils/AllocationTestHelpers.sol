@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {Test} from "forge-std/Test.sol";
-import {TokenizedAllocationMechanism} from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import {QuadraticVotingMechanism} from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
-import {AllocationMechanismFactory} from "src/mechanisms/AllocationMechanismFactory.sol";
-import {AllocationConfig} from "src/mechanisms/BaseAllocationMechanism.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import { Test } from "forge-std/Test.sol";
+import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
+import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
+import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
+import { AllocationConfig } from "src/mechanisms/BaseAllocationMechanism.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 
 abstract contract AllocationTestHelpers is Test {
     function _tokenized(address mechanismAddress) internal pure returns (TokenizedAllocationMechanism) {
@@ -29,17 +29,18 @@ abstract contract AllocationTestHelpers is Test {
         uint256 gracePeriod,
         address owner
     ) internal pure returns (AllocationConfig memory) {
-        return AllocationConfig({
-            asset: asset,
-            name: name,
-            symbol: symbol,
-            votingDelay: votingDelay,
-            votingPeriod: votingPeriod,
-            quorumShares: quorumShares,
-            timelockDelay: timelockDelay,
-            gracePeriod: gracePeriod,
-            owner: owner
-        });
+        return
+            AllocationConfig({
+                asset: asset,
+                name: name,
+                symbol: symbol,
+                votingDelay: votingDelay,
+                votingPeriod: votingPeriod,
+                quorumShares: quorumShares,
+                timelockDelay: timelockDelay,
+                gracePeriod: gracePeriod,
+                owner: owner
+            });
     }
 
     function _deployQuadraticVoting(
@@ -48,23 +49,30 @@ abstract contract AllocationTestHelpers is Test {
         uint256 alphaNumerator,
         uint256 alphaDenominator
     ) internal returns (QuadraticVotingMechanism) {
-        return QuadraticVotingMechanism(
-            payable(factory.deployQuadraticVotingMechanism(allocationConfig, alphaNumerator, alphaDenominator))
-        );
+        return
+            QuadraticVotingMechanism(
+                payable(factory.deployQuadraticVotingMechanism(allocationConfig, alphaNumerator, alphaDenominator))
+            );
     }
 
-    function _signupUser(ERC20Mock token, QuadraticVotingMechanism mechanism, address user, uint256 depositAmount)
-        internal
-    {
+    function _signupUser(
+        ERC20Mock token,
+        QuadraticVotingMechanism mechanism,
+        address user,
+        uint256 depositAmount
+    ) internal {
         vm.startPrank(user);
         token.approve(address(mechanism), depositAmount);
         _tokenized(address(mechanism)).signup(depositAmount);
         vm.stopPrank();
     }
 
-    function _signupUser(IERC20 token, TokenizedAllocationMechanism mechanism, address user, uint256 depositAmount)
-        internal
-    {
+    function _signupUser(
+        IERC20 token,
+        TokenizedAllocationMechanism mechanism,
+        address user,
+        uint256 depositAmount
+    ) internal {
         vm.startPrank(user);
         token.approve(address(mechanism), depositAmount);
         mechanism.signup(depositAmount);

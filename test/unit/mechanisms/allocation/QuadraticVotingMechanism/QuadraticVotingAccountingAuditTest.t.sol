@@ -2,11 +2,11 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/console.sol";
-import {TokenizedAllocationMechanism} from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import {QuadraticVotingMechanism} from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
-import {AllocationMechanismFactory} from "src/mechanisms/AllocationMechanismFactory.sol";
-import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
-import {AllocationTestHelpers} from "../utils/AllocationTestHelpers.sol";
+import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
+import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
+import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
+import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import { AllocationTestHelpers } from "../utils/AllocationTestHelpers.sol";
 
 /// @title Quadratic Voting Accounting Audit Test
 /// @notice Comprehensive end-to-end test tracking every state change for auditor verification
@@ -232,11 +232,11 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
 
         // Proposal funding (if proposals exist) - use getTally() from ProperQF
         if (pid1 != 0) {
-            (,, uint256 p1QuadraticFunding, uint256 p1LinearFunding) = mechanism.getTally(pid1);
+            (, , uint256 p1QuadraticFunding, uint256 p1LinearFunding) = mechanism.getTally(pid1);
             state.proposal1Funding = p1QuadraticFunding + p1LinearFunding;
         }
         if (pid2 != 0) {
-            (,, uint256 p2QuadraticFunding, uint256 p2LinearFunding) = mechanism.getTally(pid2);
+            (, , uint256 p2QuadraticFunding, uint256 p2LinearFunding) = mechanism.getTally(pid2);
             state.proposal2Funding = p2QuadraticFunding + p2LinearFunding;
         }
 
@@ -266,7 +266,8 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
         if (keccak256(bytes(phase)) == keccak256(bytes("FINAL"))) {
             // After all redemptions, mechanism should have minimal dust (<=2 wei)
             assertTrue(
-                state.totalMechanismAssets <= 2, string(abi.encodePacked("Final asset cleanup failed in ", phase))
+                state.totalMechanismAssets <= 2,
+                string(abi.encodePacked("Final asset cleanup failed in ", phase))
             );
         } else if (keccak256(bytes(phase)) == keccak256(bytes("POST_REDEMPTION_1"))) {
             // After first redemption, mechanism should have ~half the assets
@@ -380,27 +381,51 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
 
         // Alice votes
         vm.prank(alice);
-        _tokenized(address(mechanism))
-            .castVote(currentTestCtx.pid1, TokenizedAllocationMechanism.VoteType.For, VOTE_WEIGHT, recipient1);
+        _tokenized(address(mechanism)).castVote(
+            currentTestCtx.pid1,
+            TokenizedAllocationMechanism.VoteType.For,
+            VOTE_WEIGHT,
+            recipient1
+        );
         vm.prank(alice);
-        _tokenized(address(mechanism))
-            .castVote(currentTestCtx.pid2, TokenizedAllocationMechanism.VoteType.For, VOTE_WEIGHT, recipient2);
+        _tokenized(address(mechanism)).castVote(
+            currentTestCtx.pid2,
+            TokenizedAllocationMechanism.VoteType.For,
+            VOTE_WEIGHT,
+            recipient2
+        );
 
         // Bob votes
         vm.prank(bob);
-        _tokenized(address(mechanism))
-            .castVote(currentTestCtx.pid1, TokenizedAllocationMechanism.VoteType.For, VOTE_WEIGHT, recipient1);
+        _tokenized(address(mechanism)).castVote(
+            currentTestCtx.pid1,
+            TokenizedAllocationMechanism.VoteType.For,
+            VOTE_WEIGHT,
+            recipient1
+        );
         vm.prank(bob);
-        _tokenized(address(mechanism))
-            .castVote(currentTestCtx.pid2, TokenizedAllocationMechanism.VoteType.For, VOTE_WEIGHT, recipient2);
+        _tokenized(address(mechanism)).castVote(
+            currentTestCtx.pid2,
+            TokenizedAllocationMechanism.VoteType.For,
+            VOTE_WEIGHT,
+            recipient2
+        );
 
         // Charlie votes
         vm.prank(charlie);
-        _tokenized(address(mechanism))
-            .castVote(currentTestCtx.pid1, TokenizedAllocationMechanism.VoteType.For, VOTE_WEIGHT, recipient1);
+        _tokenized(address(mechanism)).castVote(
+            currentTestCtx.pid1,
+            TokenizedAllocationMechanism.VoteType.For,
+            VOTE_WEIGHT,
+            recipient1
+        );
         vm.prank(charlie);
-        _tokenized(address(mechanism))
-            .castVote(currentTestCtx.pid2, TokenizedAllocationMechanism.VoteType.For, VOTE_WEIGHT, recipient2);
+        _tokenized(address(mechanism)).castVote(
+            currentTestCtx.pid2,
+            TokenizedAllocationMechanism.VoteType.For,
+            VOTE_WEIGHT,
+            recipient2
+        );
 
         AccountingState memory postVotingState = _captureAccountingState(currentTestCtx.pid1, currentTestCtx.pid2);
         _logAccountingState("POST_VOTING", postVotingState);
@@ -448,7 +473,9 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
         uint256 currentAssets = postVotingState.totalMechanismAssets; // User deposits = totalLinearSum
 
         // For alpha = 1: matching pool = totalQuadraticSum - totalLinearSum
-        currentTestCtx.matchingPoolNeeded = (currentTestCtx.totalQuadraticSum - currentTestCtx.totalLinearSum) * 1 ether;
+        currentTestCtx.matchingPoolNeeded =
+            (currentTestCtx.totalQuadraticSum - currentTestCtx.totalLinearSum) *
+            1 ether;
         currentTestCtx.totalAssetsNeeded = currentTestCtx.totalQuadraticSum * 1 ether; // For 1:1 ratio
 
         console.log("Total quadratic sum:", currentTestCtx.totalQuadraticSum);
@@ -465,10 +492,13 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
         console.log("=== PHASE 5: FINALIZATION ===");
         vm.warp(currentTestCtx.startTime + VOTING_DELAY + VOTING_PERIOD + 1);
 
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
-        AccountingState memory postFinalizationState = _captureAccountingState(currentTestCtx.pid1, currentTestCtx.pid2);
+        AccountingState memory postFinalizationState = _captureAccountingState(
+            currentTestCtx.pid1,
+            currentTestCtx.pid2
+        );
         _logAccountingState("POST_FINALIZATION", postFinalizationState);
         _verifyAccountingInvariants(postFinalizationState, "POST_FINALIZATION");
 
@@ -484,12 +514,14 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
 
         currentTestCtx.queueTimestamp = block.timestamp;
 
-        (bool success1,) =
-            address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", currentTestCtx.pid1));
+        (bool success1, ) = address(mechanism).call(
+            abi.encodeWithSignature("queueProposal(uint256)", currentTestCtx.pid1)
+        );
         require(success1, "Queue proposal 1 failed");
 
-        (bool success2,) =
-            address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", currentTestCtx.pid2));
+        (bool success2, ) = address(mechanism).call(
+            abi.encodeWithSignature("queueProposal(uint256)", currentTestCtx.pid2)
+        );
         require(success2, "Queue proposal 2 failed");
 
         AccountingState memory postQueueingState = _captureAccountingState(currentTestCtx.pid1, currentTestCtx.pid2);
@@ -499,13 +531,19 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
         // Verify share minting - should be exact with alpha = 1
         uint256 expectedSharesPerRecipient = currentTestCtx.expectedFundingPerProposal; // 3600 shares per recipient
         assertEq(
-            postQueueingState.recipient1Shares, expectedSharesPerRecipient, "Recipient1 should get exactly 3600 shares"
+            postQueueingState.recipient1Shares,
+            expectedSharesPerRecipient,
+            "Recipient1 should get exactly 3600 shares"
         );
         assertEq(
-            postQueueingState.recipient2Shares, expectedSharesPerRecipient, "Recipient2 should get exactly 3600 shares"
+            postQueueingState.recipient2Shares,
+            expectedSharesPerRecipient,
+            "Recipient2 should get exactly 3600 shares"
         );
         assertEq(
-            postQueueingState.totalSharesSupply, expectedSharesPerRecipient * 2, "Total shares should be exactly 7200"
+            postQueueingState.totalSharesSupply,
+            expectedSharesPerRecipient * 2,
+            "Total shares should be exactly 7200"
         );
 
         // Verify timelock setup
@@ -531,7 +569,8 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
         currentTestCtx.totalAssets = postQueueingState.totalMechanismAssets;
         currentTestCtx.totalShares = postQueueingState.totalSharesSupply;
         currentTestCtx.expectedAssetsPerRecipient =
-            (expectedSharesPerRecipient * currentTestCtx.totalAssets) / currentTestCtx.totalShares;
+            (expectedSharesPerRecipient * currentTestCtx.totalAssets) /
+            currentTestCtx.totalShares;
 
         console.log("Post-queuing total assets:", currentTestCtx.totalAssets);
         console.log("Post-queuing total shares:", currentTestCtx.totalShares);
@@ -552,15 +591,18 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
         currentTestCtx.recipient1ActualShares = postQueueingState.recipient1Shares;
 
         vm.prank(recipient1);
-        currentTestCtx.recipient1Assets =
-            _tokenized(address(mechanism)).redeem(currentTestCtx.recipient1ActualShares, recipient1, recipient1);
+        currentTestCtx.recipient1Assets = _tokenized(address(mechanism)).redeem(
+            currentTestCtx.recipient1ActualShares,
+            recipient1,
+            recipient1
+        );
 
         AccountingState memory postRedemption1State = _captureAccountingState(currentTestCtx.pid1, currentTestCtx.pid2);
         _logAccountingState("POST_REDEMPTION_1", postRedemption1State);
 
         // Verify recipient1 redemption accounting - exact proportional calculation
-        uint256 expectedRecipient1Assets =
-            (currentTestCtx.recipient1ActualShares * currentTestCtx.totalAssets) / currentTestCtx.totalShares;
+        uint256 expectedRecipient1Assets = (currentTestCtx.recipient1ActualShares * currentTestCtx.totalAssets) /
+            currentTestCtx.totalShares;
         assertEq(
             currentTestCtx.recipient1Assets,
             expectedRecipient1Assets,
@@ -584,16 +626,19 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
         currentTestCtx.recipient2ActualShares = postRedemption1State.recipient2Shares;
 
         vm.prank(recipient2);
-        currentTestCtx.recipient2Assets =
-            _tokenized(address(mechanism)).redeem(currentTestCtx.recipient2ActualShares, recipient2, recipient2);
+        currentTestCtx.recipient2Assets = _tokenized(address(mechanism)).redeem(
+            currentTestCtx.recipient2ActualShares,
+            recipient2,
+            recipient2
+        );
 
         AccountingState memory finalState = _captureAccountingState(currentTestCtx.pid1, currentTestCtx.pid2);
         _logAccountingState("FINAL", finalState);
         _verifyAccountingInvariants(finalState, "FINAL");
 
         // Verify recipient2 redemption accounting - exact proportional calculation
-        uint256 expectedRecipient2Assets =
-            (currentTestCtx.recipient2ActualShares * currentTestCtx.totalAssets) / currentTestCtx.totalShares;
+        uint256 expectedRecipient2Assets = (currentTestCtx.recipient2ActualShares * currentTestCtx.totalAssets) /
+            currentTestCtx.totalShares;
         assertEq(
             currentTestCtx.recipient2Assets,
             expectedRecipient2Assets,
@@ -613,7 +658,8 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
         // Verify good shares:asset ratio achieved using test context
         currentTestCtx.totalAssetsDistributed = currentTestCtx.recipient1Assets + currentTestCtx.recipient2Assets;
         currentTestCtx.totalSharesRedeemed =
-            currentTestCtx.recipient1ActualShares + currentTestCtx.recipient2ActualShares;
+            currentTestCtx.recipient1ActualShares +
+            currentTestCtx.recipient2ActualShares;
 
         console.log("Total assets distributed:", currentTestCtx.totalAssetsDistributed);
         console.log("Total shares redeemed:", currentTestCtx.totalSharesRedeemed);
@@ -621,7 +667,9 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
 
         // Verify exact asset conservation - all assets distributed, none lost
         assertEq(
-            currentTestCtx.totalAssetsDistributed, currentTestCtx.totalAssets, "All assets must be distributed exactly"
+            currentTestCtx.totalAssetsDistributed,
+            currentTestCtx.totalAssets,
+            "All assets must be distributed exactly"
         );
         assertEq(currentTestCtx.totalSharesRedeemed, currentTestCtx.totalShares, "All shares must be redeemed exactly");
 
@@ -724,7 +772,7 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
         // Note: This requires the mechanism to be deployed with the correct alpha initially
         // For this test, we'll verify the calculation instead
 
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         // ==================== VERIFY OPTIMAL FUNDING ====================
@@ -734,10 +782,10 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
         _verifyConstrainedFunding(currentTestCtx);
 
         // Queue proposals
-        (bool success1,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid1));
+        (bool success1, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid1));
         require(success1, "Queue project 1 failed");
 
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid2));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid2));
         require(success2, "Queue project 2 failed");
 
         // ==================== VERIFY EXACT ACCOUNTING ====================
@@ -779,8 +827,11 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
         uint256 recipient1MaxRedeem = _tokenized(address(mechanism)).maxRedeem(recipient1);
         if (recipient1MaxRedeem > 0) {
             vm.prank(recipient1);
-            currentTestCtx.recipient1Assets += _tokenized(address(mechanism))
-                .redeem(recipient1MaxRedeem, recipient1, recipient1);
+            currentTestCtx.recipient1Assets += _tokenized(address(mechanism)).redeem(
+                recipient1MaxRedeem,
+                recipient1,
+                recipient1
+            );
         }
 
         // Handle any remaining shares due to rounding
@@ -789,8 +840,11 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
             uint256 recipient1MaxRedeem2 = _tokenized(address(mechanism)).maxRedeem(recipient1);
             if (recipient1MaxRedeem2 > 0) {
                 vm.prank(recipient1);
-                currentTestCtx.recipient1Assets += _tokenized(address(mechanism))
-                    .redeem(recipient1MaxRedeem2, recipient1, recipient1);
+                currentTestCtx.recipient1Assets += _tokenized(address(mechanism)).redeem(
+                    recipient1MaxRedeem2,
+                    recipient1,
+                    recipient1
+                );
             }
         }
 
@@ -798,8 +852,11 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
         uint256 recipient2MaxRedeem = _tokenized(address(mechanism)).maxRedeem(recipient2);
         if (recipient2MaxRedeem > 0) {
             vm.prank(recipient2);
-            currentTestCtx.recipient2Assets += _tokenized(address(mechanism))
-                .redeem(recipient2MaxRedeem, recipient2, recipient2);
+            currentTestCtx.recipient2Assets += _tokenized(address(mechanism)).redeem(
+                recipient2MaxRedeem,
+                recipient2,
+                recipient2
+            );
         }
 
         // Handle any remaining shares due to rounding
@@ -808,22 +865,29 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
             uint256 recipient2MaxRedeem2 = _tokenized(address(mechanism)).maxRedeem(recipient2);
             if (recipient2MaxRedeem2 > 0) {
                 vm.prank(recipient2);
-                currentTestCtx.recipient2Assets += _tokenized(address(mechanism))
-                    .redeem(recipient2MaxRedeem2, recipient2, recipient2);
+                currentTestCtx.recipient2Assets += _tokenized(address(mechanism)).redeem(
+                    recipient2MaxRedeem2,
+                    recipient2,
+                    recipient2
+                );
             }
         }
 
         // Verify exact proportional distribution based on actual shares redeemed
-        uint256 totalActualSharesRedeemed = currentTestCtx.recipient1Shares
-            - _tokenized(address(mechanism)).balanceOf(recipient1) + currentTestCtx.recipient2Shares
-            - _tokenized(address(mechanism)).balanceOf(recipient2);
+        uint256 totalActualSharesRedeemed = currentTestCtx.recipient1Shares -
+            _tokenized(address(mechanism)).balanceOf(recipient1) +
+            currentTestCtx.recipient2Shares -
+            _tokenized(address(mechanism)).balanceOf(recipient2);
         currentTestCtx.expectedTotalAssets =
-            (totalActualSharesRedeemed * currentTestCtx.totalAssets) / currentTestCtx.totalShares;
+            (totalActualSharesRedeemed * currentTestCtx.totalAssets) /
+            currentTestCtx.totalShares;
 
         // Verify complete asset distribution - should be exact with proper redemption
         uint256 totalAssetsRedeemed = currentTestCtx.recipient1Assets + currentTestCtx.recipient2Assets;
         assertEq(
-            totalAssetsRedeemed, currentTestCtx.expectedTotalAssets, "All redeemable assets must be distributed exactly"
+            totalAssetsRedeemed,
+            currentTestCtx.expectedTotalAssets,
+            "All redeemable assets must be distributed exactly"
         );
 
         // Both recipients should have redeemed all or nearly all their shares
@@ -899,22 +963,46 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
 
         // Alice votes the same amount (20) for each project
         vm.startPrank(alice);
-        _tokenized(address(mechanism))
-            .castVote(currentTestCtx.pid1, TokenizedAllocationMechanism.VoteType.For, 20, recipient1); // Cost: 400
-        _tokenized(address(mechanism))
-            .castVote(currentTestCtx.pid2, TokenizedAllocationMechanism.VoteType.For, 20, recipient2); // Cost: 400
-        _tokenized(address(mechanism))
-            .castVote(currentTestCtx.pid3, TokenizedAllocationMechanism.VoteType.For, 20, recipient3); // Cost: 400
+        _tokenized(address(mechanism)).castVote(
+            currentTestCtx.pid1,
+            TokenizedAllocationMechanism.VoteType.For,
+            20,
+            recipient1
+        ); // Cost: 400
+        _tokenized(address(mechanism)).castVote(
+            currentTestCtx.pid2,
+            TokenizedAllocationMechanism.VoteType.For,
+            20,
+            recipient2
+        ); // Cost: 400
+        _tokenized(address(mechanism)).castVote(
+            currentTestCtx.pid3,
+            TokenizedAllocationMechanism.VoteType.For,
+            20,
+            recipient3
+        ); // Cost: 400
         vm.stopPrank();
 
         // Bob votes the same amount (15) for each project
         vm.startPrank(bob);
-        _tokenized(address(mechanism))
-            .castVote(currentTestCtx.pid1, TokenizedAllocationMechanism.VoteType.For, 15, recipient1); // Cost: 225
-        _tokenized(address(mechanism))
-            .castVote(currentTestCtx.pid2, TokenizedAllocationMechanism.VoteType.For, 15, recipient2); // Cost: 225
-        _tokenized(address(mechanism))
-            .castVote(currentTestCtx.pid3, TokenizedAllocationMechanism.VoteType.For, 15, recipient3); // Cost: 225
+        _tokenized(address(mechanism)).castVote(
+            currentTestCtx.pid1,
+            TokenizedAllocationMechanism.VoteType.For,
+            15,
+            recipient1
+        ); // Cost: 225
+        _tokenized(address(mechanism)).castVote(
+            currentTestCtx.pid2,
+            TokenizedAllocationMechanism.VoteType.For,
+            15,
+            recipient2
+        ); // Cost: 225
+        _tokenized(address(mechanism)).castVote(
+            currentTestCtx.pid3,
+            TokenizedAllocationMechanism.VoteType.For,
+            15,
+            recipient3
+        ); // Cost: 225
         vm.stopPrank();
 
         vm.warp(currentTestCtx.startTime + VOTING_DELAY + VOTING_PERIOD + 1);
@@ -923,9 +1011,9 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
         console.log("=== VERIFYING QUADRATIC FUNDING ===");
 
         // Get funding for each project using getTally()
-        (,, uint256 p1QuadraticFunding, uint256 p1LinearFunding) = mechanism.getTally(currentTestCtx.pid1);
-        (,, uint256 p2QuadraticFunding, uint256 p2LinearFunding) = mechanism.getTally(currentTestCtx.pid2);
-        (,, uint256 p3QuadraticFunding, uint256 p3LinearFunding) = mechanism.getTally(currentTestCtx.pid3);
+        (, , uint256 p1QuadraticFunding, uint256 p1LinearFunding) = mechanism.getTally(currentTestCtx.pid1);
+        (, , uint256 p2QuadraticFunding, uint256 p2LinearFunding) = mechanism.getTally(currentTestCtx.pid2);
+        (, , uint256 p3QuadraticFunding, uint256 p3LinearFunding) = mechanism.getTally(currentTestCtx.pid3);
 
         currentTestCtx.expectedProject1Funding = p1QuadraticFunding + p1LinearFunding;
         currentTestCtx.expectedProject2Funding = p2QuadraticFunding + p2LinearFunding;
@@ -963,20 +1051,23 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
         token.transfer(address(mechanism), currentTestCtx.matchingPoolNeeded);
 
         // Finalize voting
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         // Queue all proposals
-        (bool success1,) =
-            address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", currentTestCtx.pid1));
+        (bool success1, ) = address(mechanism).call(
+            abi.encodeWithSignature("queueProposal(uint256)", currentTestCtx.pid1)
+        );
         require(success1, "Queue project 1 failed");
 
-        (bool success2,) =
-            address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", currentTestCtx.pid2));
+        (bool success2, ) = address(mechanism).call(
+            abi.encodeWithSignature("queueProposal(uint256)", currentTestCtx.pid2)
+        );
         require(success2, "Queue project 2 failed");
 
-        (bool success3,) =
-            address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", currentTestCtx.pid3));
+        (bool success3, ) = address(mechanism).call(
+            abi.encodeWithSignature("queueProposal(uint256)", currentTestCtx.pid3)
+        );
         require(success3, "Queue project 3 failed");
 
         // === VERIFICATION ===
@@ -1021,7 +1112,9 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
         );
 
         currentTestCtx.totalSharesRedeemed =
-            currentTestCtx.recipient1Shares + currentTestCtx.recipient2Shares + currentTestCtx.recipient3Shares;
+            currentTestCtx.recipient1Shares +
+            currentTestCtx.recipient2Shares +
+            currentTestCtx.recipient3Shares;
         currentTestCtx.expectedTotalAssets = 3 * 1225; // 3 projects × 1225 funding each
         assertEq(
             currentTestCtx.totalSharesRedeemed,
@@ -1048,7 +1141,8 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
         ctx.constrainedAlphaNumerator = smallerBudget;
 
         ctx.requiredMatchingPool =
-            (ctx.totalQuadraticSum * ctx.constrainedAlphaNumerator) / ctx.constrainedAlphaDenominator;
+            (ctx.totalQuadraticSum * ctx.constrainedAlphaNumerator) /
+            ctx.constrainedAlphaDenominator;
 
         console.log("Total quadratic sum:", ctx.totalQuadraticSum);
         console.log("Total linear sum:", totalLinearSum);
@@ -1056,7 +1150,9 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
         console.log("Example: If budget was", smallerBudget, "shares");
         console.log("Then alpha would be:", ctx.constrainedAlphaNumerator, "/", ctx.constrainedAlphaDenominator);
         console.log(
-            "Alpha percentage:", (ctx.constrainedAlphaNumerator * 10000) / ctx.constrainedAlphaDenominator, "/ 10000"
+            "Alpha percentage:",
+            (ctx.constrainedAlphaNumerator * 10000) / ctx.constrainedAlphaDenominator,
+            "/ 10000"
         );
     }
 
@@ -1064,8 +1160,8 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
     /// @param ctx Test context containing alpha parameters and storing results
     function _verifyConstrainedFunding(TestContext storage ctx) internal {
         // Get actual funding from mechanism
-        (,, uint256 project1QuadraticFunding, uint256 project1LinearFunding) = mechanism.getTally(ctx.pid1);
-        (,, uint256 project2QuadraticFunding, uint256 project2LinearFunding) = mechanism.getTally(ctx.pid2);
+        (, , uint256 project1QuadraticFunding, uint256 project1LinearFunding) = mechanism.getTally(ctx.pid1);
+        (, , uint256 project2QuadraticFunding, uint256 project2LinearFunding) = mechanism.getTally(ctx.pid2);
 
         uint256 project1Funding = project1QuadraticFunding + project1LinearFunding;
         uint256 project2Funding = project2QuadraticFunding + project2LinearFunding;
@@ -1075,26 +1171,30 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
 
         // Calculate expected funding in scoped block to limit stack usage
         {
-            uint256 project1QuadraticComponent =
-                (60 * 60 * ctx.constrainedAlphaNumerator) / ctx.constrainedAlphaDenominator;
-            uint256 project1LinearComponent = (1250 * (ctx.constrainedAlphaDenominator - ctx.constrainedAlphaNumerator))
-                / ctx.constrainedAlphaDenominator;
+            uint256 project1QuadraticComponent = (60 * 60 * ctx.constrainedAlphaNumerator) /
+                ctx.constrainedAlphaDenominator;
+            uint256 project1LinearComponent = (1250 *
+                (ctx.constrainedAlphaDenominator - ctx.constrainedAlphaNumerator)) / ctx.constrainedAlphaDenominator;
             ctx.expectedProject1Funding = project1QuadraticComponent + project1LinearComponent;
 
             assertEq(
-                project1Funding, ctx.expectedProject1Funding, "Project 1 funding should match quadratic calculation"
+                project1Funding,
+                ctx.expectedProject1Funding,
+                "Project 1 funding should match quadratic calculation"
             );
         }
 
         {
-            uint256 project2QuadraticComponent =
-                (27 * 27 * ctx.constrainedAlphaNumerator) / ctx.constrainedAlphaDenominator;
-            uint256 project2LinearComponent = (369 * (ctx.constrainedAlphaDenominator - ctx.constrainedAlphaNumerator))
-                / ctx.constrainedAlphaDenominator;
+            uint256 project2QuadraticComponent = (27 * 27 * ctx.constrainedAlphaNumerator) /
+                ctx.constrainedAlphaDenominator;
+            uint256 project2LinearComponent = (369 *
+                (ctx.constrainedAlphaDenominator - ctx.constrainedAlphaNumerator)) / ctx.constrainedAlphaDenominator;
             ctx.expectedProject2Funding = project2QuadraticComponent + project2LinearComponent;
 
             assertEq(
-                project2Funding, ctx.expectedProject2Funding, "Project 2 funding should match quadratic calculation"
+                project2Funding,
+                ctx.expectedProject2Funding,
+                "Project 2 funding should match quadratic calculation"
             );
         }
     }
@@ -1122,11 +1222,17 @@ contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
             console.log("- Amount trapped:", remainingAssets);
             console.log("- Percentage of total:", (remainingAssets * 10000) / ctx.totalAssets, "basis points");
             console.log(
-                "- Exchange rate at time of issue: totalAssets/totalShares =", ctx.totalAssets, "/", ctx.totalShares
+                "- Exchange rate at time of issue: totalAssets/totalShares =",
+                ctx.totalAssets,
+                "/",
+                ctx.totalShares
             );
             if (remainingShares > 0) {
                 console.log(
-                    "- Current exchange rate: remainingAssets/remainingShares =", remainingAssets, "/", remainingShares
+                    "- Current exchange rate: remainingAssets/remainingShares =",
+                    remainingAssets,
+                    "/",
+                    remainingShares
                 );
             }
         }

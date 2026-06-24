@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {AllocationMechanismFactory} from "src/mechanisms/AllocationMechanismFactory.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
-import {AllocationConfig} from "src/mechanisms/BaseAllocationMechanism.sol";
-import {AllocationTestHelpers} from "./utils/AllocationTestHelpers.sol";
+import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import { AllocationConfig } from "src/mechanisms/BaseAllocationMechanism.sol";
+import { AllocationTestHelpers } from "./utils/AllocationTestHelpers.sol";
 
 contract DuplicatePreventionTest is AllocationTestHelpers {
     AllocationMechanismFactory factory;

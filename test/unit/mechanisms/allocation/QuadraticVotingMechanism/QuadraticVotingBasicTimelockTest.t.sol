@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {QuadraticVotingTestBase} from "../utils/QuadraticVotingTestBase.sol";
+import { QuadraticVotingTestBase } from "../utils/QuadraticVotingTestBase.sol";
 
 contract QuadraticVotingBasicTimelockTest is QuadraticVotingTestBase {
     function setUp() public {
@@ -31,7 +31,7 @@ contract QuadraticVotingBasicTimelockTest is QuadraticVotingTestBase {
         // Finalize - advance past voting period
         vm.warp(votingEndTime + 1);
         uint256 finalizeTime = block.timestamp; // Should be 112
-        (bool success,) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
+        (bool success, ) = address(mechanism).call(abi.encodeWithSignature("finalizeVoteTally()"));
         require(success, "Finalization failed");
 
         // Check that global redemption start was set during finalization
@@ -45,7 +45,7 @@ contract QuadraticVotingBasicTimelockTest is QuadraticVotingTestBase {
 
         // Queue proposal
         assertEq(block.timestamp, finalizeTime, "Should be at finalize timestamp");
-        (bool success2,) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
+        (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success2, "Queue failed");
 
         // Verify shares were minted

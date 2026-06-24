@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/console.sol";
-import {QuadraticVotingTestBase} from "./utils/QuadraticVotingTestBase.sol";
+import { QuadraticVotingTestBase } from "./utils/QuadraticVotingTestBase.sol";
 
 /// @title Multiple Signup Test
 /// @notice Tests that QuadraticVotingMechanism allows multiple signups while OctantQFMechanism prevents them

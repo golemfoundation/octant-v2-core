@@ -2,11 +2,11 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/console.sol";
-import {TokenizedAllocationMechanism} from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import {QuadraticVotingMechanism} from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
-import {AllocationMechanismFactory} from "src/mechanisms/AllocationMechanismFactory.sol";
-import {ERC20Mock} from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
-import {AllocationTestHelpers} from "../utils/AllocationTestHelpers.sol";
+import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
+import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
+import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
+import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import { AllocationTestHelpers } from "../utils/AllocationTestHelpers.sol";
 
 /// @title Quadratic Voting End-to-End Test
 /// @notice Complete end-to-end testing of the quadratic voting mechanism
@@ -96,10 +96,11 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
     /// @param recipient Address that will receive funds if proposal passes
     /// @param description Description of the proposal
     /// @return pid The proposal ID
-    function _createProposal(address proposer, address recipient, string memory description)
-        internal
-        returns (uint256 pid)
-    {
+    function _createProposal(
+        address proposer,
+        address recipient,
+        string memory description
+    ) internal returns (uint256 pid) {
         pid = _createProposal(mechanism, proposer, recipient, description);
     }
 
@@ -109,10 +110,12 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
     /// @param weight Vote weight (quadratic cost = weight^2)
     /// @return previousPower Voting power before the vote
     /// @return newPower Voting power after the vote
-    function _castVote(address voter, uint256 pid, uint256 weight, address recipient)
-        internal
-        returns (uint256 previousPower, uint256 newPower)
-    {
+    function _castVote(
+        address voter,
+        uint256 pid,
+        uint256 weight,
+        address recipient
+    ) internal returns (uint256 previousPower, uint256 newPower) {
         previousPower = _tokenized(address(mechanism)).votingPower(voter);
         _castVote(mechanism, voter, pid, weight, recipient);
         newPower = _tokenized(address(mechanism)).votingPower(voter);
@@ -123,11 +126,9 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
     /// @return matchingFundsNeeded Amount of additional funds needed for 1:1 ratio
     /// @return totalQuadraticSum Total quadratic sum from all proposals
     /// @return totalLinearSum Total linear sum from all proposals (user contributions)
-    function _calculateMatchingFunds(uint256 totalUserDeposits)
-        internal
-        view
-        returns (uint256 matchingFundsNeeded, uint256 totalQuadraticSum, uint256 totalLinearSum)
-    {
+    function _calculateMatchingFunds(
+        uint256 totalUserDeposits
+    ) internal view returns (uint256 matchingFundsNeeded, uint256 totalQuadraticSum, uint256 totalLinearSum) {
         totalQuadraticSum = mechanism.totalQuadraticSum();
         totalLinearSum = mechanism.totalLinearSum();
 
@@ -277,7 +278,9 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         assertEq(_tokenized(address(mechanism)).votingPower(alice), 0, "Alice should have no voting power initially");
         assertEq(_tokenized(address(mechanism)).votingPower(bob), 0, "Bob should have no voting power initially");
         assertEq(
-            _tokenized(address(mechanism)).votingPower(charlie), 0, "Charlie should have no voting power initially"
+            _tokenized(address(mechanism)).votingPower(charlie),
+            0,
+            "Charlie should have no voting power initially"
         );
 
         // Verify recipient addresses have zero balances
@@ -321,7 +324,9 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
             "Bob should have voting power equal to his deposit"
         );
         assertEq(
-            token.balanceOf(address(mechanism)), DEPOSIT_AMOUNT + bobDeposit, "Mechanism should have both deposits"
+            token.balanceOf(address(mechanism)),
+            DEPOSIT_AMOUNT + bobDeposit,
+            "Mechanism should have both deposits"
         );
 
         // Sign up Charlie with zero deposit
@@ -438,9 +443,15 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
 
         // Verify mechanism state remains consistent
         assertEq(
-            token.balanceOf(address(mechanism)), totalDeposits, "Mechanism balance should be unchanged by proposals"
+            token.balanceOf(address(mechanism)),
+            totalDeposits,
+            "Mechanism balance should be unchanged by proposals"
         );
-        assertEq(_tokenized(address(mechanism)).totalSupply(), 0, "No shares should be minted during proposal creation");
+        assertEq(
+            _tokenized(address(mechanism)).totalSupply(),
+            0,
+            "No shares should be minted during proposal creation"
+        );
 
         console.log("Workflow test complete - 3 users signed up, 3 proposals created");
     }
@@ -653,8 +664,9 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         console.log("=== MATCHING FUNDS CALCULATION TEST ===");
 
         // Calculate matching funds needed before finalization
-        (uint256 matchingFundsNeeded, uint256 totalQuadraticSum, uint256 totalLinearSum) =
-            _calculateMatchingFunds(totalUserDeposits);
+        (uint256 matchingFundsNeeded, uint256 totalQuadraticSum, uint256 totalLinearSum) = _calculateMatchingFunds(
+            totalUserDeposits
+        );
 
         console.log("Total Quadratic Sum:", totalQuadraticSum);
         console.log("Total Linear Sum:", totalLinearSum);
@@ -773,8 +785,12 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         uint256 fixedMatchingPool = 300 ether;
 
         // Calculate optimal alpha
-        (uint256 alphaNumerator, uint256 alphaDenominator) =
-            _calculateOptimalAlpha(fixedMatchingPool, totalQuadraticSum, totalLinearSum, totalUserDeposits);
+        (uint256 alphaNumerator, uint256 alphaDenominator) = _calculateOptimalAlpha(
+            fixedMatchingPool,
+            totalQuadraticSum,
+            totalLinearSum,
+            totalUserDeposits
+        );
 
         // console.log("Fixed matching pool:", fixedMatchingPool);
         // console.log("Calculated alpha:", alphaNumerator, "/", alphaDenominator);
@@ -894,8 +910,10 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         uint256 smallMatchingPool = 200 ether;
 
         // Calculate optimal alpha using mechanism's function
-        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) =
-            mechanism.calculateOptimalAlpha(smallMatchingPool, totalUserDeposits);
+        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) = mechanism.calculateOptimalAlpha(
+            smallMatchingPool,
+            totalUserDeposits
+        );
 
         console.log("Small matching pool:", smallMatchingPool);
         console.log("Calculated optimal alpha:", optimalAlphaNumerator, "/", optimalAlphaDenominator);
@@ -973,8 +991,10 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         uint256 mediumMatchingPool = 600 ether;
 
         // Calculate optimal alpha
-        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) =
-            mechanism.calculateOptimalAlpha(mediumMatchingPool, totalUserDeposits);
+        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) = mechanism.calculateOptimalAlpha(
+            mediumMatchingPool,
+            totalUserDeposits
+        );
 
         console.log("Medium matching pool:", mediumMatchingPool);
         console.log("Calculated optimal alpha:", optimalAlphaNumerator, "/", optimalAlphaDenominator);
@@ -1057,8 +1077,10 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         uint256 variedMatchingPool = 500 ether;
 
         // Calculate optimal alpha
-        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) =
-            mechanism.calculateOptimalAlpha(variedMatchingPool, totalUserDeposits);
+        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) = mechanism.calculateOptimalAlpha(
+            variedMatchingPool,
+            totalUserDeposits
+        );
 
         console.log("Varied matching pool:", variedMatchingPool);
         console.log("Calculated optimal alpha:", optimalAlphaNumerator, "/", optimalAlphaDenominator);
@@ -1096,7 +1118,9 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         assertTrue(recipient2Shares > 0, "Recipient 2 should receive shares");
         assertTrue(recipient3Shares > 0, "Recipient 3 should receive shares");
         assertEq(
-            recipient1Shares + recipient2Shares + recipient3Shares, totalShares, "Individual shares should sum to total"
+            recipient1Shares + recipient2Shares + recipient3Shares,
+            totalShares,
+            "Individual shares should sum to total"
         );
 
         console.log("Alpha:", optimalAlphaNumerator, "/", optimalAlphaDenominator);
@@ -1154,8 +1178,10 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         uint256 largeMatchingPool = 50_000_000 ether; // 50M tokens
 
         // Calculate optimal alpha with large numbers
-        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) =
-            mechanism.calculateOptimalAlpha(largeMatchingPool, totalUserDeposits);
+        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) = mechanism.calculateOptimalAlpha(
+            largeMatchingPool,
+            totalUserDeposits
+        );
 
         console.log("Large matching pool:", largeMatchingPool);
         console.log("Calculated optimal alpha:", optimalAlphaNumerator, "/", optimalAlphaDenominator);
@@ -1182,7 +1208,10 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         uint256 totalShares = _tokenized(address(mechanism)).totalSupply();
         uint256 totalAssets = token.balanceOf(address(mechanism));
         assertApproxEqAbs(
-            totalShares, totalAssets, 1000, "Total shares should approximately equal total assets at large scale"
+            totalShares,
+            totalAssets,
+            1000,
+            "Total shares should approximately equal total assets at large scale"
         );
 
         console.log("Large scale alpha:", optimalAlphaNumerator, "/", optimalAlphaDenominator);
@@ -1230,8 +1259,10 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         uint256 tinyMatchingPool = 1;
 
         // Calculate optimal alpha with tiny matching pool
-        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) =
-            mechanism.calculateOptimalAlpha(tinyMatchingPool, totalUserDeposits);
+        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) = mechanism.calculateOptimalAlpha(
+            tinyMatchingPool,
+            totalUserDeposits
+        );
 
         console.log("Tiny matching pool:", tinyMatchingPool);
         console.log("Calculated optimal alpha:", optimalAlphaNumerator, "/", optimalAlphaDenominator);
@@ -1258,7 +1289,10 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         uint256 totalShares = _tokenized(address(mechanism)).totalSupply();
         uint256 totalAssets = token.balanceOf(address(mechanism));
         assertApproxEqAbs(
-            totalShares, totalAssets, 100, "Total shares should approximately equal total assets with tiny pool"
+            totalShares,
+            totalAssets,
+            100,
+            "Total shares should approximately equal total assets with tiny pool"
         );
 
         console.log("Tiny pool alpha:", optimalAlphaNumerator, "/", optimalAlphaDenominator);
@@ -1311,8 +1345,10 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         uint256 nearFullMatchingPool = quadraticAdvantage - 1; // 1 wei short of full quadratic
 
         // Calculate optimal alpha (should be very close to 1)
-        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) =
-            mechanism.calculateOptimalAlpha(nearFullMatchingPool, totalUserDeposits);
+        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) = mechanism.calculateOptimalAlpha(
+            nearFullMatchingPool,
+            totalUserDeposits
+        );
 
         console.log("Near-full matching pool:", nearFullMatchingPool);
         console.log("Quadratic advantage:", quadraticAdvantage);
@@ -1337,7 +1373,9 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         // Verify 1:1 ratio is not violated (it's OK to be over 1:1, but not under)
         uint256 assetsFor1Share = _tokenized(address(mechanism)).convertToAssets(1e18);
         assertGe(
-            assetsFor1Share, 1e18, "1:1 ratio should not be violated - users should get at least 1:1 assets per share"
+            assetsFor1Share,
+            1e18,
+            "1:1 ratio should not be violated - users should get at least 1:1 assets per share"
         );
 
         uint256 totalShares = _tokenized(address(mechanism)).totalSupply();
@@ -1404,8 +1442,10 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         uint256 moderateMatchingPool = 5000 ether; // Much smaller than quadratic advantage
 
         // Calculate optimal alpha (should have large denominator)
-        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) =
-            mechanism.calculateOptimalAlpha(moderateMatchingPool, totalUserDeposits);
+        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) = mechanism.calculateOptimalAlpha(
+            moderateMatchingPool,
+            totalUserDeposits
+        );
 
         console.log("Moderate matching pool:", moderateMatchingPool);
         console.log("Calculated optimal alpha:", optimalAlphaNumerator, "/", optimalAlphaDenominator);
@@ -1433,7 +1473,10 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         uint256 totalShares = _tokenized(address(mechanism)).totalSupply();
         uint256 totalAssets = token.balanceOf(address(mechanism));
         assertApproxEqAbs(
-            totalShares, totalAssets, 100, "Total shares should approximately equal total assets with huge advantage"
+            totalShares,
+            totalAssets,
+            100,
+            "Total shares should approximately equal total assets with huge advantage"
         );
 
         console.log("Huge advantage alpha:", optimalAlphaNumerator, "/", optimalAlphaDenominator);
@@ -1487,8 +1530,10 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         console.log("Excess matching funds:", excessMatchingFunds);
 
         // Calculate optimal alpha with excess funds (should be alpha = 1)
-        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) =
-            mechanism.calculateOptimalAlpha(excessMatchingFunds, totalUserDeposits);
+        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) = mechanism.calculateOptimalAlpha(
+            excessMatchingFunds,
+            totalUserDeposits
+        );
 
         console.log("Calculated optimal alpha:", optimalAlphaNumerator, "/", optimalAlphaDenominator);
 
@@ -1519,7 +1564,9 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         // With alpha=1 and excess matching funds, the ratio should be >1:1
         assertGt(assetsFor1Share, 1e18, "Ratio should be >1:1 when alpha=1 and there are excess matching funds");
         assertGt(
-            totalAssets, totalShares, "Total assets should exceed total shares when there are excess matching funds"
+            totalAssets,
+            totalShares,
+            "Total assets should exceed total shares when there are excess matching funds"
         );
 
         // Verify that total shares equals total quadratic funding (since alpha=1)
@@ -1527,7 +1574,11 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
 
         // Verify that excess funds remain in the contract (not allocated to shares)
         uint256 expectedExcessAssets = totalUserDeposits + excessMatchingFunds;
-        assertEq(totalAssets, expectedExcessAssets, "Total assets should include user deposits + excess matching funds");
+        assertEq(
+            totalAssets,
+            expectedExcessAssets,
+            "Total assets should include user deposits + excess matching funds"
+        );
 
         console.log("=== VALIDATION COMPLETE ===");
         console.log("Confirmed: >1:1 ratio only occurs with alpha=1 and excess matching funds");
@@ -1567,15 +1618,18 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         uint256 limitedMatchingPool = 400 ether; // Less than full quadratic advantage
 
         // Calculate optimal alpha (should be < 1)
-        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) =
-            mechanism.calculateOptimalAlpha(limitedMatchingPool, totalUserDeposits);
+        (uint256 optimalAlphaNumerator, uint256 optimalAlphaDenominator) = mechanism.calculateOptimalAlpha(
+            limitedMatchingPool,
+            totalUserDeposits
+        );
 
         console.log("Limited matching pool:", limitedMatchingPool);
         console.log("Calculated optimal alpha:", optimalAlphaNumerator, "/", optimalAlphaDenominator);
 
         // Verify alpha < 1
         assertTrue(
-            optimalAlphaNumerator < optimalAlphaDenominator, "Alpha should be less than 1 with limited matching funds"
+            optimalAlphaNumerator < optimalAlphaDenominator,
+            "Alpha should be less than 1 with limited matching funds"
         );
 
         // Apply limited matching funds and fractional alpha
@@ -1601,7 +1655,10 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         // With fractional alpha, ratio should be 1:1 (or very close due to rounding)
         assertApproxEqAbs(assetsFor1Share, 1e18, 10, "Ratio should be approximately 1:1 when alpha < 1");
         assertApproxEqAbs(
-            totalAssets, totalShares, 10, "Total assets should approximately equal total shares when alpha < 1"
+            totalAssets,
+            totalShares,
+            10,
+            "Total assets should approximately equal total shares when alpha < 1"
         );
 
         // Verify that we're not over-collateralized when alpha < 1
@@ -1705,8 +1762,10 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
 
         // Finalize and test actual share distribution
         vm.warp(
-            data.deploymentTime + _tokenized(address(mechanism)).votingDelay()
-                + _tokenized(address(mechanism)).votingPeriod() + 1
+            data.deploymentTime +
+                _tokenized(address(mechanism)).votingDelay() +
+                _tokenized(address(mechanism)).votingPeriod() +
+                1
         );
         _tokenized(address(mechanism)).finalizeVoteTally();
         _tokenized(address(mechanism)).queueProposal(data.pid1);
@@ -1760,8 +1819,10 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         data.totalLinearSum = mechanism.totalLinearSum();
 
         // Calculate optimal alpha
-        (data.optimalAlphaNumerator, data.optimalAlphaDenominator) =
-            mechanism.calculateOptimalAlpha(data.fixedMatchingPool, data.totalUserDeposits);
+        (data.optimalAlphaNumerator, data.optimalAlphaDenominator) = mechanism.calculateOptimalAlpha(
+            data.fixedMatchingPool,
+            data.totalUserDeposits
+        );
 
         // Apply optimal alpha and add matching pool
         token.mint(address(this), data.fixedMatchingPool);
@@ -1779,18 +1840,20 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         assertTrue(totalFundingAfterAlpha != totalFundingBeforeAlpha, "setAlpha should update totalFunding");
 
         // Calculate expected total funding with optimal alpha
-        uint256 expectedTotalFunding = (data.totalQuadraticSum * data.optimalAlphaNumerator)
-            / data.optimalAlphaDenominator
-            + (data.totalLinearSum * (data.optimalAlphaDenominator - data.optimalAlphaNumerator))
-            / data.optimalAlphaDenominator;
+        uint256 expectedTotalFunding = (data.totalQuadraticSum * data.optimalAlphaNumerator) /
+            data.optimalAlphaDenominator +
+            (data.totalLinearSum * (data.optimalAlphaDenominator - data.optimalAlphaNumerator)) /
+            data.optimalAlphaDenominator;
 
         // Check if setAlpha updated totalFunding correctly
         assertEq(totalFundingAfterAlpha, expectedTotalFunding, "setAlpha should update totalFunding correctly");
 
         // Finalize to update totalFunding storage
         vm.warp(
-            data.deploymentTime + _tokenized(address(mechanism)).votingDelay()
-                + _tokenized(address(mechanism)).votingPeriod() + 1
+            data.deploymentTime +
+                _tokenized(address(mechanism)).votingDelay() +
+                _tokenized(address(mechanism)).votingPeriod() +
+                1
         );
         _tokenized(address(mechanism)).finalizeVoteTally();
 
@@ -1810,7 +1873,10 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
 
         // With optimal alpha, total funding should approximately equal total assets
         assertApproxEqAbs(
-            actualTotalFunding, data.totalAssets, 10, "Total funding should approximately match total assets"
+            actualTotalFunding,
+            data.totalAssets,
+            10,
+            "Total funding should approximately match total assets"
         );
 
         // Queue all proposals and verify shares
@@ -1819,9 +1885,9 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         _tokenized(address(mechanism)).queueProposal(data.pid3);
 
         // Verify individual project funding adds up to total
-        (,, uint256 q1, uint256 l1) = mechanism.getTally(data.pid1);
-        (,, uint256 q2, uint256 l2) = mechanism.getTally(data.pid2);
-        (,, uint256 q3, uint256 l3) = mechanism.getTally(data.pid3);
+        (, , uint256 q1, uint256 l1) = mechanism.getTally(data.pid1);
+        (, , uint256 q2, uint256 l2) = mechanism.getTally(data.pid2);
+        (, , uint256 q3, uint256 l3) = mechanism.getTally(data.pid3);
 
         uint256 sumOfProjectFunding = (q1 + l1) + (q2 + l2) + (q3 + l3);
 
@@ -1893,12 +1959,16 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
             uint256 matchingPool = matchingPoolSizes[i];
 
             // Calculate optimal alpha for this matching pool size
-            (uint256 alphaNumerator, uint256 alphaDenominator) =
-                mechanism.calculateOptimalAlpha(matchingPool, data.totalUserDeposits);
+            (uint256 alphaNumerator, uint256 alphaDenominator) = mechanism.calculateOptimalAlpha(
+                matchingPool,
+                data.totalUserDeposits
+            );
 
             // Calculate expected total funding
-            uint256 expectedTotalFunding = (data.totalQuadraticSum * alphaNumerator) / alphaDenominator
-                + (data.totalLinearSum * (alphaDenominator - alphaNumerator)) / alphaDenominator;
+            uint256 expectedTotalFunding = (data.totalQuadraticSum * alphaNumerator) /
+                alphaDenominator +
+                (data.totalLinearSum * (alphaDenominator - alphaNumerator)) /
+                alphaDenominator;
 
             uint256 expectedTotalAssets = data.totalUserDeposits + matchingPool;
 
@@ -1922,15 +1992,19 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         token.mint(address(this), data.finalMatchingPool);
         token.transfer(address(mechanism), data.finalMatchingPool);
 
-        (data.finalAlphaNumerator, data.finalAlphaDenominator) =
-            mechanism.calculateOptimalAlpha(data.finalMatchingPool, data.totalUserDeposits);
+        (data.finalAlphaNumerator, data.finalAlphaDenominator) = mechanism.calculateOptimalAlpha(
+            data.finalMatchingPool,
+            data.totalUserDeposits
+        );
 
         mechanism.setAlpha(data.finalAlphaNumerator, data.finalAlphaDenominator);
 
         // Finalize and verify total funding is updated correctly
         vm.warp(
-            data.deploymentTime + _tokenized(address(mechanism)).votingDelay()
-                + _tokenized(address(mechanism)).votingPeriod() + 1
+            data.deploymentTime +
+                _tokenized(address(mechanism)).votingDelay() +
+                _tokenized(address(mechanism)).votingPeriod() +
+                1
         );
         _tokenized(address(mechanism)).finalizeVoteTally();
 
@@ -1938,7 +2012,10 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         data.finalTotalAssets = token.balanceOf(address(mechanism));
 
         assertApproxEqAbs(
-            data.finalTotalFunding, data.finalTotalAssets, 10, "Final total funding should match total assets"
+            data.finalTotalFunding,
+            data.finalTotalAssets,
+            10,
+            "Final total funding should match total assets"
         );
 
         // Queue all proposals and verify individual funding
@@ -1950,7 +2027,7 @@ contract QuadraticVotingE2E is AllocationTestHelpers {
         // Calculate sum of individual project funding
         uint256 totalProjectFunding = 0;
         for (uint256 pid = data.pid1; pid <= data.pid4; pid++) {
-            (,, uint256 q, uint256 l) = mechanism.getTally(pid);
+            (, , uint256 q, uint256 l) = mechanism.getTally(pid);
             uint256 projectFunding = q + l;
             totalProjectFunding += projectFunding;
         }
