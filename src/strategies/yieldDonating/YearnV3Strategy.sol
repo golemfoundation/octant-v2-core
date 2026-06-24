@@ -28,7 +28,13 @@ import { ITokenizedStrategy } from "src/core/interfaces/ITokenizedStrategy.sol";
  *      - Accepts 100% loss on withdrawals to prevent revert cascades
  *      - MultistrategyVault performs actual loss validation via updateDebt
  *
+ *      FEE-CHARGING TARGET VAULTS — NOT SUPPORTED:
+ *      Do NOT deploy against a Yearn vault that charges an entry/deposit or
+ *      withdrawal/exit fee. Deposit accounting credits the full pre-fee amount;
+ *      new depositors can exit before the next `report()` and drain existing users.
+ *
  * @custom:security Yearn vault convertToAssets must be manipulation-resistant
+ * @custom:security Yearn vault must NOT charge entry/deposit or withdrawal/exit fees
  */
 contract YearnV3Strategy is BaseHealthCheck {
     using SafeERC20 for IERC20;

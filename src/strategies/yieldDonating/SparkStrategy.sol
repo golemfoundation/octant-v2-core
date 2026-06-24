@@ -20,7 +20,14 @@ import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
  *      - Swept tokens are sent to the dragon router (donation address)
  *      - Callable by both keepers and management for operational flexibility
  *
+ *      FEE-CHARGING TARGET VAULTS — NOT SUPPORTED:
+ *      Inherits ERC4626Strategy's accounting and the same hazard. Do NOT deploy
+ *      against a Spark vault that charges an entry/deposit or withdrawal/exit
+ *      fee. Deposit accounting credits the full pre-fee amount; new depositors
+ *      can exit before the next `report()` and drain existing users.
+ *
  * @custom:security Only sweep tokens that are not critical to strategy operation
+ * @custom:security Target Spark vault must NOT charge entry/deposit or withdrawal/exit fees
  */
 contract SparkStrategy is ERC4626Strategy {
     using SafeERC20 for IERC20;

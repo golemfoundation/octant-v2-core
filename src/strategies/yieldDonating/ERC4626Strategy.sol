@@ -41,8 +41,15 @@ import { IERC4626 } from "@openzeppelin/contracts/interfaces/IERC4626.sol";
  *      strategy is deployed against it. Do not treat ERC-4626 conformance as a
  *      blanket security guarantee.
  *
+ *      FEE-CHARGING TARGET VAULTS — NOT SUPPORTED:
+ *      Do NOT deploy against a target ERC-4626 vault that charges an
+ *      entry/deposit or withdrawal/exit fee. Deposit accounting credits the
+ *      full pre-fee amount; new depositors can exit before the next `report()`
+ *      and drain existing users.
+ *
  * @custom:security ERC4626 vault convertToAssets must be manipulation-resistant
  * @custom:security Target vault must be audited individually before deployment
+ * @custom:security Target vault must NOT charge entry/deposit or withdrawal/exit fees
  */
 contract ERC4626Strategy is BaseHealthCheck {
     using SafeERC20 for IERC20;
