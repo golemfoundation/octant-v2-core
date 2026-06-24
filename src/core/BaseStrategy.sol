@@ -519,7 +519,7 @@ abstract contract BaseStrategy {
      * @dev Execute a function on the TokenizedStrategy and return any value.
      *
      * This fallback function will be executed when any of the standard functions
-     * defined in the TokenizedStrategy are called since they wont be defined in
+     * defined in the TokenizedStrategy are called since they won't be defined in
      * this contract.
      *
      * It will delegatecall the TokenizedStrategy implementation with the exact
