@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.25](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.24..1.2.0-develop.25) - 2026-06-24
+
+### Documentation
+
+- **(erc4626)** warn against fee-charging target vaults - ([80bf0e2](https://github.com/golemfoundation/octant-v2-core/commit/80bf0e2775d479f2dbc34cc5c8249860f5e3948b)) - skimaharvey
+- **(strategies)** refine fee-vault warnings per review - ([c3c4d47](https://github.com/golemfoundation/octant-v2-core/commit/c3c4d471d8d0e4ca28526d0bec7dc066c96485ed)) - skimaharvey
+- **(strategies)** mirror fee-vault NatSpec to Yearn and Morpho - ([0c93bd4](https://github.com/golemfoundation/octant-v2-core/commit/0c93bd4e61b3648999310dd5e35822eb019a8cb1)) - skimaharvey
+- **(strategies)** align fee-vault comments with team policy - ([c7011ed](https://github.com/golemfoundation/octant-v2-core/commit/c7011ed72899de3e1202ce5b1c3273c5469ee8f7)) - skimaharvey
+
+
 ## [1.2.0-develop.24](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.23..1.2.0-develop.24) - 2026-06-24
 
 ### Documentation
