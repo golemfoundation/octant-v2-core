@@ -1,19 +1,18 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "forge-std/Test.sol";
 import "forge-std/console.sol";
 import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
 import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
 import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
-import { AllocationConfig } from "src/mechanisms/BaseAllocationMechanism.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import { AllocationTestHelpers } from "./utils/AllocationTestHelpers.sol";
 
 /// @title EIP712 Signature Tests
 /// @notice Comprehensive tests for EIP-2612 style signature functionality
 /// @dev Tests signup and voting with signatures following EIP712 standard
-contract EIP712SignatureTest is Test {
+contract EIP712SignatureTest is AllocationTestHelpers {
     // Constants
     bytes32 private constant TYPE_HASH =
         keccak256("EIP712Domain(string name,string version,uint256 chainId,address verifyingContract)");
@@ -62,25 +61,22 @@ contract EIP712SignatureTest is Test {
         token.mint(charlie, INITIAL_BALANCE);
         vm.deal(relayer, 10 ether);
 
-        // Deploy mechanism
-        AllocationConfig memory config = AllocationConfig({
-            asset: IERC20(address(token)),
-            name: "Test Voting",
-            symbol: "TEST",
-            votingDelay: VOTING_DELAY,
-            votingPeriod: VOTING_PERIOD,
-            quorumShares: QUORUM_SHARES,
-            timelockDelay: 1 days,
-            gracePeriod: 7 days,
-            owner: address(this)
-        });
-
-        address mechanismAddr = factory.deployQuadraticVotingMechanism(config, 1, 1);
-        mechanism = QuadraticVotingMechanism(payable(mechanismAddr));
-    }
-
-    function _tokenized(address _mechanism) internal pure returns (TokenizedAllocationMechanism) {
-        return TokenizedAllocationMechanism(_mechanism);
+        mechanism = _deployQuadraticVoting(
+            factory,
+            _config({
+                asset: IERC20(address(token)),
+                name: "Test Voting",
+                symbol: "TEST",
+                votingDelay: VOTING_DELAY,
+                votingPeriod: VOTING_PERIOD,
+                quorumShares: QUORUM_SHARES,
+                timelockDelay: 1 days,
+                gracePeriod: 7 days,
+                owner: address(this)
+            }),
+            1,
+            1
+        );
     }
 
     // ============ EIP712 Helper Functions ============
@@ -349,7 +345,7 @@ contract EIP712SignatureTest is Test {
         address[3] memory users = [alice, bob, charlie];
         uint256[3] memory privateKeys = [ALICE_PRIVATE_KEY, BOB_PRIVATE_KEY, CHARLIE_PRIVATE_KEY];
 
-        for (uint i = 0; i < users.length; i++) {
+        for (uint256 i = 0; i < users.length; i++) {
             vm.startPrank(users[i]);
             token.approve(address(mechanism), DEPOSIT_AMOUNT);
             _tokenized(address(mechanism)).signup(DEPOSIT_AMOUNT);
@@ -358,7 +354,7 @@ contract EIP712SignatureTest is Test {
 
         // Create proposals
         uint256[3] memory pids;
-        for (uint i = 0; i < 3; i++) {
+        for (uint256 i = 0; i < 3; i++) {
             pids[i] = _tokenized(address(mechanism)).propose(address(uint160(0x100 + i)), "Proposal");
         }
 
@@ -372,7 +368,7 @@ contract EIP712SignatureTest is Test {
             TokenizedAllocationMechanism.VoteType.For
         ];
 
-        for (uint i = 0; i < 3; i++) {
+        for (uint256 i = 0; i < 3; i++) {
             // Scope variables to reduce stack pressure
             {
                 uint256 nonce = _tokenized(address(mechanism)).nonces(users[i]);

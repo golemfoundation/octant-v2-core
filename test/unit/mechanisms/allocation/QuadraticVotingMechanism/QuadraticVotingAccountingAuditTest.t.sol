@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "forge-std/Test.sol";
 import "forge-std/console.sol";
 import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
 import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
 import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
-import { AllocationConfig } from "src/mechanisms/BaseAllocationMechanism.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import { AllocationTestHelpers } from "../utils/AllocationTestHelpers.sol";
 
 /// @title Quadratic Voting Accounting Audit Test
 /// @notice Comprehensive end-to-end test tracking every state change for auditor verification
@@ -48,7 +46,7 @@ import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
 /// 4. Share-to-asset conversion approaching 1:1 ratio
 /// 5. Timelock enforcement
 /// 6. Complete asset redemption with minimal dust remaining
-contract QuadraticVotingAccountingAuditTest is Test {
+contract QuadraticVotingAccountingAuditTest is AllocationTestHelpers {
     AllocationMechanismFactory factory;
     ERC20Mock token;
     QuadraticVotingMechanism mechanism;
@@ -136,10 +134,6 @@ contract QuadraticVotingAccountingAuditTest is Test {
     // Storage-based test context for stack optimization
     TestContext internal currentTestCtx;
 
-    function _tokenized(address _mechanism) internal pure returns (TokenizedAllocationMechanism) {
-        return TokenizedAllocationMechanism(_mechanism);
-    }
-
     /// @notice Clear test context for fresh initialization
     function _clearTestContext() internal {
         delete currentTestCtx.constrainedAlphaNumerator;
@@ -188,20 +182,22 @@ contract QuadraticVotingAccountingAuditTest is Test {
         token.mint(bob, 2000 ether);
         token.mint(charlie, 2000 ether);
 
-        AllocationConfig memory config = AllocationConfig({
-            asset: IERC20(address(token)),
-            name: "Accounting Audit Test",
-            symbol: "AUDIT",
-            votingDelay: VOTING_DELAY,
-            votingPeriod: VOTING_PERIOD,
-            quorumShares: QUORUM_REQUIREMENT,
-            timelockDelay: TIMELOCK_DELAY,
-            gracePeriod: 7 days,
-            owner: address(0)
-        });
-
-        address mechanismAddr = factory.deployQuadraticVotingMechanism(config, ALPHA_NUMERATOR, ALPHA_DENOMINATOR);
-        mechanism = QuadraticVotingMechanism(payable(mechanismAddr));
+        mechanism = _deployQuadraticVoting(
+            factory,
+            _config({
+                asset: token,
+                name: "Accounting Audit Test",
+                symbol: "AUDIT",
+                votingDelay: VOTING_DELAY,
+                votingPeriod: VOTING_PERIOD,
+                quorumShares: QUORUM_REQUIREMENT,
+                timelockDelay: TIMELOCK_DELAY,
+                gracePeriod: 7 days,
+                owner: address(0)
+            }),
+            ALPHA_NUMERATOR,
+            ALPHA_DENOMINATOR
+        );
 
         // Set alice as keeper and management for proposers
         _tokenized(address(mechanism)).setKeeper(alice);

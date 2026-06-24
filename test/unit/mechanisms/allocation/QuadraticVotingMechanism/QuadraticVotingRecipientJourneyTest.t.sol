@@ -1,29 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "forge-std/Test.sol";
-import "forge-std/console.sol";
 import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
-import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
-import { AllocationConfig } from "src/mechanisms/BaseAllocationMechanism.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import { QuadraticVotingTestBase } from "../utils/QuadraticVotingTestBase.sol";
 
 /// @title Recipient Journey Integration Tests
 /// @notice Comprehensive tests for recipient user journey covering advocacy, allocation, and redemption
-contract QuadraticVotingRecipientJourneyTest is Test {
-    AllocationMechanismFactory factory;
-    ERC20Mock token;
-    QuadraticVotingMechanism mechanism;
-
-    address alice = address(0x1);
-    address bob = address(0x2);
-    address charlie = address(0x3);
-    address dave = address(0x4);
-    address eve = address(0x5);
-    address frank = address(0x6);
-
+contract QuadraticVotingRecipientJourneyTest is QuadraticVotingTestBase {
     uint256 constant LARGE_DEPOSIT = 1000 ether;
     uint256 constant MEDIUM_DEPOSIT = 500 ether;
     uint256 constant QUORUM_REQUIREMENT = 500;
@@ -130,68 +113,23 @@ contract QuadraticVotingRecipientJourneyTest is Test {
         currentTestCtx.eveFor = 0;
     }
 
-    function _tokenized(address _mechanism) internal pure returns (TokenizedAllocationMechanism) {
-        return TokenizedAllocationMechanism(_mechanism);
-    }
-
-    /// @notice Helper function to sign up a user with specified deposit
-    /// @param user Address of user to sign up
-    /// @param depositAmount Amount of tokens to deposit
-    function _signupUser(address user, uint256 depositAmount) internal {
-        vm.startPrank(user);
-        token.approve(address(mechanism), depositAmount);
-        _tokenized(address(mechanism)).signup(depositAmount);
-        vm.stopPrank();
-    }
-
-    /// @notice Helper function to create a proposal
-    /// @param proposer Address creating the proposal
-    /// @param recipient Address that will receive funds if proposal passes
-    /// @param description Description of the proposal
-    /// @return pid The proposal ID
-    function _createProposal(
-        address proposer,
-        address recipient,
-        string memory description
-    ) internal returns (uint256 pid) {
-        vm.prank(proposer);
-        pid = _tokenized(address(mechanism)).propose(recipient, description);
-    }
-
-    /// @notice Helper function to cast a vote on a proposal
-    /// @param voter Address casting the vote
-    /// @param pid Proposal ID to vote on
-    /// @param weight Vote weight (quadratic cost = weight^2)
-    /// @param recipient Expected recipient address for the proposal
-    function _castVote(address voter, uint256 pid, uint256 weight, address recipient) internal {
-        vm.prank(voter);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, weight, recipient);
-    }
-
     function setUp() public {
-        factory = new AllocationMechanismFactory();
-        token = new ERC20Mock();
+        _setUpQuadraticVoting(
+            "Recipient Journey Test",
+            "RJTEST",
+            VOTING_DELAY,
+            VOTING_PERIOD,
+            QUORUM_REQUIREMENT,
+            TIMELOCK_DELAY,
+            7 days,
+            50,
+            100
+        );
 
         token.mint(alice, 2000 ether);
         token.mint(bob, 1500 ether);
         token.mint(frank, 200 ether);
-
-        AllocationConfig memory config = AllocationConfig({
-            asset: IERC20(address(token)),
-            name: "Recipient Journey Test",
-            symbol: "RJTEST",
-            votingDelay: VOTING_DELAY,
-            votingPeriod: VOTING_PERIOD,
-            quorumShares: QUORUM_REQUIREMENT,
-            timelockDelay: TIMELOCK_DELAY,
-            gracePeriod: 7 days,
-            owner: address(0)
-        });
-
-        address mechanismAddr = factory.deployQuadraticVotingMechanism(config, 50, 100); // 50% alpha
-        mechanism = QuadraticVotingMechanism(payable(mechanismAddr));
-        _tokenized(address(mechanism)).setKeeper(alice);
-        _tokenized(address(mechanism)).setManagement(bob);
+        _setRoles(alice, bob);
 
         // Pre-fund matching pool - this will be included in total assets during finalize
         uint256 matchingPoolAmount = 2000 ether;
@@ -201,7 +139,7 @@ contract QuadraticVotingRecipientJourneyTest is Test {
 
     /// @notice Test recipient proposal advocacy and creation
     function testRecipientAdvocacy_ProposalCreation() public {
-        uint256 startBlock = _tokenized(address(mechanism)).startBlock();
+        uint256 startBlock = _tokenized().startBlock();
         vm.roll(startBlock - 1);
 
         // Recipients need proposers with voting power
@@ -211,7 +149,7 @@ contract QuadraticVotingRecipientJourneyTest is Test {
         // Successful proposal creation for recipient
         uint256 pid1 = _createProposal(alice, charlie, "Charlie's Clean Energy Initiative");
 
-        TokenizedAllocationMechanism.Proposal memory proposal1 = _tokenized(address(mechanism)).proposals(pid1);
+        TokenizedAllocationMechanism.Proposal memory proposal1 = _tokenized().proposals(pid1);
         assertEq(proposal1.proposer, alice);
         assertEq(proposal1.recipient, charlie);
         assertEq(proposal1.description, "Charlie's Clean Energy Initiative");
@@ -221,22 +159,22 @@ contract QuadraticVotingRecipientJourneyTest is Test {
         _createProposal(bob, dave, "Dave's Education Platform");
         _createProposal(alice, eve, "Eve's Healthcare Program");
 
-        assertEq(_tokenized(address(mechanism)).getProposalCount(), 3);
+        assertEq(_tokenized().getProposalCount(), 3);
 
         // Recipient uniqueness constraint
         vm.expectRevert(abi.encodeWithSelector(TokenizedAllocationMechanism.RecipientUsed.selector, charlie));
         vm.prank(bob);
-        _tokenized(address(mechanism)).propose(charlie, "Another proposal for Charlie");
+        _tokenized().propose(charlie, "Another proposal for Charlie");
 
         // Recipient cannot self-propose (no voting power)
         vm.expectRevert(abi.encodeWithSelector(TokenizedAllocationMechanism.ProposeNotAllowed.selector, charlie));
         vm.prank(charlie);
-        _tokenized(address(mechanism)).propose(frank, "Self-initiated proposal");
+        _tokenized().propose(frank, "Self-initiated proposal");
 
         // Zero address cannot be recipient
         vm.expectRevert(abi.encodeWithSelector(TokenizedAllocationMechanism.InvalidRecipient.selector, address(0)));
         vm.prank(alice);
-        _tokenized(address(mechanism)).propose(address(0), "Invalid recipient");
+        _tokenized().propose(address(0), "Invalid recipient");
     }
 
     /// @notice Test recipient monitoring and outcome tracking
@@ -245,8 +183,8 @@ contract QuadraticVotingRecipientJourneyTest is Test {
 
         // ✅ CORRECT: Fetch absolute timeline from contract
         uint256 deploymentTime = block.timestamp; // When mechanism was deployed
-        uint256 votingDelay = _tokenized(address(mechanism)).votingDelay();
-        uint256 votingPeriod = _tokenized(address(mechanism)).votingPeriod();
+        uint256 votingDelay = _tokenized().votingDelay();
+        uint256 votingPeriod = _tokenized().votingPeriod();
         uint256 votingStartTime = deploymentTime + votingDelay;
         uint256 votingEndTime = votingStartTime + votingPeriod;
 
@@ -304,16 +242,16 @@ contract QuadraticVotingRecipientJourneyTest is Test {
 
         // Test outcome tracking
         assertEq(
-            uint(_tokenized(address(mechanism)).state(currentTestCtx.pidCharlie)),
-            uint(TokenizedAllocationMechanism.ProposalState.Succeeded)
+            uint256(_tokenized().state(currentTestCtx.pidCharlie)),
+            uint256(TokenizedAllocationMechanism.ProposalState.Succeeded)
         );
         assertEq(
-            uint(_tokenized(address(mechanism)).state(currentTestCtx.pidDave)),
-            uint(TokenizedAllocationMechanism.ProposalState.Defeated)
+            uint256(_tokenized().state(currentTestCtx.pidDave)),
+            uint256(TokenizedAllocationMechanism.ProposalState.Defeated)
         );
         assertEq(
-            uint(_tokenized(address(mechanism)).state(currentTestCtx.pidEve)),
-            uint(TokenizedAllocationMechanism.ProposalState.Defeated)
+            uint256(_tokenized().state(currentTestCtx.pidEve)),
+            uint256(TokenizedAllocationMechanism.ProposalState.Defeated)
         );
     }
 
@@ -321,8 +259,8 @@ contract QuadraticVotingRecipientJourneyTest is Test {
     function testRecipientShares_AllocationRedemption() public {
         // ✅ CORRECT: Fetch absolute timeline from contract
         uint256 deploymentTime = block.timestamp; // When mechanism was deployed
-        uint256 votingDelay = _tokenized(address(mechanism)).votingDelay();
-        uint256 votingPeriod = _tokenized(address(mechanism)).votingPeriod();
+        uint256 votingDelay = _tokenized().votingDelay();
+        uint256 votingPeriod = _tokenized().votingPeriod();
         uint256 votingStartTime = deploymentTime + votingDelay;
         uint256 votingEndTime = votingStartTime + votingPeriod;
 
@@ -344,32 +282,32 @@ contract QuadraticVotingRecipientJourneyTest is Test {
         require(success, "Finalization failed");
 
         // Share allocation on queuing
-        assertEq(_tokenized(address(mechanism)).balanceOf(charlie), 0);
-        assertEq(_tokenized(address(mechanism)).totalSupply(), 0);
+        assertEq(_tokenized().balanceOf(charlie), 0);
+        assertEq(_tokenized().totalSupply(), 0);
 
         uint256 timestampBefore = block.timestamp;
         (bool success2, ) = address(mechanism).call(abi.encodeWithSignature("queueProposal(uint256)", pid));
         require(success2, "Queue proposal failed");
 
         // Verify share allocation based on QuadraticFunding calculation
-        uint256 actualShares = _tokenized(address(mechanism)).balanceOf(charlie);
+        uint256 actualShares = _tokenized().balanceOf(charlie);
         assertTrue(actualShares > 0, "Charlie should receive shares based on QuadraticFunding");
-        assertEq(_tokenized(address(mechanism)).totalSupply(), actualShares);
+        assertEq(_tokenized().totalSupply(), actualShares);
 
         // With matching pool: totalAssets = user deposits + matching pool
         uint256 expectedTotalAssets = LARGE_DEPOSIT + MEDIUM_DEPOSIT + 2000 ether; // 1000 + 500 + 2000 = 3500
-        assertEq(_tokenized(address(mechanism)).totalAssets(), expectedTotalAssets);
-        assertEq(_tokenized(address(mechanism)).proposalShares(pid), actualShares);
+        assertEq(_tokenized().totalAssets(), expectedTotalAssets);
+        assertEq(_tokenized().proposalShares(pid), actualShares);
 
         // Timelock enforcement
-        uint256 redeemableTime = _tokenized(address(mechanism)).globalRedemptionStart();
+        uint256 redeemableTime = _tokenized().globalRedemptionStart();
         assertEq(redeemableTime, timestampBefore + TIMELOCK_DELAY);
         assertGt(redeemableTime, block.timestamp);
 
         // Cannot redeem before timelock
         vm.expectRevert("Allocation: redeem more than max");
         vm.prank(charlie);
-        _tokenized(address(mechanism)).redeem(actualShares, charlie, charlie);
+        _tokenized().redeem(actualShares, charlie, charlie);
 
         // Successful redemption after timelock
         vm.warp(redeemableTime + 1);
@@ -378,11 +316,11 @@ contract QuadraticVotingRecipientJourneyTest is Test {
         uint256 mechanismTokensBefore = token.balanceOf(address(mechanism));
 
         vm.prank(charlie);
-        uint256 assetsReceived = _tokenized(address(mechanism)).redeem(actualShares, charlie, charlie);
+        uint256 assetsReceived = _tokenized().redeem(actualShares, charlie, charlie);
 
         // Verify redemption effects
-        assertEq(_tokenized(address(mechanism)).balanceOf(charlie), 0);
-        assertEq(_tokenized(address(mechanism)).totalSupply(), 0);
+        assertEq(_tokenized().balanceOf(charlie), 0);
+        assertEq(_tokenized().totalSupply(), 0);
         assertEq(token.balanceOf(charlie), charlieTokensBefore + assetsReceived);
         assertEq(token.balanceOf(address(mechanism)), mechanismTokensBefore - assetsReceived);
         // With matching pool: charlie gets 100% of shares, so 100% of total assets
@@ -397,20 +335,20 @@ contract QuadraticVotingRecipientJourneyTest is Test {
 
         // ✅ CORRECT: Fetch absolute timeline from contract
         uint256 deploymentTime = block.timestamp; // When mechanism was deployed
-        uint256 votingDelay = _tokenized(address(mechanism)).votingDelay();
-        uint256 votingPeriod = _tokenized(address(mechanism)).votingPeriod();
+        uint256 votingDelay = _tokenized().votingDelay();
+        uint256 votingPeriod = _tokenized().votingPeriod();
         uint256 votingStartTime = deploymentTime + votingDelay;
         uint256 votingEndTime = votingStartTime + votingPeriod;
 
         // Setup multiple successful recipients
         vm.startPrank(alice);
         token.approve(address(mechanism), LARGE_DEPOSIT);
-        _tokenized(address(mechanism)).signup(LARGE_DEPOSIT);
+        _tokenized().signup(LARGE_DEPOSIT);
         vm.stopPrank();
 
         vm.startPrank(bob);
         token.approve(address(mechanism), MEDIUM_DEPOSIT);
-        _tokenized(address(mechanism)).signup(MEDIUM_DEPOSIT);
+        _tokenized().signup(MEDIUM_DEPOSIT);
         vm.stopPrank();
 
         currentTestCtx.pid1 = _createProposal(alice, charlie, "Charlie's Project");
@@ -445,9 +383,9 @@ contract QuadraticVotingRecipientJourneyTest is Test {
         require(success2, "Queue proposal 2 failed");
 
         // Verify both recipients received shares based on QuadraticFunding calculations
-        currentTestCtx.charlieShares = _tokenized(address(mechanism)).balanceOf(charlie);
-        currentTestCtx.daveShares = _tokenized(address(mechanism)).balanceOf(dave);
-        currentTestCtx.totalSupply = _tokenized(address(mechanism)).totalSupply();
+        currentTestCtx.charlieShares = _tokenized().balanceOf(charlie);
+        currentTestCtx.daveShares = _tokenized().balanceOf(dave);
+        currentTestCtx.totalSupply = _tokenized().totalSupply();
 
         assertTrue(currentTestCtx.charlieShares > 0, "Charlie should receive shares");
         assertTrue(currentTestCtx.daveShares > 0, "Dave should receive shares");
@@ -457,21 +395,14 @@ contract QuadraticVotingRecipientJourneyTest is Test {
         vm.warp(block.timestamp + TIMELOCK_DELAY + 100);
 
         // Charlie partial redemption (50%) - use maxRedeem to avoid boundary issues
-        currentTestCtx.charlieMaxRedeem = _tokenized(address(mechanism)).maxRedeem(charlie);
+        currentTestCtx.charlieMaxRedeem = _tokenized().maxRedeem(charlie);
         currentTestCtx.charliePartialRedeem = currentTestCtx.charlieMaxRedeem / 2; // Redeem half of what's allowed
         vm.prank(charlie);
-        currentTestCtx.charlieAssets1 = _tokenized(address(mechanism)).redeem(
-            currentTestCtx.charliePartialRedeem,
-            charlie,
-            charlie
-        );
+        currentTestCtx.charlieAssets1 = _tokenized().redeem(currentTestCtx.charliePartialRedeem, charlie, charlie);
 
         currentTestCtx.charlieRemainingShares = currentTestCtx.charlieShares - currentTestCtx.charliePartialRedeem;
-        assertEq(_tokenized(address(mechanism)).balanceOf(charlie), currentTestCtx.charlieRemainingShares);
-        assertEq(
-            _tokenized(address(mechanism)).totalSupply(),
-            currentTestCtx.totalSupply - currentTestCtx.charliePartialRedeem
-        );
+        assertEq(_tokenized().balanceOf(charlie), currentTestCtx.charlieRemainingShares);
+        assertEq(_tokenized().totalSupply(), currentTestCtx.totalSupply - currentTestCtx.charliePartialRedeem);
 
         // With matching pool: calculate expected assets based on share-to-asset ratio
         currentTestCtx.totalAssets = LARGE_DEPOSIT + MEDIUM_DEPOSIT + 2000 ether; // 3500 ether
@@ -486,18 +417,14 @@ contract QuadraticVotingRecipientJourneyTest is Test {
         );
 
         // Dave full redemption - use maxRedeem to handle any rounding issues
-        currentTestCtx.daveMaxRedeemShares = _tokenized(address(mechanism)).maxRedeem(dave);
+        currentTestCtx.daveMaxRedeemShares = _tokenized().maxRedeem(dave);
         vm.prank(dave);
-        currentTestCtx.daveAssets = _tokenized(address(mechanism)).redeem(
-            currentTestCtx.daveMaxRedeemShares,
-            dave,
-            dave
-        );
+        currentTestCtx.daveAssets = _tokenized().redeem(currentTestCtx.daveMaxRedeemShares, dave, dave);
 
         currentTestCtx.daveRemainingShares = currentTestCtx.daveShares - currentTestCtx.daveMaxRedeemShares;
-        assertEq(_tokenized(address(mechanism)).balanceOf(dave), currentTestCtx.daveRemainingShares);
+        assertEq(_tokenized().balanceOf(dave), currentTestCtx.daveRemainingShares);
         assertEq(
-            _tokenized(address(mechanism)).totalSupply(),
+            _tokenized().totalSupply(),
             currentTestCtx.charlieRemainingShares + currentTestCtx.daveRemainingShares
         );
 
@@ -507,32 +434,24 @@ contract QuadraticVotingRecipientJourneyTest is Test {
         assertApproxEqAbs(currentTestCtx.daveAssets, currentTestCtx.expectedDaveAssets, 1, "Dave assets within 1 wei");
 
         // Charlie remaining redemption - redeem whatever is left and allowed
-        currentTestCtx.charlieMaxRedeem2 = _tokenized(address(mechanism)).maxRedeem(charlie);
+        currentTestCtx.charlieMaxRedeem2 = _tokenized().maxRedeem(charlie);
         vm.prank(charlie);
-        currentTestCtx.charlieAssets2 = _tokenized(address(mechanism)).redeem(
-            currentTestCtx.charlieMaxRedeem2,
-            charlie,
-            charlie
-        );
+        currentTestCtx.charlieAssets2 = _tokenized().redeem(currentTestCtx.charlieMaxRedeem2, charlie, charlie);
 
         // If Charlie has any remaining shares due to rounding, redeem them too
-        currentTestCtx.charlieRemainingAfterSecond = _tokenized(address(mechanism)).balanceOf(charlie);
+        currentTestCtx.charlieRemainingAfterSecond = _tokenized().balanceOf(charlie);
         currentTestCtx.charlieAssets3 = 0;
         if (currentTestCtx.charlieRemainingAfterSecond > 0) {
-            currentTestCtx.charlieMaxRedeem3 = _tokenized(address(mechanism)).maxRedeem(charlie);
+            currentTestCtx.charlieMaxRedeem3 = _tokenized().maxRedeem(charlie);
             if (currentTestCtx.charlieMaxRedeem3 > 0) {
                 vm.prank(charlie);
-                currentTestCtx.charlieAssets3 = _tokenized(address(mechanism)).redeem(
-                    currentTestCtx.charlieMaxRedeem3,
-                    charlie,
-                    charlie
-                );
+                currentTestCtx.charlieAssets3 = _tokenized().redeem(currentTestCtx.charlieMaxRedeem3, charlie, charlie);
             }
         }
 
         // Charlie should now have redeemed all shares
-        assertEq(_tokenized(address(mechanism)).balanceOf(charlie), 0, "Charlie should have redeemed all shares");
-        assertEq(_tokenized(address(mechanism)).totalSupply(), currentTestCtx.daveRemainingShares);
+        assertEq(_tokenized().balanceOf(charlie), 0, "Charlie should have redeemed all shares");
+        assertEq(_tokenized().totalSupply(), currentTestCtx.daveRemainingShares);
 
         currentTestCtx.expectedCharlieAssets2 =
             (currentTestCtx.charlieMaxRedeem2 * currentTestCtx.totalAssets) /
@@ -547,14 +466,10 @@ contract QuadraticVotingRecipientJourneyTest is Test {
         // Let Dave redeem any remaining shares too
         currentTestCtx.daveAssets2 = 0;
         if (currentTestCtx.daveRemainingShares > 0) {
-            currentTestCtx.daveMaxRedeem2 = _tokenized(address(mechanism)).maxRedeem(dave);
+            currentTestCtx.daveMaxRedeem2 = _tokenized().maxRedeem(dave);
             if (currentTestCtx.daveMaxRedeem2 > 0) {
                 vm.prank(dave);
-                currentTestCtx.daveAssets2 = _tokenized(address(mechanism)).redeem(
-                    currentTestCtx.daveMaxRedeem2,
-                    dave,
-                    dave
-                );
+                currentTestCtx.daveAssets2 = _tokenized().redeem(currentTestCtx.daveMaxRedeem2, dave, dave);
             }
         }
 
@@ -575,7 +490,7 @@ contract QuadraticVotingRecipientJourneyTest is Test {
         }
 
         // Both recipients should have redeemed all or nearly all their shares
-        currentTestCtx.totalRemainingShares = _tokenized(address(mechanism)).totalSupply();
+        currentTestCtx.totalRemainingShares = _tokenized().totalSupply();
         assertTrue(currentTestCtx.totalRemainingShares <= 1, "Should have at most 1 remaining share due to rounding");
 
         // Verify total assets conservation - almost all assets should be redeemed
@@ -597,15 +512,15 @@ contract QuadraticVotingRecipientJourneyTest is Test {
     function testRecipientShares_TransferabilityERC20() public {
         // ✅ CORRECT: Fetch absolute timeline from contract
         uint256 deploymentTime = block.timestamp; // When mechanism was deployed
-        uint256 votingDelay = _tokenized(address(mechanism)).votingDelay();
-        uint256 votingPeriod = _tokenized(address(mechanism)).votingPeriod();
+        uint256 votingDelay = _tokenized().votingDelay();
+        uint256 votingPeriod = _tokenized().votingPeriod();
         uint256 votingStartTime = deploymentTime + votingDelay;
         uint256 votingEndTime = votingStartTime + votingPeriod;
 
         // Setup successful allocation
         vm.startPrank(alice);
         token.approve(address(mechanism), LARGE_DEPOSIT);
-        _tokenized(address(mechanism)).signup(LARGE_DEPOSIT);
+        _tokenized().signup(LARGE_DEPOSIT);
         vm.stopPrank();
 
         uint256 pid = _createProposal(alice, charlie, "Charlie's Project");
@@ -623,13 +538,13 @@ contract QuadraticVotingRecipientJourneyTest is Test {
         require(success2, "Queue proposal failed");
 
         // Charlie receives shares from QuadraticFunding calculation
-        uint256 charlieShares = _tokenized(address(mechanism)).balanceOf(charlie);
+        uint256 charlieShares = _tokenized().balanceOf(charlie);
         assertTrue(charlieShares > 0, "Charlie should receive shares");
 
         // Test that transfers are blocked before redemption period
         vm.prank(charlie);
         vm.expectRevert("Transfers only allowed during redemption period");
-        _tokenized(address(mechanism)).transfer(dave, charlieShares / 3);
+        _tokenized().transfer(dave, charlieShares / 3);
 
         // Fast forward to redemption period start
         vm.warp(block.timestamp + TIMELOCK_DELAY);
@@ -637,45 +552,45 @@ contract QuadraticVotingRecipientJourneyTest is Test {
         // Test share transferability (use reasonable portion of actual shares)
         uint256 transferAmount = charlieShares / 3; // Transfer 1/3 of shares
         vm.prank(charlie);
-        _tokenized(address(mechanism)).transfer(dave, transferAmount);
+        _tokenized().transfer(dave, transferAmount);
 
         // Verify transfer
-        assertEq(_tokenized(address(mechanism)).balanceOf(charlie), charlieShares - transferAmount);
-        assertEq(_tokenized(address(mechanism)).balanceOf(dave), transferAmount);
-        assertEq(_tokenized(address(mechanism)).totalSupply(), charlieShares);
+        assertEq(_tokenized().balanceOf(charlie), charlieShares - transferAmount);
+        assertEq(_tokenized().balanceOf(dave), transferAmount);
+        assertEq(_tokenized().totalSupply(), charlieShares);
 
         // Test approval and transferFrom
         uint256 allowanceAmount = charlieShares / 5; // Approve 1/5 of original shares
         vm.prank(charlie);
-        _tokenized(address(mechanism)).approve(dave, allowanceAmount);
+        _tokenized().approve(dave, allowanceAmount);
 
-        assertEq(_tokenized(address(mechanism)).allowance(charlie, dave), allowanceAmount);
+        assertEq(_tokenized().allowance(charlie, dave), allowanceAmount);
 
         vm.prank(dave);
-        _tokenized(address(mechanism)).transferFrom(charlie, eve, allowanceAmount);
+        _tokenized().transferFrom(charlie, eve, allowanceAmount);
 
         // Verify transferFrom effects
-        assertEq(_tokenized(address(mechanism)).balanceOf(charlie), charlieShares - transferAmount - allowanceAmount);
-        assertEq(_tokenized(address(mechanism)).balanceOf(eve), allowanceAmount);
-        assertEq(_tokenized(address(mechanism)).allowance(charlie, dave), 0);
+        assertEq(_tokenized().balanceOf(charlie), charlieShares - transferAmount - allowanceAmount);
+        assertEq(_tokenized().balanceOf(eve), allowanceAmount);
+        assertEq(_tokenized().allowance(charlie, dave), 0);
 
         // Dave can redeem transferred shares
         vm.prank(dave);
-        uint256 daveAssets = _tokenized(address(mechanism)).redeem(transferAmount, dave, dave);
+        uint256 daveAssets = _tokenized().redeem(transferAmount, dave, dave);
 
         // With matching pool: total assets = 1000 (alice) + 2000 (matching pool) = 3000 ether
         // Conversion ratio = 3000 ether / 900 shares = 3.333... ether per share
         uint256 totalAssets = LARGE_DEPOSIT + 2000 ether; // 3000 ether
         uint256 expectedDaveAssets = (transferAmount * totalAssets) / charlieShares;
         assertEq(daveAssets, expectedDaveAssets);
-        assertEq(_tokenized(address(mechanism)).balanceOf(dave), 0);
+        assertEq(_tokenized().balanceOf(dave), 0);
 
         // Eve can redeem transferred shares
         vm.prank(eve);
-        uint256 eveAssets = _tokenized(address(mechanism)).redeem(allowanceAmount, eve, eve);
+        uint256 eveAssets = _tokenized().redeem(allowanceAmount, eve, eve);
 
         uint256 expectedEveAssets = (allowanceAmount * totalAssets) / charlieShares;
         assertEq(eveAssets, expectedEveAssets);
-        assertEq(_tokenized(address(mechanism)).balanceOf(eve), 0);
+        assertEq(_tokenized().balanceOf(eve), 0);
     }
 }

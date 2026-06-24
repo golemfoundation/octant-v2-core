@@ -1,18 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "forge-std/Test.sol";
 import "forge-std/console.sol";
 import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
 import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
 import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
-import { AllocationConfig } from "src/mechanisms/BaseAllocationMechanism.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { AllocationTestHelpers } from "../utils/AllocationTestHelpers.sol";
 
 /// @title Gas Analysis Test for Cold vs Warm Storage Operations
 /// @notice Analyzes gas costs for voting on new projects (cold storage) vs existing projects (warm storage)
-contract QuadraticVotingGasAnalysisTest is Test {
+contract QuadraticVotingGasAnalysisTest is AllocationTestHelpers {
     // Events for gas measurement logging
     event GasMeasurement(string operation, uint256 gasUsed);
     event GasComparison(string comparison, uint256 gasA, uint256 gasB, uint256 difference, uint256 percentSavings);
@@ -35,26 +33,23 @@ contract QuadraticVotingGasAnalysisTest is Test {
         factory = new AllocationMechanismFactory();
         token = new ERC20Mock();
 
-        // Deploy mechanism with alpha = 1.0 (pure quadratic)
-        AllocationConfig memory config = AllocationConfig({
-            asset: IERC20(address(token)),
-            name: "Gas Analysis Test",
-            symbol: "GAT",
-            votingDelay: 5, // voting delay blocks
-            votingPeriod: 100, // voting period blocks
-            quorumShares: 1000 ether,
-            timelockDelay: 10, // timelock blocks
-            gracePeriod: 50, // grace period blocks
-            owner: address(this) // will be set by factory
-        });
-
-        address mechanismAddr = factory.deployQuadraticVotingMechanism(
-            config,
+        mechanism = _deployQuadraticVoting(
+            factory,
+            _config({
+                asset: token,
+                name: "Gas Analysis Test",
+                symbol: "GAT",
+                votingDelay: 5,
+                votingPeriod: 100,
+                quorumShares: 1000 ether,
+                timelockDelay: 10,
+                gracePeriod: 50,
+                owner: address(this)
+            }),
             10000, // alpha numerator (1.0)
             10000 // alpha denominator (1.0)
         );
 
-        mechanism = QuadraticVotingMechanism(payable(mechanismAddr));
         TokenizedAllocationMechanism(address(mechanism)).setKeeper(alice);
         TokenizedAllocationMechanism(address(mechanism)).setManagement(david);
 

@@ -1,28 +1,14 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "forge-std/Test.sol";
 import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
 import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
-import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
-import { AllocationConfig } from "src/mechanisms/BaseAllocationMechanism.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import { QuadraticVotingTestBase } from "./utils/QuadraticVotingTestBase.sol";
 
 /// @title Recipient Verification Tests
 /// @notice Tests for recipient verification functionality that prevents reorganization attacks
 /// @dev Tests the core security feature that validates expected recipients match proposal recipients
-contract RecipientVerificationTest is Test {
-    // Test contracts
-    AllocationMechanismFactory factory;
-    ERC20Mock token;
-    QuadraticVotingMechanism mechanism;
-
-    // Test actors
-    address alice = address(0x1);
-    address bob = address(0x2);
-    address charlie = address(0x3);
-
+contract RecipientVerificationTest is QuadraticVotingTestBase {
     // Recipients for proposals
     address recipientA = address(0x100);
     address recipientB = address(0x200);
@@ -36,56 +22,22 @@ contract RecipientVerificationTest is Test {
     uint256 constant QUORUM_SHARES = 100 ether;
 
     function setUp() public {
-        // Deploy infrastructure
-        factory = new AllocationMechanismFactory();
-        token = new ERC20Mock();
+        _setUpQuadraticVoting(
+            "Recipient Verification Test",
+            "RVTEST",
+            VOTING_DELAY,
+            VOTING_PERIOD,
+            QUORUM_SHARES,
+            1 days,
+            7 days,
+            50,
+            100
+        );
 
         // Fund test accounts
         token.mint(alice, INITIAL_BALANCE);
         token.mint(bob, INITIAL_BALANCE);
         token.mint(charlie, INITIAL_BALANCE);
-
-        // Deploy mechanism
-        AllocationConfig memory config = AllocationConfig({
-            asset: IERC20(address(token)),
-            name: "Recipient Verification Test",
-            symbol: "RVTEST",
-            votingDelay: VOTING_DELAY,
-            votingPeriod: VOTING_PERIOD,
-            quorumShares: QUORUM_SHARES,
-            timelockDelay: 1 days,
-            gracePeriod: 7 days,
-            owner: address(this)
-        });
-
-        address mechanismAddr = factory.deployQuadraticVotingMechanism(config, 50, 100);
-        mechanism = QuadraticVotingMechanism(payable(mechanismAddr));
-    }
-
-    function _tokenized(address _mechanism) internal pure returns (TokenizedAllocationMechanism) {
-        return TokenizedAllocationMechanism(_mechanism);
-    }
-
-    /// @notice Helper function to sign up a user with specified deposit
-    function _signupUser(address user, uint256 depositAmount) internal {
-        vm.startPrank(user);
-        token.approve(address(mechanism), depositAmount);
-        _tokenized(address(mechanism)).signup(depositAmount);
-        vm.stopPrank();
-    }
-
-    /// @notice Helper function to create a proposal (only keeper/management can propose in QuadraticVoting)
-    function _createProposal(address recipient, string memory description) internal returns (uint256 pid) {
-        vm.prank(address(this)); // Test contract is keeper/management
-        pid = _tokenized(address(mechanism)).propose(recipient, description);
-    }
-
-    /// @notice Helper function to move to voting period
-    function _moveToVotingPeriod() internal {
-        uint256 deploymentTime = block.timestamp;
-        uint256 votingDelay = _tokenized(address(mechanism)).votingDelay();
-        uint256 votingStartTime = deploymentTime + votingDelay;
-        vm.warp(votingStartTime + 1);
     }
 
     // ============ Core Recipient Verification Tests ============
@@ -107,7 +59,7 @@ contract RecipientVerificationTest is Test {
             )
         );
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(
+        _tokenized().castVote(
             pid,
             TokenizedAllocationMechanism.VoteType.For,
             10, // Small weight to minimize cost
@@ -122,11 +74,11 @@ contract RecipientVerificationTest is Test {
         uint256 pid = _createProposal(recipientA, "Fund Recipient A");
         _moveToVotingPeriod();
 
-        uint256 alicePowerBefore = _tokenized(address(mechanism)).votingPower(alice);
+        uint256 alicePowerBefore = _tokenized().votingPower(alice);
 
         // Vote with correct expected recipient - should succeed
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(
+        _tokenized().castVote(
             pid,
             TokenizedAllocationMechanism.VoteType.For,
             10, // weight=10, cost=100 (quadratic)
@@ -134,7 +86,7 @@ contract RecipientVerificationTest is Test {
         );
 
         // Verify vote was recorded successfully
-        uint256 alicePowerAfter = _tokenized(address(mechanism)).votingPower(alice);
+        uint256 alicePowerAfter = _tokenized().votingPower(alice);
         assertEq(
             alicePowerBefore - alicePowerAfter,
             100,
@@ -154,7 +106,7 @@ contract RecipientVerificationTest is Test {
 
         // Vote on proposal 1 expecting recipient A - should succeed
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 10, recipientA);
+        _tokenized().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 10, recipientA);
 
         // Try to vote on proposal 1 expecting recipient B - should fail
         vm.expectRevert(
@@ -166,15 +118,15 @@ contract RecipientVerificationTest is Test {
             )
         );
         vm.prank(bob);
-        _tokenized(address(mechanism)).castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 10, recipientB);
+        _tokenized().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 10, recipientB);
 
         // Vote on proposal 2 expecting recipient B - should succeed
         vm.prank(bob);
-        _tokenized(address(mechanism)).castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 10, recipientB);
+        _tokenized().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 10, recipientB);
 
         // Verify final voting powers (cost = weight^2)
-        assertEq(_tokenized(address(mechanism)).votingPower(alice), DEPOSIT_AMOUNT - 100); // 10^2
-        assertEq(_tokenized(address(mechanism)).votingPower(bob), DEPOSIT_AMOUNT - 100); // 10^2
+        assertEq(_tokenized().votingPower(alice), DEPOSIT_AMOUNT - 100); // 10^2
+        assertEq(_tokenized().votingPower(bob), DEPOSIT_AMOUNT - 100); // 10^2
     }
 
     /// @notice Test recipient verification across multiple proposals
@@ -199,7 +151,7 @@ contract RecipientVerificationTest is Test {
             )
         );
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 10, recipientB);
+        _tokenized().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 10, recipientB);
 
         // Try to vote on pid2 expecting recipientC (from pid3) - should fail
         vm.expectRevert(
@@ -211,22 +163,22 @@ contract RecipientVerificationTest is Test {
             )
         );
         vm.prank(bob);
-        _tokenized(address(mechanism)).castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 10, recipientC);
+        _tokenized().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 10, recipientC);
 
         // Now vote correctly on all proposals
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 10, recipientA);
+        _tokenized().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 10, recipientA);
 
         vm.prank(bob);
-        _tokenized(address(mechanism)).castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 10, recipientB);
+        _tokenized().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 10, recipientB);
 
         vm.prank(charlie);
-        _tokenized(address(mechanism)).castVote(pid3, TokenizedAllocationMechanism.VoteType.For, 10, recipientC);
+        _tokenized().castVote(pid3, TokenizedAllocationMechanism.VoteType.For, 10, recipientC);
 
         // Verify all votes were recorded (cost = weight^2)
-        assertEq(_tokenized(address(mechanism)).votingPower(alice), DEPOSIT_AMOUNT - 100); // 10^2
-        assertEq(_tokenized(address(mechanism)).votingPower(bob), DEPOSIT_AMOUNT - 100); // 10^2
-        assertEq(_tokenized(address(mechanism)).votingPower(charlie), DEPOSIT_AMOUNT - 100); // 10^2
+        assertEq(_tokenized().votingPower(alice), DEPOSIT_AMOUNT - 100); // 10^2
+        assertEq(_tokenized().votingPower(bob), DEPOSIT_AMOUNT - 100); // 10^2
+        assertEq(_tokenized().votingPower(charlie), DEPOSIT_AMOUNT - 100); // 10^2
     }
 
     // ============ Edge Cases and Security Tests ============
@@ -238,7 +190,7 @@ contract RecipientVerificationTest is Test {
         // Try to create proposal with zero address - should fail at creation
         vm.expectRevert(abi.encodeWithSelector(TokenizedAllocationMechanism.InvalidRecipient.selector, address(0)));
         vm.prank(address(this)); // Keeper/management role
-        _tokenized(address(mechanism)).propose(address(0), "Invalid proposal");
+        _tokenized().propose(address(0), "Invalid proposal");
     }
 
     /// @notice Test recipient verification with contract address (blocked at proposal creation)
@@ -250,7 +202,7 @@ contract RecipientVerificationTest is Test {
             abi.encodeWithSelector(TokenizedAllocationMechanism.InvalidRecipient.selector, address(mechanism))
         );
         vm.prank(address(this)); // Keeper/management role
-        _tokenized(address(mechanism)).propose(address(mechanism), "Self-proposal");
+        _tokenized().propose(address(mechanism), "Self-proposal");
     }
 
     /// @notice Test recipient verification preserves error message format
@@ -269,7 +221,7 @@ contract RecipientVerificationTest is Test {
             )
         );
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipientB);
+        _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipientB);
     }
 
     /// @notice Test that only For votes are supported in QuadraticVoting
@@ -280,12 +232,12 @@ contract RecipientVerificationTest is Test {
 
         // For vote with correct recipient should work
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipientA);
+        _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.For, 10, recipientA);
 
         // Against vote should fail due to QuadraticVoting constraints
         vm.expectRevert(abi.encodeWithSelector(QuadraticVotingMechanism.OnlyForVotesSupported.selector));
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.Against, 5, recipientA);
+        _tokenized().castVote(pid, TokenizedAllocationMechanism.VoteType.Against, 5, recipientA);
     }
 
     /// @notice Comprehensive end-to-end test with multiple users and proposals
@@ -304,13 +256,13 @@ contract RecipientVerificationTest is Test {
 
         // Successful votes with correct recipients
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 10, recipientA);
+        _tokenized().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 10, recipientA);
 
         vm.prank(bob);
-        _tokenized(address(mechanism)).castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 10, recipientB);
+        _tokenized().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 10, recipientB);
 
         vm.prank(charlie);
-        _tokenized(address(mechanism)).castVote(pid3, TokenizedAllocationMechanism.VoteType.For, 10, recipientC);
+        _tokenized().castVote(pid3, TokenizedAllocationMechanism.VoteType.For, 10, recipientC);
 
         // Test failed vote with wrong recipient - use different user to avoid "already voted" error
         vm.expectRevert(
@@ -322,12 +274,12 @@ contract RecipientVerificationTest is Test {
             )
         );
         vm.prank(bob); // Bob hasn't voted on pid1 yet, so this tests recipient mismatch specifically
-        _tokenized(address(mechanism)).castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 5, recipientB);
+        _tokenized().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 5, recipientB);
 
         // Verify final state - only successful votes should have reduced voting power
-        assertEq(_tokenized(address(mechanism)).votingPower(alice), DEPOSIT_AMOUNT - 100); // 10^2
-        assertEq(_tokenized(address(mechanism)).votingPower(bob), DEPOSIT_AMOUNT - 100); // 10^2 (only from pid2 vote)
-        assertEq(_tokenized(address(mechanism)).votingPower(charlie), DEPOSIT_AMOUNT - 100); // 10^2
+        assertEq(_tokenized().votingPower(alice), DEPOSIT_AMOUNT - 100); // 10^2
+        assertEq(_tokenized().votingPower(bob), DEPOSIT_AMOUNT - 100); // 10^2 (only from pid2 vote)
+        assertEq(_tokenized().votingPower(charlie), DEPOSIT_AMOUNT - 100); // 10^2
     }
 
     /// @notice Test the specific attack scenario that recipient verification prevents
@@ -345,7 +297,7 @@ contract RecipientVerificationTest is Test {
 
         // Alice votes for what she thinks is proposal 1 (recipientA)
         vm.prank(alice);
-        _tokenized(address(mechanism)).castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 20, recipientA);
+        _tokenized().castVote(pid1, TokenizedAllocationMechanism.VoteType.For, 20, recipientA);
 
         // Now imagine chain reorganization happens and proposal IDs get swapped
         // Alice tries to vote again thinking she's voting for the same project (recipientA)
@@ -360,14 +312,14 @@ contract RecipientVerificationTest is Test {
             )
         );
         vm.prank(bob); // Bob tries to vote expecting recipientA but proposal is for recipientB
-        _tokenized(address(mechanism)).castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 15, recipientA);
+        _tokenized().castVote(pid2, TokenizedAllocationMechanism.VoteType.For, 15, recipientA);
 
         // Without recipient verification, Bob's vote would have gone to recipientB
         // With recipient verification, the vote is rejected, protecting Bob from the attack
 
         // Verify only Alice's legitimate vote went through
-        assertEq(_tokenized(address(mechanism)).votingPower(alice), DEPOSIT_AMOUNT - 400); // 20^2
-        assertEq(_tokenized(address(mechanism)).votingPower(bob), DEPOSIT_AMOUNT); // No vote went through
+        assertEq(_tokenized().votingPower(alice), DEPOSIT_AMOUNT - 400); // 20^2
+        assertEq(_tokenized().votingPower(bob), DEPOSIT_AMOUNT); // No vote went through
     }
 
     /// @notice Test that zero address registration is blocked at core level
@@ -377,6 +329,6 @@ contract RecipientVerificationTest is Test {
 
         // Use vm.prank to simulate the call coming from address(0)
         vm.prank(address(0));
-        _tokenized(address(mechanism)).signup(0); // Zero deposit to avoid token transfer complications
+        _tokenized().signup(0); // Zero deposit to avoid token transfer complications
     }
 }

@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "forge-std/Test.sol";
 import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
-import { AllocationConfig } from "src/mechanisms/BaseAllocationMechanism.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import { AllocationConfig } from "src/mechanisms/BaseAllocationMechanism.sol";
+import { AllocationTestHelpers } from "./utils/AllocationTestHelpers.sol";
 
-contract DuplicatePreventionTest is Test {
+contract DuplicatePreventionTest is AllocationTestHelpers {
     AllocationMechanismFactory factory;
     ERC20Mock token;
 
@@ -17,7 +17,7 @@ contract DuplicatePreventionTest is Test {
     }
 
     function testDuplicatePrevention() public {
-        AllocationConfig memory config = AllocationConfig({
+        AllocationConfig memory config = _config({
             asset: IERC20(address(token)),
             name: "Test Mechanism",
             symbol: "TEST",
@@ -47,7 +47,7 @@ contract DuplicatePreventionTest is Test {
     }
 
     function testPredictMechanismAddress() public {
-        AllocationConfig memory config = AllocationConfig({
+        AllocationConfig memory config = _config({
             asset: IERC20(address(token)),
             name: "Predictable Mechanism",
             symbol: "PRED",

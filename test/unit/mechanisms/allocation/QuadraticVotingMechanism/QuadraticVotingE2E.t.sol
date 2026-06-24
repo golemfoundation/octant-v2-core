@@ -1,19 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import "forge-std/Test.sol";
 import "forge-std/console.sol";
 import { TokenizedAllocationMechanism } from "src/mechanisms/TokenizedAllocationMechanism.sol";
 import { QuadraticVotingMechanism } from "src/mechanisms/mechanism/QuadraticVotingMechanism.sol";
 import { AllocationMechanismFactory } from "src/mechanisms/AllocationMechanismFactory.sol";
-import { AllocationConfig } from "src/mechanisms/BaseAllocationMechanism.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+import { AllocationTestHelpers } from "../utils/AllocationTestHelpers.sol";
 
 /// @title Quadratic Voting End-to-End Test
 /// @notice Complete end-to-end testing of the quadratic voting mechanism
 /// @dev Tests the full user journey from registration through final redemption
-contract QuadraticVotingE2E is Test {
+contract QuadraticVotingE2E is AllocationTestHelpers {
     // General purpose struct to avoid stack too deep errors
     struct TestData {
         // Common data
@@ -85,18 +83,11 @@ contract QuadraticVotingE2E is Test {
     uint256 constant TIMELOCK_DELAY = 1 days;
     uint256 constant GRACE_PERIOD = 7 days;
 
-    function _tokenized(address _mechanism) internal pure returns (TokenizedAllocationMechanism) {
-        return TokenizedAllocationMechanism(_mechanism);
-    }
-
     /// @notice Helper function to sign up a user with specified deposit
     /// @param user Address of user to sign up
     /// @param depositAmount Amount of tokens to deposit
     function _signupUser(address user, uint256 depositAmount) internal {
-        vm.startPrank(user);
-        token.approve(address(mechanism), depositAmount);
-        _tokenized(address(mechanism)).signup(depositAmount);
-        vm.stopPrank();
+        _signupUser(token, mechanism, user, depositAmount);
     }
 
     /// @notice Helper function to create a proposal
@@ -110,8 +101,7 @@ contract QuadraticVotingE2E is Test {
         address recipient,
         string memory description
     ) internal returns (uint256 pid) {
-        vm.prank(proposer);
-        pid = _tokenized(address(mechanism)).propose(recipient, description);
+        pid = _createProposal(mechanism, proposer, recipient, description);
     }
 
     /// @notice Helper function to cast a vote on a proposal
@@ -127,8 +117,7 @@ contract QuadraticVotingE2E is Test {
         address recipient
     ) internal returns (uint256 previousPower, uint256 newPower) {
         previousPower = _tokenized(address(mechanism)).votingPower(voter);
-        vm.prank(voter);
-        _tokenized(address(mechanism)).castVote(pid, TokenizedAllocationMechanism.VoteType.For, weight, recipient);
+        _castVote(mechanism, voter, pid, weight, recipient);
         newPower = _tokenized(address(mechanism)).votingPower(voter);
     }
 
@@ -216,22 +205,22 @@ contract QuadraticVotingE2E is Test {
         token.mint(bob, INITIAL_TOKEN_BALANCE);
         token.mint(charlie, INITIAL_TOKEN_BALANCE);
 
-        // Configure the allocation mechanism
-        AllocationConfig memory config = AllocationConfig({
-            asset: IERC20(address(token)),
-            name: "E2E Test Mechanism",
-            symbol: "E2E",
-            votingDelay: VOTING_DELAY,
-            votingPeriod: VOTING_PERIOD,
-            quorumShares: QUORUM_REQUIREMENT,
-            timelockDelay: TIMELOCK_DELAY,
-            gracePeriod: GRACE_PERIOD,
-            owner: address(0)
-        });
-
-        // Deploy quadratic voting mechanism with 100% quadratic funding
-        address mechanismAddr = factory.deployQuadraticVotingMechanism(config, ALPHA_NUMERATOR, ALPHA_DENOMINATOR);
-        mechanism = QuadraticVotingMechanism(payable(mechanismAddr));
+        mechanism = _deployQuadraticVoting(
+            factory,
+            _config({
+                asset: token,
+                name: "E2E Test Mechanism",
+                symbol: "E2E",
+                votingDelay: VOTING_DELAY,
+                votingPeriod: VOTING_PERIOD,
+                quorumShares: QUORUM_REQUIREMENT,
+                timelockDelay: TIMELOCK_DELAY,
+                gracePeriod: GRACE_PERIOD,
+                owner: address(0)
+            }),
+            ALPHA_NUMERATOR,
+            ALPHA_DENOMINATOR
+        );
 
         // Set alice as keeper and bob as management (both can create proposals)
         _tokenized(address(mechanism)).setKeeper(alice);
@@ -466,6 +455,7 @@ contract QuadraticVotingE2E is Test {
 
         console.log("Workflow test complete - 3 users signed up, 3 proposals created");
     }
+
     /// @notice Test voting edge cases and error conditions
     function testVotingErrorConditions() public {
         // ✅ CORRECT: Fetch absolute timeline from contract
