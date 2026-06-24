@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.26](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.25..1.2.0-develop.26) - 2026-06-24
+
+### Styling
+
+- **(allocation)** apply prettier formatting - ([a54ab1c](https://github.com/golemfoundation/octant-v2-core/commit/a54ab1c480115cec15a6c5fcac149fec13d9c7b2)) - Maxime
+
+### Testing
+
+- **(allocation)** modularize quadratic voting fixtures - ([7c7add6](https://github.com/golemfoundation/octant-v2-core/commit/7c7add64832f2d3d259e236aeb06826f4b8658bd)) - Maxime
+
+
 ## [1.2.0-develop.25](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.24..1.2.0-develop.25) - 2026-06-24
 
 ### Documentation
