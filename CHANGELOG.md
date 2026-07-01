@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.2.0-develop.27](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.26..1.2.0-develop.27) - 2026-07-01
+
+### CI/CD
+
+- pull node-extended image via WIF and publish releases in-container - ([9640b7d](https://github.com/golemfoundation/octant-v2-core/commit/9640b7dffcd97717c230c92ceb4b9d97836bf482)) - Michał Kluczek
+
+
 ## [1.2.0-develop.26](https://github.com/golemfoundation/octant-v2-core/compare/1.2.0-develop.25..1.2.0-develop.26) - 2026-06-24
 
 ### Styling
