@@ -14,7 +14,7 @@ concurrency:
 
 env:
   SERVICE_NAME: octant-v2-core
-  X-GITHUB_ENVIRONMENT: &GITHUB_ENVIRONMENT production
+  X-GITHUB_ENVIRONMENT: &GITHUB_ENVIRONMENT actions
   X-node-extended-image: &node_extended_image ${{ vars.GCP_DOCKER_IMAGE_REGISTRY_DEV }}/node-extended:f4f41461
   MASTER_BRANCH_NAME: master
 
@@ -103,7 +103,7 @@ jobs:
     name: Release and publish
     needs: prepare
     runs-on: ubuntu-latest
-    environment: *GITHUB_ENVIRONMENT
+    environment: production
     outputs:
       target-tag: ${{ steps.create-release.outputs.tag_name }}
       sync-pr-url: ${{ steps.sync-pr.outputs.pr_url }}
