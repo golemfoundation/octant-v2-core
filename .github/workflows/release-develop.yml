@@ -25,7 +25,7 @@ jobs:
     steps:
       - name: Mint GCP access token
         id: gcp-token
-        uses: golemfoundation/github-actions/octant/gcp-wif-token@0.6.2
+        uses: golemfoundation/github-actions/octant/gcp-wif-token@0.8.1
         with:
           wif-provider: ${{ vars.GCP_WIF_PROVIDER_DEV }}
           wif-service-account: ${{ vars.GCP_WIF_SA_DEV_READER }}
@@ -39,25 +39,25 @@ jobs:
       version: ${{ steps.release.outputs.version }}
     steps:
       - name: Checkout source code
-        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.4.9
+        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.1
         with:
           fetch-depth: 0
           token: ${{ secrets.HOUSEKEEPER_TOKEN }}
 
       - name: Setup Node.js and Yarn
-        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.4.9
+        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.8.1
         with:
           npm-auth-token: ${{ secrets.HOUSEKEEPER_PAT_OCTANT_V2_PACKAGES }}
 
       - name: Configure git
-        uses: golemfoundation/github-actions/octant/git-configure@0.4.9
+        uses: golemfoundation/github-actions/octant/git-configure@0.8.1
         with:
           gpg-key-base64: ${{ secrets.HOUSEKEEPER_SIGNING_KEY_B64 }}
           gpg-key-id: ${{ vars.HOUSEKEEPER_SIGNING_KEY_ID }}
 
       - name: Create release
         id: release
-        uses: golemfoundation/github-actions/octant/release-dev-tag@0.4.9
+        uses: golemfoundation/github-actions/octant/release-dev-tag@0.8.1
         with:
           github-token: ${{ secrets.HOUSEKEEPER_TOKEN }}
 
@@ -81,12 +81,12 @@ jobs:
         run: echo "::add-mask::${{ needs.registry-token.outputs.access_token }}"
 
       - name: Checkout source code
-        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.4.9
+        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.1
         with:
           ref: ${{ needs.create-release.outputs.tag-name }}
 
       - name: Setup Node.js and Yarn
-        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.4.9
+        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.8.1
         with:
           npm-auth-token: ${{ secrets.HOUSEKEEPER_PAT_OCTANT_V2_PACKAGES }}
 
@@ -94,7 +94,7 @@ jobs:
         run: forge soldeer install
 
       - name: Publish package
-        uses: golemfoundation/github-actions/octant/package-publish@0.4.9
+        uses: golemfoundation/github-actions/octant/package-publish@0.8.1
         with:
           build-command: 'yarn build'
           tag: develop

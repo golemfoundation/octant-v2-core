@@ -86,7 +86,7 @@ jobs:
     steps:
       - name: Mint GCP access token
         id: gcp-token
-        uses: golemfoundation/github-actions/octant/gcp-wif-token@0.6.2
+        uses: golemfoundation/github-actions/octant/gcp-wif-token@0.8.1
         with:
           wif-provider: ${{ vars.GCP_WIF_PROVIDER_DEV }}
           wif-service-account: ${{ vars.GCP_WIF_SA_DEV_READER }}
@@ -155,7 +155,7 @@ jobs:
         run: git fetch origin ${{ github.base_ref }}
 
       - name: Check conventional commits
-        uses: golemfoundation/github-actions/octant/conventional-commits-check@0.4.9
+        uses: golemfoundation/github-actions/octant/conventional-commits-check@0.8.1
         with:
           base-ref: origin/${{ github.base_ref }}
           head-ref: ${{ github.event.pull_request.head.sha }}
@@ -468,7 +468,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Trivy Scan
-        uses: golemfoundation/github-actions/octant/trivy-scan@0.4.9
+        uses: golemfoundation/github-actions/octant/trivy-scan@0.8.1
 
   natspec:
     name: NatSpec Documentation Check
