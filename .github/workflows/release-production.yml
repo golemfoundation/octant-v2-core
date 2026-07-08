@@ -39,14 +39,14 @@ jobs:
       changelog: ${{ steps.prepare.outputs.changelog }}
     steps:
       - name: Checkout source code
-        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.1
+        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.2
         with:
           ref: ${{ inputs.source }}
           fetch-depth: 0
           token: ${{ secrets.HOUSEKEEPER_TOKEN }}
 
       - name: Setup Node.js and Yarn
-        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.8.1
+        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.8.2
         with:
           npm-auth-token: ${{ secrets.HOUSEKEEPER_PAT_OCTANT_V2_PACKAGES }}
 
@@ -59,7 +59,7 @@ jobs:
           github-token: ${{ secrets.HOUSEKEEPER_TOKEN }}
 
       - name: Write job summary
-        uses: golemfoundation/github-actions/octant/write-release-summary@0.8.1
+        uses: golemfoundation/github-actions/octant/write-release-summary@0.8.2
         with:
           type: preview
           source: ${{ inputs.source }}
@@ -80,7 +80,7 @@ jobs:
     environment: *GITHUB_ENVIRONMENT
     steps:
       - name: Notify Mattermost
-        uses: golemfoundation/github-actions/octant/mattermost-notify@0.8.1
+        uses: golemfoundation/github-actions/octant/mattermost-notify@0.8.2
         with:
           webhook-url: ${{ secrets.MATTERMOST_NOTIFIER_WEBHOOK_PROD }}
           status: pending
@@ -110,19 +110,19 @@ jobs:
       sync-pr-url: ${{ steps.sync-pr.outputs.pr_url }}
     steps:
       - name: Checkout source code
-        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.1
+        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.2
         with:
           ref: ${{ inputs.source }}
           fetch-depth: 0
           token: ${{ secrets.HOUSEKEEPER_TOKEN }}
 
       - name: Setup Node.js and Yarn
-        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.8.1
+        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.8.2
         with:
           npm-auth-token: ${{ secrets.HOUSEKEEPER_PAT_OCTANT_V2_PACKAGES }}
 
       - name: Configure git
-        uses: golemfoundation/github-actions/octant/git-configure@0.8.1
+        uses: golemfoundation/github-actions/octant/git-configure@0.8.2
         with:
           gpg-key-base64: ${{ secrets.HOUSEKEEPER_SIGNING_KEY_B64 }}
           gpg-key-id: ${{ vars.HOUSEKEEPER_SIGNING_KEY_ID }}
@@ -131,7 +131,7 @@ jobs:
 
       - name: Create release tag
         id: create-release
-        uses: golemfoundation/github-actions/octant/release-create-tag@0.8.1
+        uses: golemfoundation/github-actions/octant/release-create-tag@0.8.2
         with:
           source-type: ${{ needs.prepare.outputs.source-type }}
           source-ref: ${{ needs.prepare.outputs.source-ref }}
@@ -142,7 +142,7 @@ jobs:
 
       - name: Create sync PR
         id: sync-pr
-        uses: golemfoundation/github-actions/octant/create-sync-pr@0.8.1
+        uses: golemfoundation/github-actions/octant/create-sync-pr@0.8.2
         with:
           version: ${{ needs.prepare.outputs.proposed-version }}
           source: ${{ inputs.source }}
@@ -151,7 +151,7 @@ jobs:
           github-repository: ${{ github.repository }}
 
       - name: Write job summary
-        uses: golemfoundation/github-actions/octant/write-release-summary@0.8.1
+        uses: golemfoundation/github-actions/octant/write-release-summary@0.8.2
         with:
           type: complete
           source: ${{ inputs.source }}
@@ -178,7 +178,7 @@ jobs:
     steps:
       - name: Mint GCP access token
         id: gcp-token
-        uses: golemfoundation/github-actions/octant/gcp-wif-token@0.8.1
+        uses: golemfoundation/github-actions/octant/gcp-wif-token@0.8.2
         with:
           wif-provider: ${{ vars.GCP_WIF_PROVIDER_DEV }}
           wif-service-account: ${{ vars.GCP_WIF_SA_DEV_READER }}
@@ -205,12 +205,12 @@ jobs:
         run: echo "::add-mask::${{ needs.registry-token.outputs.access_token }}"
 
       - name: Checkout source code
-        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.1
+        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.2
         with:
           ref: ${{ needs.release-and-publish.outputs.target-tag }}
 
       - name: Setup Node.js and Yarn
-        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.8.1
+        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.8.2
         with:
           npm-auth-token: ${{ secrets.HOUSEKEEPER_PAT_OCTANT_V2_PACKAGES }}
 
@@ -218,7 +218,7 @@ jobs:
         run: forge soldeer install
 
       - name: Publish package
-        uses: golemfoundation/github-actions/octant/package-publish@0.8.1
+        uses: golemfoundation/github-actions/octant/package-publish@0.8.2
         with:
           build-command: 'yarn build'
 
@@ -247,7 +247,7 @@ jobs:
           fi
 
       - name: Notify Mattermost
-        uses: golemfoundation/github-actions/octant/mattermost-notify@0.8.1
+        uses: golemfoundation/github-actions/octant/mattermost-notify@0.8.2
         with:
           webhook-url: ${{ secrets.MATTERMOST_NOTIFIER_WEBHOOK_PROD }}
           status: ${{ steps.status.outputs.status }}
