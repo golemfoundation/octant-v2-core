@@ -172,7 +172,11 @@ contract PSMSwapper is ISwapper {
 
         IERC20(tokenIn).forceApprove(protocol, 0);
 
-        IERC20(tokenOut).safeTransfer(receiver, amountOut);
+        // Forward FULL tokenOut balance so any pre-existing donation is not
+        // stranded by the delta-based amountOut accounting. amountOut stays
+        // as the true swap delta -- the swap() wrapper's minAmountOut check
+        // and the emitted output remain honest, immune to donation inflation.
+        IERC20(tokenOut).safeTransfer(receiver, IERC20(tokenOut).balanceOf(address(this)));
     }
 
     /// @dev Buy gem (e.g., USDC) with DAI/USDS via PSM.
@@ -195,7 +199,10 @@ contract PSMSwapper is ISwapper {
 
         IERC20(tokenIn).forceApprove(protocol, 0);
 
-        IERC20(tokenOut).safeTransfer(receiver, amountOut);
+        // Forward FULL tokenOut balance so any pre-existing donation is not
+        // stranded by the delta-based amountOut accounting. amountOut stays
+        // as the true swap delta for the swap() wrapper's minAmountOut check.
+        IERC20(tokenOut).safeTransfer(receiver, IERC20(tokenOut).balanceOf(address(this)));
     }
 
     /// @dev Convert DAI to USDS via DaiUsds converter (always 1:1, permanently fee-free).

@@ -127,5 +127,14 @@ contract UniswapV3SwapperAdapter is ISwapper {
         if (leftover != 0) {
             IERC20(tokenIn).safeTransfer(msg.sender, leftover);
         }
+
+        // Defense-in-depth: the router sends tokenOut directly to receiver,
+        // so the adapter should hold no tokenOut. Sweep any residue (e.g.
+        // an external donation sitting on the adapter at entry) to receiver
+        // so the ISwapper "holds no tokens between calls" invariant holds.
+        uint256 tokenOutResidue = IERC20(tokenOut).balanceOf(address(this));
+        if (tokenOutResidue != 0) {
+            IERC20(tokenOut).safeTransfer(receiver, tokenOutResidue);
+        }
     }
 }
