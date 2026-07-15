@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0-develop.0](https://github.com/golemfoundation/octant-v2-core/compare/1.3.0..1.3.0-develop.0) - 2026-07-15
+
+### Bug Fixes
+
+- **(swappers)** cantina #1 reopen - forward full tokenOut to receiver - ([1d5b8ce](https://github.com/golemfoundation/octant-v2-core/commit/1d5b8ce95c32fdc076b7058629171f611f81fc3c)) - Maxime
+
+### CI/CD
+
+- unify shared actions to 0.8.2 and migrate off general runners [skip ci] - ([0d330f0](https://github.com/golemfoundation/octant-v2-core/commit/0d330f0a089fd45cd3e2422ccbbec02cb0ca381b)) - Michał Kluczek
+- Fix incorrect git refs when running a hotfix pipeline [skip ci] - ([903fa99](https://github.com/golemfoundation/octant-v2-core/commit/903fa99fa3cae7e83dd215990cb7516b6377e462)) - Michał Kluczek
+- bump shared actions to 0.8.1 [skip ci] - ([665f342](https://github.com/golemfoundation/octant-v2-core/commit/665f342d4f625bc9d3cd884031f552fa08ff5fb5)) - Michał Kluczek
+- Fix production default GH environment [skip ci] - ([ceb13ef](https://github.com/golemfoundation/octant-v2-core/commit/ceb13ef2c90178adc5cfcc9644c707b95b751a50)) - Michał Kluczek
+
+### Documentation
+
+- **(swappers)** clarify ISwapper.amountOut excludes swept residue - ([d43f86b](https://github.com/golemfoundation/octant-v2-core/commit/d43f86b6a327e41dc8a2b96daa26da095f05e7fc)) - skimaharvey
+
+### Testing
+
+- **(regen)** split RegenIntegration tests into concern files - ([1439b1a](https://github.com/golemfoundation/octant-v2-core/commit/1439b1a11bbd5aa0fa4ddf6ec1903cb67bea3621)) - Maxime
+- **(regen)** split RegenStakerBase unit tests into concern files - ([197228c](https://github.com/golemfoundation/octant-v2-core/commit/197228cb987fb38d7904eeecef6f3157540cbbca)) - Maxime
+
+
 ## [1.3.0](https://github.com/golemfoundation/octant-v2-core/compare/backup/pr418-pre-surgery..1.3.0) - 2026-07-01
 
 ### Bug Fixes
