@@ -15,7 +15,8 @@ ast = true
 fs_permissions = [
     { access = "read-write", path = "./cache/test-artifacts/" },
     { access = "read", path = "./out/" },
-    { access = "read-write", path = "./partners/" }
+    { access = "read-write", path = "./partners/" },
+    { access = "read-write", path = "./contract_addresses.txt" }
 ]
 build_info = true
 extra_output = ["storageLayout"]

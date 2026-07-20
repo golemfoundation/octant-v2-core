@@ -176,6 +176,17 @@ abstract contract BatchScript is Script {
         if (success) {
             return data;
         } else {
+            // Nick's CREATE2 factory reverts with empty returndata when the target is
+            // already deployed, which would otherwise surface with no message at all.
+            if (data.length == 0) {
+                revert(
+                    string.concat(
+                        "BatchScript: call to ",
+                        vm.toString(to_),
+                        " reverted without a reason (for a CREATE2 deployment this usually means the target is already deployed)"
+                    )
+                );
+            }
             revert(string(data));
         }
     }
