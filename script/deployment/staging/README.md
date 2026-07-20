@@ -15,8 +15,21 @@ The DeployProtocol script handles the sequential deployment of:
 7. Payment Splitter Factory (conditional)
 8. Sky Compounder Strategy Factory (conditional)
 9. Morpho Compounder Strategy Factory (conditional)
-10. Regen Staker Factory
+10. Regen Staker Factory (must be pre-deployed via Safe; the script reverts otherwise)
 11. Allocation Mechanism Factory
+12. Yearn V3 Strategy Factory (conditional)
+13. Lido Strategy Factory (conditional)
+14. Spark Strategy Factory (conditional)
+15. Aave V3 Strategy Factory (conditional)
+16. Rocket Pool Strategy Factory (conditional)
+
+"Conditional" means the script deploys the contract only when its entry in
+`script/helpers/DeployedAddresses.sol` is `address(0)` for the selected network.
+Each address is appended to `./contract_addresses.txt` after the run.
+
+For the Safe-multisig deployment path (staging or production) see
+[`script/deploy/DEPLOYMENT_GUIDE.md`](../../deploy/DEPLOYMENT_GUIDE.md) — this script deploys
+from a plain EOA and produces different CREATE2 addresses than the Safe batches.
 
 ### Smart Deployment with Address Reuse
 

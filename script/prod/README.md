@@ -1,84 +1,114 @@
-# Dragon Protocol Deployment Guide
+# Octant v2 Production Deployment
 
-This guide explains how to deploy the Dragon Protocol core components in a Development environment or in your own Tenderly Sepolia Testnet (look at the end).
+`DeployProtocol.s.sol` encodes the complete Octant v2 mainnet deployment as a sequence of Gnosis Safe
+transactions. Every contract is deployed through Nick's CREATE2 factory
+(`0x4e59b44847b379578588920cA78FbF26c0B4956C`), so addresses depend only on the salt and the creation
+code — never on the Safe nonce.
 
-## Overview
+The script does not broadcast. It simulates, asserts each deployment lands on its precomputed address,
+and (with `SEND=true`) proposes the batch to the Safe transaction service for owner signatures.
 
-The DeployProtocol script handles the sequential deployment of:
+## Structure — 8 Safe transactions
 
-1. Safe (1/1 multisig)
-2. Module Proxy Factory
-3. Hats Protocol & Dragon Hatter
-4. Dragon Tokenized Strategy Implementation
-5. Dragon Router
-6. Mock Strategy (for testing)
+**Phase A — 13 factory/implementation contracts.** Split into four batches only because of the
+EIP-7825 per-transaction gas limit of ~16.78M.
 
-## Prerequisites
+| Tx | Entry point | Contracts |
+|---|---|---|
+| 1 | `phaseA_batch1()` | YieldSkimmingTokenizedStrategy, YieldDonatingTokenizedStrategy, PaymentSplitterFactory, LidoStrategyFactory, MorphoCompounderStrategyFactory |
+| 2 | `phaseA_batch2()` | SkyCompounderStrategyFactory, YearnV3StrategyFactory |
+| 3 | `phaseA_batch3()` | AddressSetFactory, RegenEarningPowerCalculatorFactory, RegenStakerFactory |
+| 4 | `phaseA_batch4()` | SparkStrategyFactory, AaveV3StrategyFactory, RocketPoolStrategyFactory |
 
-- Access to an RPC endpoint for your target network
-- Private key with sufficient native tokens for deployment
-- Environment file (.env) setup
+**Phase B — 5 instance contracts.** Requires Phase A to be executed on-chain first.
 
-## Environment Setup
+| Tx | Entry point | Contracts |
+|---|---|---|
+| 5 | `phaseB_addressSets()` | allocationMechanismAllowset, stakerAllowset, stakerBlockset |
+| 6 | `phaseB_calculator()` | RegenEarningPowerCalculator |
+| 7 | `phaseB_staker()` | RegenStakerWithoutDelegateSurrogateVotes |
+| 8 | `phaseB_stakerAccessSets()` | Assigns the staker's allowset/blockset via admin setters |
 
-Your .env file should contain:
+The staker is constructed with `address(0)` for its allowset and blockset and `accessMode = NONE`, so
+the sets are inactive until Tx 8 assigns them.
 
-```
-PRIVATE_KEY - Your deployment private key
-RPC_URL - URL for your target network
-ETHERSCAN_API_KEY - For contract verification
-```
-
-## Running the Deployment
-
-1. First dry run the deployment:
-   ```forge script script/prod/DeployProtocol.s.sol:DeployProtocol -vvvv --rpc-url $RPC_URL```
-
-2. If the dry run succeeds, execute the actual deployment:
-   ```forge script script/prod/DeployProtocol.s.sol:DeployProtocol --rpc-url $RPC_URL --broadcast --verify```
-
-## Post Deployment
-
-The script will output a deployment summary with all contract addresses. Save these addresses for future reference.
-
-The script performs automatic verification of:
-- Safe configuration
-- Owner permissions
-- Strategy enablement
-- Component connections
-
-## Security Considerations
-
-- The initial Safe is deployed as 1/1 for simplicity but should be upgraded to a proper multisig after deployment
-- All contract ownership and admin roles are initially assigned to the deployer
-- Additional owners and permissions should be configured after successful deployment
-- Verify all addresses and permissions manually after deployment
-
-## Next Steps
-
-After successful deployment:
-1. Configure multisig owners
-2. Set up etra permissions on hats protocol
-4. Deposit into strategy and mint undelying asset token
-## How to create your own Sepolia Virtual TestNet in Tenderly and deploy V2 contracts there:
-
-1. Create your own Virtual TestNet in Tenderly (Sepolia, sync on) (https://docs.tenderly.co/virtual-testnets/quickstart)
-2. Create Tenderly Personal accessToken (https://docs.tenderly.co/account/projects/how-to-generate-api-access-token#personal-account-access-tokens)
-3. Send some SepoliaETH (your own Sepolia TestNet RPC) to your deployer address (ex. MetaMask account) (https://docs.tenderly.co/virtual-testnets/unlimited-faucet)
-4. Set required ENVs
+## Environment
 
 ```
-SENDER=(deployer address ex. MetaMask account)PRIVATE_KEY=(deployer private key ex. MetaMask account)
-THRESHOLD=1 # Safe threshold (default is 5)
-TENDERLY_VIRTUAL_TESTNET_RPC_URL=(your own Sepolia TestNet RPC)
-TENDERLY_VERIFIER_URL=$TENDERLY_VIRTUAL_TESTNET_RPC_URL/verify/etherscan
-TENDERLY_ACCESS_TOKEN=(your Personal Tenderly accessToken)
-MAX_OPEX_SPLIT=5 # to confirm
-MIN_METAPOOL_SPLIT=0 # to confirm
-GOVERNANCE=$SENDER # to confirm
+SAFE_ADDRESS     required  -- target Gnosis Safe
+SALT_TIMESTAMP   optional  -- suffix for all CREATE2 salts; auto-generated as HH_DDMMYYYY via FFI
+SEND             optional  -- set to true to submit to the Safe API (default: simulate only)
+CHAIN            e.g. mainnet
+WALLET_TYPE      local | ledger
+PRIVATE_KEY      required for WALLET_TYPE=local
 ```
 
-3. Run script in terminal (repo root)
-    1. `source .env`
-    2. ```forge script script/prod/DeployProtocol.s.sol --slow --verify --verifier-url $TENDERLY_VERIFIER_URL --sender $SENDER --rpc-url $TENDERLY_VIRTUAL_TESTNET_RPC_URL --private-key $PRIVATE_KEY --etherscan-api-key $TENDERLY_ACCESS_TOKEN -vvvv --broadcast``` // Deploy V2 Contracts
-    3. ```forge script dependencies/hats-protocol-1.0/script/Hats.s.sol:DeployHats --slow --verify --verifier-url $TENDERLY_VERIFIER_URL --rpc-url $TENDERLY_VIRTUAL_TESTNET_RPC_URL --private-key $PRIVATE_KEY --etherscan-api-key $TENDERLY_ACCESS_TOKEN -vvvv --broadcast``` // Deploy Hats Protocol
+Reusing the same `SALT_TIMESTAMP` reproduces the same addresses; changing it produces a fresh set.
+Pin it explicitly when replaying a deployment across the hour boundary.
+
+> ⚠️ The salt preimage prefixes here are identical to the pinned constants in
+> `script/deploy/DeployNewStrategiesAndFactories.s.sol`. Pinning `SALT_TIMESTAMP=11022026` (or
+> `07072026`) reproduces that script's exact addresses, so every CREATE2 reverts if those contracts
+> already exist. Let the timestamp auto-generate as `HH_DDMMYYYY` unless you are deliberately
+> replaying an in-flight deployment.
+
+## Running
+
+Preview all 18 deterministic addresses without proposing anything:
+
+```bash
+SAFE_ADDRESS=0x... forge script script/prod/DeployProtocol.s.sol:DeployProtocol \
+  --sig "computeAllAddresses()" --ffi
+```
+
+Simulate one batch against a fork:
+
+```bash
+CHAIN=mainnet WALLET_TYPE=local PRIVATE_KEY=0x... SAFE_ADDRESS=0x... \
+forge script script/prod/DeployProtocol.s.sol:DeployProtocol \
+  --sig "phaseA_batch4()" --rpc-url $FORK_RPC --ffi
+```
+
+Propose to the Safe by adding `SEND=true`. Run the batches in order and let each one execute on-chain
+before proposing the next — Phase B reads addresses that Phase A must have produced.
+
+Before signing, diff the addresses in the batch output against the `computeAllAddresses()` output.
+
+## Source verification
+
+```bash
+SAFE_ADDRESS=0x... SALT_TIMESTAMP=... ETHERSCAN_API_KEY=... \
+forge script script/prod/DeployProtocol.s.sol:VerifyProtocolSourceCode --sig "verifyEtherscan()" --ffi
+
+SAFE_ADDRESS=0x... SALT_TIMESTAMP=... \
+forge script script/prod/DeployProtocol.s.sol:VerifyProtocolSourceCode --sig "verifySourcify()" --ffi
+```
+
+## Post-deployment verification
+
+`VerifyProtocolDeployment` is a fork test suite covering all deployed contracts: code existence,
+factory constants, ownership, address-set determinism, calculator behaviour, and a staker
+stake/withdraw cycle. It is excluded from the default Foundry profile.
+
+```bash
+FOUNDRY_PROFILE=mainnet forge test --match-contract VerifyProtocolDeployment --fork-url <mainnet-rpc>
+```
+
+Addresses default to the production deployment and can each be overridden via `EXPECTED_*` env vars to
+verify a testbed instead. The batch 4 factories (Spark, Aave V3, Rocket Pool) have no production
+default yet: supply `EXPECTED_SPARK_FACTORY`, `EXPECTED_AAVE_V3_FACTORY`, and
+`EXPECTED_ROCKET_POOL_FACTORY` to bring them under verification. The suite logs
+`[NOT CONFIGURED]` for any it skips.
+
+## Security notes
+
+- All ownership and admin roles are assigned to the Safe, never to the deploying EOA
+- Address assertions run before a batch is proposed, so a salt or bytecode drift fails locally rather
+  than producing a Safe payload whose logged addresses are wrong
+- Verify all addresses and permissions manually after execution
+
+## Related
+
+- Staging / testbed Safe path and salt tables: [`../deploy/DEPLOYMENT_GUIDE.md`](../deploy/DEPLOYMENT_GUIDE.md)
+- EOA staging path: [`../deployment/staging/README.md`](../deployment/staging/README.md)
+- CI coverage for the deployment scripts: `test/unit/script/DeploymentScripts.t.sol`
