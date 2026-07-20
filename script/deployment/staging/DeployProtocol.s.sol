@@ -11,6 +11,9 @@ import { DeployMorphoCompounderStrategyFactory } from "script/deploy/DeployMorph
 import { DeployAllocationMechanismFactory } from "script/deploy/DeployAllocationMechanismFactory.sol";
 import { DeployYearnV3StrategyFactory } from "script/deploy/DeployYearnV3StrategyFactory.s.sol";
 import { DeployLidoStrategyFactory } from "script/deploy/DeployLidoStrategyFactory.sol";
+import { DeploySparkStrategyFactory } from "script/deploy/DeploySparkStrategyFactory.sol";
+import { DeployAaveV3StrategyFactory } from "script/deploy/DeployAaveV3StrategyFactory.sol";
+import { DeployRocketPoolStrategyFactory } from "script/deploy/DeployRocketPoolStrategyFactory.sol";
 import { DeployedAddresses } from "script/helpers/DeployedAddresses.sol";
 
 /**
@@ -27,6 +30,9 @@ contract DeployProtocol is Script {
     DeployAllocationMechanismFactory public deployAllocationMechanismFactory;
     DeployYearnV3StrategyFactory public deployYearnV3StrategyFactory;
     DeployLidoStrategyFactory public deployLidoStrategyFactory;
+    DeploySparkStrategyFactory public deploySparkStrategyFactory;
+    DeployAaveV3StrategyFactory public deployAaveV3StrategyFactory;
+    DeployRocketPoolStrategyFactory public deployRocketPoolStrategyFactory;
 
     // Address registry for network-specific deployments
     DeployedAddresses public immutable deployedAddresses;
@@ -42,6 +48,9 @@ contract DeployProtocol is Script {
     address public yieldDonatingTokenizedStrategyAddress;
     address public yearnV3StrategyFactoryAddress;
     address public lidoStrategyFactoryAddress;
+    address public sparkStrategyFactoryAddress;
+    address public aaveV3StrategyFactoryAddress;
+    address public rocketPoolStrategyFactoryAddress;
 
     error DeploymentFailed();
 
@@ -62,6 +71,9 @@ contract DeployProtocol is Script {
         deployAllocationMechanismFactory = new DeployAllocationMechanismFactory();
         deployYearnV3StrategyFactory = new DeployYearnV3StrategyFactory();
         deployLidoStrategyFactory = new DeployLidoStrategyFactory();
+        deploySparkStrategyFactory = new DeploySparkStrategyFactory();
+        deployAaveV3StrategyFactory = new DeployAaveV3StrategyFactory();
+        deployRocketPoolStrategyFactory = new DeployRocketPoolStrategyFactory();
     }
 
     /**
@@ -82,6 +94,9 @@ contract DeployProtocol is Script {
         yieldDonatingTokenizedStrategyAddress = addresses.yieldDonatingTokenizedStrategy;
         yearnV3StrategyFactoryAddress = addresses.yearnV3StrategyFactory;
         lidoStrategyFactoryAddress = addresses.lidoStrategyFactory;
+        sparkStrategyFactoryAddress = addresses.sparkStrategyFactory;
+        aaveV3StrategyFactoryAddress = addresses.aaveV3StrategyFactory;
+        rocketPoolStrategyFactoryAddress = addresses.rocketPoolStrategyFactory;
     }
 
     // This entrypoint intentionally coordinates multiple conditional deployments.
@@ -151,6 +166,24 @@ contract DeployProtocol is Script {
             if (lidoStrategyFactoryAddress == address(0)) revert DeploymentFailed();
         }
 
+        // Deploy Spark Strategy Factory
+        if (sparkStrategyFactoryAddress == address(0)) {
+            sparkStrategyFactoryAddress = deploySparkStrategyFactory.deploy();
+            if (sparkStrategyFactoryAddress == address(0)) revert DeploymentFailed();
+        }
+
+        // Deploy Aave V3 Strategy Factory
+        if (aaveV3StrategyFactoryAddress == address(0)) {
+            aaveV3StrategyFactoryAddress = deployAaveV3StrategyFactory.deploy();
+            if (aaveV3StrategyFactoryAddress == address(0)) revert DeploymentFailed();
+        }
+
+        // Deploy Rocket Pool Strategy Factory
+        if (rocketPoolStrategyFactoryAddress == address(0)) {
+            rocketPoolStrategyFactoryAddress = deployRocketPoolStrategyFactory.deploy();
+            if (rocketPoolStrategyFactoryAddress == address(0)) revert DeploymentFailed();
+        }
+
         // Log deployment addresses
         console2.log("\nDeployment Summary:");
         console2.log("------------------");
@@ -163,6 +196,9 @@ contract DeployProtocol is Script {
         console2.log("Allocation Mechanism Factory:             ", allocationMechanismFactoryAddress);
         console2.log("Yearn V3 Strategy Factory:                ", yearnV3StrategyFactoryAddress);
         console2.log("Lido Strategy Factory:                    ", lidoStrategyFactoryAddress);
+        console2.log("Spark Strategy Factory:                   ", sparkStrategyFactoryAddress);
+        console2.log("Aave V3 Strategy Factory:                 ", aaveV3StrategyFactoryAddress);
+        console2.log("Rocket Pool Strategy Factory:             ", rocketPoolStrategyFactoryAddress);
         console2.log("------------------");
 
         string memory contractAddressFilename = "./contract_addresses.txt";
@@ -207,6 +243,18 @@ contract DeployProtocol is Script {
         vm.writeLine(
             contractAddressFilename,
             string.concat("LIDO_STRATEGY_FACTORY_ADDRESS=", vm.toString(lidoStrategyFactoryAddress))
+        );
+        vm.writeLine(
+            contractAddressFilename,
+            string.concat("SPARK_STRATEGY_FACTORY_ADDRESS=", vm.toString(sparkStrategyFactoryAddress))
+        );
+        vm.writeLine(
+            contractAddressFilename,
+            string.concat("AAVE_V3_STRATEGY_FACTORY_ADDRESS=", vm.toString(aaveV3StrategyFactoryAddress))
+        );
+        vm.writeLine(
+            contractAddressFilename,
+            string.concat("ROCKET_POOL_STRATEGY_FACTORY_ADDRESS=", vm.toString(rocketPoolStrategyFactoryAddress))
         );
     }
 }

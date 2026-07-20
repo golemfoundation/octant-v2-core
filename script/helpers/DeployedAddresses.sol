@@ -38,6 +38,9 @@ contract DeployedAddresses is Script {
         address yieldDonatingTokenizedStrategy;
         address yearnV3StrategyFactory;
         address lidoStrategyFactory;
+        address sparkStrategyFactory;
+        address aaveV3StrategyFactory;
+        address rocketPoolStrategyFactory;
         // AddressSet Factory and Contracts (for allowlists/blocklists)
         address addressSetFactory;
         address stakerAllowset;
@@ -90,6 +93,9 @@ contract DeployedAddresses is Script {
                 yieldDonatingTokenizedStrategy: 0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c,
                 yearnV3StrategyFactory: 0x6D8c4E4A158083E30B53ba7df3cFB885fC096fF6,
                 lidoStrategyFactory: address(0),
+                sparkStrategyFactory: address(0),
+                aaveV3StrategyFactory: address(0),
+                rocketPoolStrategyFactory: address(0),
                 // AddressSet factory and contracts - to be deployed
                 addressSetFactory: 0x908FA1747a5E12708c0e575875F2685750CFEfD1,
                 stakerAllowset: 0x4FFAb2c015d9dCd5D20d489E644D99ae67a57270,
@@ -118,6 +124,9 @@ contract DeployedAddresses is Script {
                 yieldDonatingTokenizedStrategy: address(0),
                 yearnV3StrategyFactory: address(0),
                 lidoStrategyFactory: address(0),
+                sparkStrategyFactory: address(0),
+                aaveV3StrategyFactory: address(0),
+                rocketPoolStrategyFactory: address(0),
                 addressSetFactory: address(0),
                 stakerAllowset: address(0),
                 stakerBlockset: address(0),
@@ -147,6 +156,9 @@ contract DeployedAddresses is Script {
                 yieldDonatingTokenizedStrategy: 0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c,
                 yearnV3StrategyFactory: 0x6D8c4E4A158083E30B53ba7df3cFB885fC096fF6,
                 lidoStrategyFactory: address(0),
+                sparkStrategyFactory: address(0),
+                aaveV3StrategyFactory: address(0),
+                rocketPoolStrategyFactory: address(0),
                 // AddressSet factory and contracts - deploy fresh (protocol-specific)
                 addressSetFactory: 0x908FA1747a5E12708c0e575875F2685750CFEfD1,
                 stakerAllowset: address(0),
@@ -175,6 +187,9 @@ contract DeployedAddresses is Script {
                 yieldDonatingTokenizedStrategy: address(0),
                 yearnV3StrategyFactory: address(0),
                 lidoStrategyFactory: address(0),
+                sparkStrategyFactory: address(0),
+                aaveV3StrategyFactory: address(0),
+                rocketPoolStrategyFactory: address(0),
                 addressSetFactory: address(0),
                 stakerAllowset: address(0),
                 stakerBlockset: address(0),

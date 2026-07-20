@@ -18,6 +18,9 @@ import { LidoStrategyFactory } from "src/factories/LidoStrategyFactory.sol";
 import { MorphoCompounderStrategyFactory } from "src/factories/MorphoCompounderStrategyFactory.sol";
 import { SkyCompounderStrategyFactory } from "src/factories/SkyCompounderStrategyFactory.sol";
 import { YearnV3StrategyFactory } from "src/factories/yieldDonating/YearnV3StrategyFactory.sol";
+import { SparkStrategyFactory } from "src/factories/SparkStrategyFactory.sol";
+import { AaveV3StrategyFactory } from "src/factories/AaveV3StrategyFactory.sol";
+import { RocketPoolStrategyFactory } from "src/factories/yieldSkimming/RocketPoolStrategyFactory.sol";
 import { AddressSetFactory } from "src/factories/AddressSetFactory.sol";
 import { RegenEarningPowerCalculatorFactory } from "src/factories/RegenEarningPowerCalculatorFactory.sol";
 import { RegenStakerFactory } from "src/factories/RegenStakerFactory.sol";
@@ -67,14 +70,14 @@ uint256 constant REWARD_DURATION = 30 days;
 ///         resolved at runtime:
 ///           - SAFE_ADDRESS (env var, required) -- target Gnosis Safe
 ///           - SALT_TIMESTAMP (env var, optional) -- suffix for CREATE2 salts
-///             Auto-generated via `date -u +%H%d%m%Y` if not set.
+///             Auto-generated via `date -u +%H_%d%m%Y` if not set.
 ///           - Expected addresses computed from salts + safe at runtime.
 ///
-///         The deployment is structured as 7 Gnosis Safe transactions:
-///           Phase A (Tx 1-3): 10 factory/implementation contracts via Nick's CREATE2
-///           Phase B (Tx 4-7): 3 address sets + calculator + staker + staker access set assignment
+///         The deployment is structured as 8 Gnosis Safe transactions:
+///           Phase A (Tx 1-4): 13 factory/implementation contracts via Nick's CREATE2
+///           Phase B (Tx 5-8): 3 address sets + calculator + staker + staker access set assignment
 ///                             Staker is constructed with address(0) for allowset/blockset,
-///                             then assigned post-construction via admin setters in Tx 7
+///                             then assigned post-construction via admin setters in Tx 8
 ///                             (accessMode=NONE, so they are initially inactive).
 ///
 ///         Replay on a fork (simulation only, default):
@@ -101,6 +104,9 @@ contract DeployProtocol is Script, BatchScript {
     bytes32 internal _morphoFactorySalt;
     bytes32 internal _skyFactorySalt;
     bytes32 internal _yearnV3FactorySalt;
+    bytes32 internal _sparkFactorySalt;
+    bytes32 internal _aaveV3FactorySalt;
+    bytes32 internal _rocketPoolFactorySalt;
     bytes32 internal _addressSetFactorySalt;
     bytes32 internal _calcFactorySalt;
     bytes32 internal _stakerFactorySalt;
@@ -116,7 +122,7 @@ contract DeployProtocol is Script, BatchScript {
     //  INITIALIZATION
     // ═════════════════════════════════════════════════════════════════════════
 
-    /// @dev Resolves SAFE_ADDRESS and SALT_TIMESTAMP from env, computes all 15
+    /// @dev Resolves SAFE_ADDRESS and SALT_TIMESTAMP from env, computes all 18
     ///      salts, and logs the full deployment configuration. Guarded by
     ///      _initialized to run exactly once.
     function _initialize() internal {
@@ -139,6 +145,9 @@ contract DeployProtocol is Script, BatchScript {
         _morphoFactorySalt = keccak256(abi.encodePacked("MORPHO_COMPOUNDER_FACTORY_", _saltTimestamp));
         _skyFactorySalt = keccak256(abi.encodePacked("SKY_COMPOUNDER_FACTORY_", _saltTimestamp));
         _yearnV3FactorySalt = keccak256(abi.encodePacked("YEARN_V3_STRATEGY_FACTORY_", _saltTimestamp));
+        _sparkFactorySalt = keccak256(abi.encodePacked("SPARK_STRATEGY_FACTORY_", _saltTimestamp));
+        _aaveV3FactorySalt = keccak256(abi.encodePacked("AAVE_V3_STRATEGY_FACTORY_", _saltTimestamp));
+        _rocketPoolFactorySalt = keccak256(abi.encodePacked("ROCKET_POOL_STRATEGY_FACTORY_", _saltTimestamp));
         _addressSetFactorySalt = keccak256(abi.encodePacked("ADDRESS_SET_FACTORY_", _saltTimestamp));
         _calcFactorySalt = keccak256(abi.encodePacked("REGEN_EARNING_POWER_CALCULATOR_FACTORY_", _saltTimestamp));
         _stakerFactorySalt = keccak256(abi.encodePacked("REGEN_STAKER_FACTORY_", _saltTimestamp));
@@ -190,6 +199,61 @@ contract DeployProtocol is Script, BatchScript {
     ///      (simulation only). Set SEND=true for production Safe API submission.
     function _shouldSend() internal view returns (bool) {
         return vm.envOr("SEND", false);
+    }
+
+    /// @dev `expected` must come from the same helper _logPhaseAAddresses() prints, so the
+    ///      address an operator reviews is the address the batch deploys.
+    function _addAndAssert(bytes32 salt, bytes memory creationCode, address expected, string memory label) internal {
+        address deployed = _addCreate2Deployment(salt, creationCode);
+        require(deployed == expected, string.concat(label, ": address mismatch"));
+        console.log(string.concat(label, ":"), deployed);
+    }
+
+    // --- Phase A deterministic addresses (single source of truth per contract) ---
+
+    function _yieldSkimmingAddress() internal view returns (address) {
+        return _computeCreate2AddressViaFactory(_yieldSkimmingSalt, type(YieldSkimmingTokenizedStrategy).creationCode);
+    }
+
+    function _yieldDonatingAddress() internal view returns (address) {
+        return _computeCreate2AddressViaFactory(_yieldDonatingSalt, type(YieldDonatingTokenizedStrategy).creationCode);
+    }
+
+    function _paymentSplitterFactoryAddress() internal view returns (address) {
+        return _computeCreate2AddressViaFactory(_paymentSplitterFactorySalt, type(PaymentSplitterFactory).creationCode);
+    }
+
+    function _lidoFactoryAddress() internal view returns (address) {
+        return _computeCreate2AddressViaFactory(_lidoFactorySalt, type(LidoStrategyFactory).creationCode);
+    }
+
+    function _morphoFactoryAddress() internal view returns (address) {
+        return _computeCreate2AddressViaFactory(_morphoFactorySalt, type(MorphoCompounderStrategyFactory).creationCode);
+    }
+
+    function _skyFactoryAddress() internal view returns (address) {
+        return _computeCreate2AddressViaFactory(_skyFactorySalt, type(SkyCompounderStrategyFactory).creationCode);
+    }
+
+    function _yearnV3FactoryAddress() internal view returns (address) {
+        return _computeCreate2AddressViaFactory(_yearnV3FactorySalt, type(YearnV3StrategyFactory).creationCode);
+    }
+
+    function _sparkFactoryAddress() internal view returns (address) {
+        return _computeCreate2AddressViaFactory(_sparkFactorySalt, type(SparkStrategyFactory).creationCode);
+    }
+
+    function _aaveV3FactoryAddress() internal view returns (address) {
+        return _computeCreate2AddressViaFactory(_aaveV3FactorySalt, type(AaveV3StrategyFactory).creationCode);
+    }
+
+    function _rocketPoolFactoryAddress() internal view returns (address) {
+        return _computeCreate2AddressViaFactory(_rocketPoolFactorySalt, type(RocketPoolStrategyFactory).creationCode);
+    }
+
+    function _calcFactoryAddress() internal view returns (address) {
+        return
+            _computeCreate2AddressViaFactory(_calcFactorySalt, type(RegenEarningPowerCalculatorFactory).creationCode);
     }
 
     /// @dev Computes the deterministic AddressSetFactory address from Phase A.
@@ -263,7 +327,7 @@ contract DeployProtocol is Script, BatchScript {
         return address(uint160(uint256(hash)));
     }
 
-    /// @notice Compute and log all 15 deterministic addresses from CREATE2 math.
+    /// @notice Compute and log all 18 deterministic addresses from CREATE2 math.
     ///         Requires SAFE_ADDRESS env var. Uses SALT_TIMESTAMP if set,
     ///         otherwise auto-generates via FFI.
     ///
@@ -275,39 +339,18 @@ contract DeployProtocol is Script, BatchScript {
     }
 
     function _logPhaseAAddresses() internal view {
-        console.log(
-            "EXPECTED_YIELD_SKIMMING:",
-            _computeCreate2AddressViaFactory(_yieldSkimmingSalt, type(YieldSkimmingTokenizedStrategy).creationCode)
-        );
-        console.log(
-            "EXPECTED_YIELD_DONATING:",
-            _computeCreate2AddressViaFactory(_yieldDonatingSalt, type(YieldDonatingTokenizedStrategy).creationCode)
-        );
-        console.log(
-            "EXPECTED_PAYMENT_SPLITTER_FACTORY:",
-            _computeCreate2AddressViaFactory(_paymentSplitterFactorySalt, type(PaymentSplitterFactory).creationCode)
-        );
-        console.log(
-            "EXPECTED_LIDO_FACTORY:",
-            _computeCreate2AddressViaFactory(_lidoFactorySalt, type(LidoStrategyFactory).creationCode)
-        );
-        console.log(
-            "EXPECTED_MORPHO_FACTORY:",
-            _computeCreate2AddressViaFactory(_morphoFactorySalt, type(MorphoCompounderStrategyFactory).creationCode)
-        );
-        console.log(
-            "EXPECTED_SKY_FACTORY:",
-            _computeCreate2AddressViaFactory(_skyFactorySalt, type(SkyCompounderStrategyFactory).creationCode)
-        );
-        console.log(
-            "EXPECTED_YEARN_FACTORY:",
-            _computeCreate2AddressViaFactory(_yearnV3FactorySalt, type(YearnV3StrategyFactory).creationCode)
-        );
+        console.log("EXPECTED_YIELD_SKIMMING:", _yieldSkimmingAddress());
+        console.log("EXPECTED_YIELD_DONATING:", _yieldDonatingAddress());
+        console.log("EXPECTED_PAYMENT_SPLITTER_FACTORY:", _paymentSplitterFactoryAddress());
+        console.log("EXPECTED_LIDO_FACTORY:", _lidoFactoryAddress());
+        console.log("EXPECTED_MORPHO_FACTORY:", _morphoFactoryAddress());
+        console.log("EXPECTED_SKY_FACTORY:", _skyFactoryAddress());
+        console.log("EXPECTED_YEARN_FACTORY:", _yearnV3FactoryAddress());
+        console.log("EXPECTED_SPARK_FACTORY:", _sparkFactoryAddress());
+        console.log("EXPECTED_AAVE_V3_FACTORY:", _aaveV3FactoryAddress());
+        console.log("EXPECTED_ROCKET_POOL_FACTORY:", _rocketPoolFactoryAddress());
         console.log("EXPECTED_ADDRESS_SET_FACTORY:", _addressSetFactoryAddress());
-        console.log(
-            "EXPECTED_CALC_FACTORY:",
-            _computeCreate2AddressViaFactory(_calcFactorySalt, type(RegenEarningPowerCalculatorFactory).creationCode)
-        );
+        console.log("EXPECTED_CALC_FACTORY:", _calcFactoryAddress());
         console.log("EXPECTED_STAKER_FACTORY:", _stakerFactoryAddress());
     }
 
@@ -321,58 +364,49 @@ contract DeployProtocol is Script, BatchScript {
     }
 
     // ═════════════════════════════════════════════════════════════════════════
-    //  PHASE A: Factory Deployment (3 Safe Transactions)
+    //  PHASE A: Factory Deployment (4 Safe Transactions)
     //
-    //  All 10 contracts deployed via Nick's CREATE2 factory (0x4e59b44...56C).
-    //  Split into 3 batches due to the EIP-7825 per-tx gas limit of ~16.78M.
+    //  All 13 contracts deployed via Nick's CREATE2 factory (0x4e59b44...56C).
+    //  Split into 4 batches due to the EIP-7825 per-tx gas limit of ~16.78M.
     // ═════════════════════════════════════════════════════════════════════════
 
-    /// @notice Tx 1 (~12.4M gas): 5 contracts
+    /// @notice Tx 1 (~12.9M gas of contract creation, measured -- the tightest batch): 5 contracts
     ///         - YieldSkimmingTokenizedStrategy
     ///         - YieldDonatingTokenizedStrategy
     ///         - PaymentSplitterFactory
     ///         - LidoStrategyFactory
     ///         - MorphoCompounderStrategyFactory
     function phaseA_batch1() external isBatch(_initAndGetSafe()) {
-        address deployed;
-        address expected;
-
-        deployed = _addCreate2Deployment(_yieldSkimmingSalt, type(YieldSkimmingTokenizedStrategy).creationCode);
-        expected = _computeCreate2AddressViaFactory(
+        _addAndAssert(
             _yieldSkimmingSalt,
-            type(YieldSkimmingTokenizedStrategy).creationCode
+            type(YieldSkimmingTokenizedStrategy).creationCode,
+            _yieldSkimmingAddress(),
+            "YieldSkimmingTokenizedStrategy"
         );
-        require(deployed == expected, "YieldSkimming address mismatch");
-        console.log("YieldSkimmingTokenizedStrategy:", deployed);
-
-        deployed = _addCreate2Deployment(_yieldDonatingSalt, type(YieldDonatingTokenizedStrategy).creationCode);
-        expected = _computeCreate2AddressViaFactory(
+        _addAndAssert(
             _yieldDonatingSalt,
-            type(YieldDonatingTokenizedStrategy).creationCode
+            type(YieldDonatingTokenizedStrategy).creationCode,
+            _yieldDonatingAddress(),
+            "YieldDonatingTokenizedStrategy"
         );
-        require(deployed == expected, "YieldDonating address mismatch");
-        console.log("YieldDonatingTokenizedStrategy:", deployed);
-
-        deployed = _addCreate2Deployment(_paymentSplitterFactorySalt, type(PaymentSplitterFactory).creationCode);
-        expected = _computeCreate2AddressViaFactory(
+        _addAndAssert(
             _paymentSplitterFactorySalt,
-            type(PaymentSplitterFactory).creationCode
+            type(PaymentSplitterFactory).creationCode,
+            _paymentSplitterFactoryAddress(),
+            "PaymentSplitterFactory"
         );
-        require(deployed == expected, "PaymentSplitterFactory address mismatch");
-        console.log("PaymentSplitterFactory:", deployed);
-
-        deployed = _addCreate2Deployment(_lidoFactorySalt, type(LidoStrategyFactory).creationCode);
-        expected = _computeCreate2AddressViaFactory(_lidoFactorySalt, type(LidoStrategyFactory).creationCode);
-        require(deployed == expected, "LidoStrategyFactory address mismatch");
-        console.log("LidoStrategyFactory:", deployed);
-
-        deployed = _addCreate2Deployment(_morphoFactorySalt, type(MorphoCompounderStrategyFactory).creationCode);
-        expected = _computeCreate2AddressViaFactory(
+        _addAndAssert(
+            _lidoFactorySalt,
+            type(LidoStrategyFactory).creationCode,
+            _lidoFactoryAddress(),
+            "LidoStrategyFactory"
+        );
+        _addAndAssert(
             _morphoFactorySalt,
-            type(MorphoCompounderStrategyFactory).creationCode
+            type(MorphoCompounderStrategyFactory).creationCode,
+            _morphoFactoryAddress(),
+            "MorphoCompounderStrategyFactory"
         );
-        require(deployed == expected, "MorphoCompounderStrategyFactory address mismatch");
-        console.log("MorphoCompounderStrategyFactory:", deployed);
 
         executeBatch(_shouldSend());
     }
@@ -381,18 +415,18 @@ contract DeployProtocol is Script, BatchScript {
     ///         - SkyCompounderStrategyFactory
     ///         - YearnV3StrategyFactory
     function phaseA_batch2() external isBatch(_initAndGetSafe()) {
-        address deployed;
-        address expected;
-
-        deployed = _addCreate2Deployment(_skyFactorySalt, type(SkyCompounderStrategyFactory).creationCode);
-        expected = _computeCreate2AddressViaFactory(_skyFactorySalt, type(SkyCompounderStrategyFactory).creationCode);
-        require(deployed == expected, "SkyFactory address mismatch");
-        console.log("SkyCompounderStrategyFactory:", deployed);
-
-        deployed = _addCreate2Deployment(_yearnV3FactorySalt, type(YearnV3StrategyFactory).creationCode);
-        expected = _computeCreate2AddressViaFactory(_yearnV3FactorySalt, type(YearnV3StrategyFactory).creationCode);
-        require(deployed == expected, "YearnFactory address mismatch");
-        console.log("YearnV3StrategyFactory:", deployed);
+        _addAndAssert(
+            _skyFactorySalt,
+            type(SkyCompounderStrategyFactory).creationCode,
+            _skyFactoryAddress(),
+            "SkyCompounderStrategyFactory"
+        );
+        _addAndAssert(
+            _yearnV3FactorySalt,
+            type(YearnV3StrategyFactory).creationCode,
+            _yearnV3FactoryAddress(),
+            "YearnV3StrategyFactory"
+        );
 
         executeBatch(_shouldSend());
     }
@@ -402,23 +436,19 @@ contract DeployProtocol is Script, BatchScript {
     ///         - RegenEarningPowerCalculatorFactory
     ///         - RegenStakerFactory (constructor: canonical bytecode hashes)
     function phaseA_batch3() external isBatch(_initAndGetSafe()) {
-        address deployed;
-        address expected;
-
-        deployed = _addCreate2Deployment(_addressSetFactorySalt, type(AddressSetFactory).creationCode);
-        expected = _addressSetFactoryAddress();
-        require(deployed == expected, "AddressSetFactory address mismatch");
-        console.log("AddressSetFactory:", deployed);
-
-        deployed = _addCreate2Deployment(_calcFactorySalt, type(RegenEarningPowerCalculatorFactory).creationCode);
-        expected = _computeCreate2AddressViaFactory(
-            _calcFactorySalt,
-            type(RegenEarningPowerCalculatorFactory).creationCode
+        _addAndAssert(
+            _addressSetFactorySalt,
+            type(AddressSetFactory).creationCode,
+            _addressSetFactoryAddress(),
+            "AddressSetFactory"
         );
-        require(deployed == expected, "CalcFactory address mismatch");
-        console.log("RegenEarningPowerCalculatorFactory:", deployed);
-
-        deployed = _addCreate2Deployment(
+        _addAndAssert(
+            _calcFactorySalt,
+            type(RegenEarningPowerCalculatorFactory).creationCode,
+            _calcFactoryAddress(),
+            "RegenEarningPowerCalculatorFactory"
+        );
+        _addAndAssert(
             _stakerFactorySalt,
             abi.encodePacked(
                 type(RegenStakerFactory).creationCode,
@@ -426,11 +456,36 @@ contract DeployProtocol is Script, BatchScript {
                     keccak256(REGEN_STAKER_V1_CREATION_CODE),
                     keccak256(REGEN_STAKER_WITHOUT_DELEGATION_V1_CREATION_CODE)
                 )
-            )
+            ),
+            _stakerFactoryAddress(),
+            "RegenStakerFactory"
         );
-        expected = _stakerFactoryAddress();
-        require(deployed == expected, "StakerFactory address mismatch");
-        console.log("RegenStakerFactory:", deployed);
+
+        executeBatch(_shouldSend());
+    }
+
+    /// @notice Tx 4 (~6.8M gas): SparkStrategyFactory, AaveV3StrategyFactory,
+    ///         RocketPoolStrategyFactory. No constructor args and the tokenized strategy
+    ///         is a createStrategy() parameter, so this batch does not depend on batch 1.
+    function phaseA_batch4() external isBatch(_initAndGetSafe()) {
+        _addAndAssert(
+            _sparkFactorySalt,
+            type(SparkStrategyFactory).creationCode,
+            _sparkFactoryAddress(),
+            "SparkStrategyFactory"
+        );
+        _addAndAssert(
+            _aaveV3FactorySalt,
+            type(AaveV3StrategyFactory).creationCode,
+            _aaveV3FactoryAddress(),
+            "AaveV3StrategyFactory"
+        );
+        _addAndAssert(
+            _rocketPoolFactorySalt,
+            type(RocketPoolStrategyFactory).creationCode,
+            _rocketPoolFactoryAddress(),
+            "RocketPoolStrategyFactory"
+        );
 
         executeBatch(_shouldSend());
     }
@@ -441,10 +496,10 @@ contract DeployProtocol is Script, BatchScript {
     //  Requires Phase A factories to be deployed and executed on-chain first.
     //  Deploys 3 address sets, the earning power calculator, and the staker.
     //  The staker is constructed with address(0) for allowset/blockset, then
-    //  assigned post-construction via admin setters in Tx 7.
+    //  assigned post-construction via admin setters in Tx 8.
     // ═════════════════════════════════════════════════════════════════════════
 
-    /// @notice Tx 4: Deploy all 3 address sets via AddressSetFactory
+    /// @notice Tx 5: Deploy all 3 address sets via AddressSetFactory
     ///         - allocationMechanismAllowset
     ///         - stakerAllowset
     ///         - stakerBlockset
@@ -490,7 +545,7 @@ contract DeployProtocol is Script, BatchScript {
         executeBatch(_shouldSend());
     }
 
-    /// @notice Tx 5: Deploy RegenEarningPowerCalculator via Nick's CREATE2 factory
+    /// @notice Tx 6: Deploy RegenEarningPowerCalculator via Nick's CREATE2 factory
     ///         Constructor args: owner=Safe, allowset=0, blockset=0, accessMode=NONE
     ///         Batched as a single Safe transaction. Address assertion runs before
     ///         the batch is submitted.
@@ -508,9 +563,9 @@ contract DeployProtocol is Script, BatchScript {
         executeBatch(_shouldSend());
     }
 
-    /// @notice Tx 6: Deploy RegenStaker (WITHOUT delegation) via RegenStakerFactory
+    /// @notice Tx 7: Deploy RegenStaker (WITHOUT delegation) via RegenStakerFactory
     ///         Staker is constructed with address(0) for stakerAllowset and
-    ///         stakerBlockset. These are assigned post-construction in Tx 7.
+    ///         stakerBlockset. These are assigned post-construction in Tx 8.
     ///         accessMode is set to NONE so the sets are initially inactive.
     ///         Batched as a single Safe transaction. Address assertion runs
     ///         before the batch is submitted.
@@ -547,9 +602,9 @@ contract DeployProtocol is Script, BatchScript {
         executeBatch(_shouldSend());
     }
 
-    /// @notice Tx 7: Assign staker allowset and blockset via admin setters.
+    /// @notice Tx 8: Assign staker allowset and blockset via admin setters.
     ///         Batched into a single Safe MultiSend transaction.
-    ///         Requires Tx 6 (staker deployment) to have been executed on-chain.
+    ///         Requires Tx 7 (staker deployment) to have been executed on-chain.
     function phaseB_stakerAccessSets() external isBatch(_initAndGetSafe()) {
         address stakerAddr = _stakerAddress();
         require(stakerAddr.code.length > 0, "Staker not deployed -- run phaseB_staker first");
@@ -584,7 +639,7 @@ contract DeployProtocol is Script, BatchScript {
 // ═════════════════════════════════════════════════════════════════════════════
 
 /// @title VerifyProtocolSourceCode
-/// @notice Verifies all 15 Octant v2 protocol contracts on Etherscan and Sourcify.
+/// @notice Verifies all 18 Octant v2 protocol contracts on Etherscan and Sourcify.
 ///         Uses deterministic addresses computed at runtime from SAFE_ADDRESS and
 ///         SALT_TIMESTAMP env vars, reusing DeployProtocol address-computation helpers.
 ///
@@ -613,6 +668,10 @@ contract VerifyProtocolSourceCode is DeployProtocol {
     string constant SKY_FACTORY_PATH = "src/factories/SkyCompounderStrategyFactory.sol:SkyCompounderStrategyFactory";
     string constant YEARN_FACTORY_PATH =
         "src/factories/yieldDonating/YearnV3StrategyFactory.sol:YearnV3StrategyFactory";
+    string constant SPARK_FACTORY_PATH = "src/factories/SparkStrategyFactory.sol:SparkStrategyFactory";
+    string constant AAVE_V3_FACTORY_PATH = "src/factories/AaveV3StrategyFactory.sol:AaveV3StrategyFactory";
+    string constant ROCKET_POOL_FACTORY_PATH =
+        "src/factories/yieldSkimming/RocketPoolStrategyFactory.sol:RocketPoolStrategyFactory";
     string constant ADDRESS_SET_FACTORY_PATH = "src/factories/AddressSetFactory.sol:AddressSetFactory";
     string constant CALC_FACTORY_PATH =
         "src/factories/RegenEarningPowerCalculatorFactory.sol:RegenEarningPowerCalculatorFactory";
@@ -626,13 +685,13 @@ contract VerifyProtocolSourceCode is DeployProtocol {
     //  ENTRY POINTS
     // ═════════════════════════════════════════════════════════════════════════
 
-    /// @notice Verify all 15 contracts on Etherscan. Requires ETHERSCAN_API_KEY env var.
+    /// @notice Verify all 18 contracts on Etherscan. Requires ETHERSCAN_API_KEY env var.
     function verifyEtherscan() external {
         _initialize();
         _verifyAll("etherscan");
     }
 
-    /// @notice Verify all 15 contracts on Sourcify. No API key needed.
+    /// @notice Verify all 18 contracts on Sourcify. No API key needed.
     function verifySourcify() external {
         _initialize();
         _verifyAll("sourcify");
@@ -643,7 +702,7 @@ contract VerifyProtocolSourceCode is DeployProtocol {
     // ═════════════════════════════════════════════════════════════════════════
 
     function _verifyAll(string memory verifier) internal {
-        console.log("=== VERIFYING ALL 15 PROTOCOL CONTRACTS ===");
+        console.log("=== VERIFYING ALL 18 PROTOCOL CONTRACTS ===");
         console.log("Verifier:", verifier);
         console.log("");
 
@@ -656,55 +715,23 @@ contract VerifyProtocolSourceCode is DeployProtocol {
     }
 
     function _verifyPhaseANoArgs(string memory verifier) internal {
+        _verifyNoArgs(_yieldSkimmingAddress(), YIELD_SKIMMING_PATH, "YieldSkimmingTokenizedStrategy", verifier);
+        _verifyNoArgs(_yieldDonatingAddress(), YIELD_DONATING_PATH, "YieldDonatingTokenizedStrategy", verifier);
         _verifyNoArgs(
-            _computeCreate2AddressViaFactory(_yieldSkimmingSalt, type(YieldSkimmingTokenizedStrategy).creationCode),
-            YIELD_SKIMMING_PATH,
-            "YieldSkimmingTokenizedStrategy",
-            verifier
-        );
-        _verifyNoArgs(
-            _computeCreate2AddressViaFactory(_yieldDonatingSalt, type(YieldDonatingTokenizedStrategy).creationCode),
-            YIELD_DONATING_PATH,
-            "YieldDonatingTokenizedStrategy",
-            verifier
-        );
-        _verifyNoArgs(
-            _computeCreate2AddressViaFactory(_paymentSplitterFactorySalt, type(PaymentSplitterFactory).creationCode),
+            _paymentSplitterFactoryAddress(),
             PAYMENT_SPLITTER_FACTORY_PATH,
             "PaymentSplitterFactory",
             verifier
         );
-        _verifyNoArgs(
-            _computeCreate2AddressViaFactory(_lidoFactorySalt, type(LidoStrategyFactory).creationCode),
-            LIDO_FACTORY_PATH,
-            "LidoStrategyFactory",
-            verifier
-        );
-        _verifyNoArgs(
-            _computeCreate2AddressViaFactory(_morphoFactorySalt, type(MorphoCompounderStrategyFactory).creationCode),
-            MORPHO_FACTORY_PATH,
-            "MorphoCompounderStrategyFactory",
-            verifier
-        );
-        _verifyNoArgs(
-            _computeCreate2AddressViaFactory(_skyFactorySalt, type(SkyCompounderStrategyFactory).creationCode),
-            SKY_FACTORY_PATH,
-            "SkyCompounderStrategyFactory",
-            verifier
-        );
-        _verifyNoArgs(
-            _computeCreate2AddressViaFactory(_yearnV3FactorySalt, type(YearnV3StrategyFactory).creationCode),
-            YEARN_FACTORY_PATH,
-            "YearnV3StrategyFactory",
-            verifier
-        );
+        _verifyNoArgs(_lidoFactoryAddress(), LIDO_FACTORY_PATH, "LidoStrategyFactory", verifier);
+        _verifyNoArgs(_morphoFactoryAddress(), MORPHO_FACTORY_PATH, "MorphoCompounderStrategyFactory", verifier);
+        _verifyNoArgs(_skyFactoryAddress(), SKY_FACTORY_PATH, "SkyCompounderStrategyFactory", verifier);
+        _verifyNoArgs(_yearnV3FactoryAddress(), YEARN_FACTORY_PATH, "YearnV3StrategyFactory", verifier);
+        _verifyNoArgs(_sparkFactoryAddress(), SPARK_FACTORY_PATH, "SparkStrategyFactory", verifier);
+        _verifyNoArgs(_aaveV3FactoryAddress(), AAVE_V3_FACTORY_PATH, "AaveV3StrategyFactory", verifier);
+        _verifyNoArgs(_rocketPoolFactoryAddress(), ROCKET_POOL_FACTORY_PATH, "RocketPoolStrategyFactory", verifier);
         _verifyNoArgs(_addressSetFactoryAddress(), ADDRESS_SET_FACTORY_PATH, "AddressSetFactory", verifier);
-        _verifyNoArgs(
-            _computeCreate2AddressViaFactory(_calcFactorySalt, type(RegenEarningPowerCalculatorFactory).creationCode),
-            CALC_FACTORY_PATH,
-            "RegenEarningPowerCalculatorFactory",
-            verifier
-        );
+        _verifyNoArgs(_calcFactoryAddress(), CALC_FACTORY_PATH, "RegenEarningPowerCalculatorFactory", verifier);
     }
 
     function _verifyPhaseAWithArgs(string memory verifier) internal {
@@ -892,6 +919,12 @@ contract VerifyProtocolDeployment is Test {
     RegenEarningPowerCalculatorFactory internal calculatorFactory;
     RegenStakerFactory internal regenStakerFactory;
 
+    // Not yet on mainnet, so no production defaults. Supply EXPECTED_SPARK_FACTORY /
+    // EXPECTED_AAVE_V3_FACTORY / EXPECTED_ROCKET_POOL_FACTORY to verify them.
+    SparkStrategyFactory internal sparkFactory;
+    AaveV3StrategyFactory internal aaveV3Factory;
+    RocketPoolStrategyFactory internal rocketPoolFactory;
+
     // Phase B
     AddressSet internal allowSet;
     RegenEarningPowerCalculator internal calculator;
@@ -908,6 +941,10 @@ contract VerifyProtocolDeployment is Test {
 
     // --- All deployed addresses for code-existence check ---
     address[] internal allContracts;
+
+    // --- Batch 4 addresses, populated only when configured via env ---
+    address[] internal batch4Contracts;
+    string[] internal batch4Names;
 
     address internal testUser = makeAddr("testUser");
 
@@ -981,10 +1018,29 @@ contract VerifyProtocolDeployment is Test {
         allContracts.push(address(staker));
         allContracts.push(address(stakerAllowset));
         allContracts.push(address(stakerBlockset));
+
+        // Batch 4 factories are opt-in: only addresses supplied via env are verified.
+        sparkFactory = SparkStrategyFactory(vm.envOr("EXPECTED_SPARK_FACTORY", address(0)));
+        aaveV3Factory = AaveV3StrategyFactory(vm.envOr("EXPECTED_AAVE_V3_FACTORY", address(0)));
+        rocketPoolFactory = RocketPoolStrategyFactory(vm.envOr("EXPECTED_ROCKET_POOL_FACTORY", address(0)));
+
+        _registerBatch4(address(sparkFactory), "SparkStrategyFactory");
+        _registerBatch4(address(aaveV3Factory), "AaveV3StrategyFactory");
+        _registerBatch4(address(rocketPoolFactory), "RocketPoolStrategyFactory");
+    }
+
+    /// @dev Reports unconfigured factories instead of silently dropping them.
+    function _registerBatch4(address factory, string memory name) internal {
+        if (factory == address(0)) {
+            console.log("[NOT CONFIGURED] %s -- set EXPECTED_* env var to verify it", name);
+            return;
+        }
+        batch4Contracts.push(factory);
+        batch4Names.push(name);
     }
 
     // -----------------------------------------------------------------------
-    // Test 1: All 15 contracts have code on-chain
+    // Test 1: All 15 core contracts have code on-chain
     // -----------------------------------------------------------------------
 
     function test_allContractsHaveCode() public view {
@@ -1063,7 +1119,57 @@ contract VerifyProtocolDeployment is Test {
     }
 
     // -----------------------------------------------------------------------
-    // Test 3: AllowSet ownership and initial state
+    // Test 3: Batch 4 factories (Spark / Aave V3 / Rocket Pool), when configured
+    // -----------------------------------------------------------------------
+
+    /// @dev Skips rather than passing vacuously when no EXPECTED_* vars are set.
+    function test_batch4FactoriesHaveCode() public {
+        vm.skip(batch4Contracts.length == 0);
+
+        for (uint256 i = 0; i < batch4Contracts.length; i++) {
+            assertTrue(
+                batch4Contracts[i].code.length > 0,
+                string.concat("No code for ", batch4Names[i], " at ", vm.toString(batch4Contracts[i]))
+            );
+        }
+    }
+
+    function test_batch4FactoryInterfaces() public {
+        vm.skip(batch4Contracts.length == 0);
+
+        if (address(sparkFactory) != address(0)) {
+            // No protocol constants to check, so assert identity via runtime bytecode.
+            assertEq(
+                keccak256(address(sparkFactory).code),
+                keccak256(type(SparkStrategyFactory).runtimeCode),
+                "SparkFactory: runtime bytecode does not match SparkStrategyFactory"
+            );
+        }
+
+        if (address(aaveV3Factory) != address(0)) {
+            assertEq(
+                aaveV3Factory.AAVE_ADDRESSES_PROVIDER(),
+                0x2f39d218133AFaB8F2B819B1066c7E434Ad94E9e,
+                "AaveV3Factory: wrong AAVE_ADDRESSES_PROVIDER"
+            );
+            assertEq(
+                aaveV3Factory.AAVE_REWARDS_CONTROLLER(),
+                0x8164Cc65827dcFe994AB23944CBC90e0aa80bFcb,
+                "AaveV3Factory: wrong AAVE_REWARDS_CONTROLLER"
+            );
+        }
+
+        if (address(rocketPoolFactory) != address(0)) {
+            assertEq(
+                rocketPoolFactory.R_ETH(),
+                0xae78736Cd615f374D3085123A210448E74Fc6393,
+                "RocketPoolFactory: wrong R_ETH"
+            );
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Test 4: AllowSet ownership and initial state
     // -----------------------------------------------------------------------
 
     function test_allowSetOwnership() public view {
@@ -1072,7 +1178,7 @@ contract VerifyProtocolDeployment is Test {
     }
 
     // -----------------------------------------------------------------------
-    // Test 4: AllowSet add/remove functionality
+    // Test 5: AllowSet add/remove functionality
     // -----------------------------------------------------------------------
 
     function test_allowSetFunctionality() public {
@@ -1094,7 +1200,7 @@ contract VerifyProtocolDeployment is Test {
     }
 
     // -----------------------------------------------------------------------
-    // Test 5: AddressSetFactory determinism (all 3 AddressSets match predictions)
+    // Test 6: AddressSetFactory determinism (all 3 AddressSets match predictions)
     // -----------------------------------------------------------------------
 
     function test_addressSetFactoryDeterminism() public view {
@@ -1122,7 +1228,7 @@ contract VerifyProtocolDeployment is Test {
     }
 
     // -----------------------------------------------------------------------
-    // Test 6: Staker AddressSet ownership and initial state
+    // Test 7: Staker AddressSet ownership and initial state
     // -----------------------------------------------------------------------
 
     function test_stakerAddressSetsOwnership() public view {
@@ -1133,7 +1239,7 @@ contract VerifyProtocolDeployment is Test {
     }
 
     // -----------------------------------------------------------------------
-    // Test 7: Calculator parameters
+    // Test 8: Calculator parameters
     // -----------------------------------------------------------------------
 
     function test_calculatorParameters() public view {
@@ -1144,7 +1250,7 @@ contract VerifyProtocolDeployment is Test {
     }
 
     // -----------------------------------------------------------------------
-    // Test 8: Calculator earning power computation
+    // Test 9: Calculator earning power computation
     // -----------------------------------------------------------------------
 
     function test_calculatorEarningPower() public view {
@@ -1164,7 +1270,7 @@ contract VerifyProtocolDeployment is Test {
     }
 
     // -----------------------------------------------------------------------
-    // Test 9: Staker parameters
+    // Test 10: Staker parameters
     // -----------------------------------------------------------------------
 
     function test_stakerParameters() public view {
@@ -1196,7 +1302,7 @@ contract VerifyProtocolDeployment is Test {
     }
 
     // -----------------------------------------------------------------------
-    // Test 10: Staker stake and withdraw cycle
+    // Test 11: Staker stake and withdraw cycle
     // -----------------------------------------------------------------------
 
     function test_stakerStakeAndWithdraw() public {
@@ -1220,7 +1326,7 @@ contract VerifyProtocolDeployment is Test {
     }
 
     // -----------------------------------------------------------------------
-    // Test 11: Cross-contract integration (stake -> earning power via calculator)
+    // Test 12: Cross-contract integration (stake -> earning power via calculator)
     // -----------------------------------------------------------------------
 
     function test_crossContractIntegration() public {
