@@ -188,8 +188,8 @@ jobs:
     name: Test suite
     needs: [pr_preflight, registry-token]
     if: needs.pr_preflight.outputs.private_ci_supported == 'true'
-    timeout-minutes: 15
-    runs-on: vpn
+    timeout-minutes: 45
+    runs-on: general
     container:
       image: *node_extended_image
       credentials:
@@ -242,7 +242,7 @@ jobs:
     needs: [pr_preflight, registry-token]
     if: needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 30
-    runs-on: ubuntu-latest
+    runs-on: general
     container:
       image: *node_extended_image
       credentials:
