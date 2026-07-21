@@ -8,18 +8,20 @@ import { BatchScript } from "../helpers/BatchScript.sol";
 import { AaveV3StrategyFactory } from "src/factories/AaveV3StrategyFactory.sol";
 import { SparkStrategyFactory } from "src/factories/SparkStrategyFactory.sol";
 import { LidoStrategyFactory } from "src/factories/LidoStrategyFactory.sol";
+import { RocketPoolStrategyFactory } from "src/factories/yieldSkimming/RocketPoolStrategyFactory.sol";
 
 /**
  * @title DeployAaveSparkLidoFactories
  * @author Golem Foundation
- * @notice Deploys the AaveV3, Spark, and Lido strategy factories in ONE Safe transaction
- * @dev Safe calls MultiSendCallOnly which makes three calls to the CREATE2 factory.
+ * @notice Deploys the AaveV3, Spark, Lido, and RocketPool strategy factories in ONE Safe transaction
+ * @dev Safe calls MultiSendCallOnly which makes four calls to the CREATE2 factory.
  *
  *      Gas budget (EIP-7825 per-transaction cap: 16,777,216):
- *        - AaveV3StrategyFactory: ~15.3KB runtime -> ~3.4M gas
- *        - SparkStrategyFactory:  ~10.5KB runtime -> ~2.4M gas
- *        - LidoStrategyFactory:    ~7.9KB runtime -> ~1.8M gas
- *      Total ~8M gas including Safe/MultiSend overhead - fits in a single transaction.
+ *        - AaveV3StrategyFactory:     ~15.3KB runtime -> ~3.1M gas
+ *        - SparkStrategyFactory:      ~10.5KB runtime -> ~2.1M gas
+ *        - LidoStrategyFactory:        ~7.9KB runtime -> ~1.6M gas
+ *        - RocketPoolStrategyFactory:  ~7.9KB runtime -> ~1.6M gas
+ *      Total ~9.5M gas including calldata and Safe/MultiSend overhead - fits in a single transaction.
  *
  *      The factories embed their strategy creation code and hardcode Ethereum mainnet
  *      protocol addresses (Aave AddressesProvider, wstETH, USDC), so this script targets
@@ -46,11 +48,13 @@ contract DeployAaveSparkLidoFactories is Script, BatchScript {
     bytes32 public constant AAVE_V3_FACTORY_SALT = keccak256("AAVE_V3_STRATEGY_FACTORY_21072026");
     bytes32 public constant SPARK_FACTORY_SALT = keccak256("SPARK_STRATEGY_FACTORY_21072026");
     bytes32 public constant LIDO_FACTORY_SALT = keccak256("LIDO_STRATEGY_FACTORY_21072026");
+    bytes32 public constant ROCKET_POOL_FACTORY_SALT = keccak256("ROCKET_POOL_STRATEGY_FACTORY_21072026");
 
     // Deployed addresses (computed, logged after proposal)
     address public aaveV3Factory;
     address public sparkFactory;
     address public lidoFactory;
+    address public rocketPoolFactory;
 
     address public safe;
 
@@ -86,6 +90,10 @@ contract DeployAaveSparkLidoFactories is Script, BatchScript {
             LIDO_FACTORY_SALT,
             keccak256(type(LidoStrategyFactory).creationCode)
         );
+        rocketPoolFactory = _computeCreate2AddressViaFactory(
+            ROCKET_POOL_FACTORY_SALT,
+            keccak256(type(RocketPoolStrategyFactory).creationCode)
+        );
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -93,7 +101,7 @@ contract DeployAaveSparkLidoFactories is Script, BatchScript {
     // ═══════════════════════════════════════════════════════════════════════
 
     function _addFactoryDeployments() internal {
-        console.log("\n=== SINGLE BATCH: AaveV3 + Spark + Lido Factories ===\n");
+        console.log("\n=== SINGLE BATCH: AaveV3 + Spark + Lido + RocketPool Factories ===\n");
 
         _addCreate2Deployment(AAVE_V3_FACTORY_SALT, type(AaveV3StrategyFactory).creationCode);
         console.log("- AaveV3StrategyFactory:", aaveV3Factory);
@@ -103,6 +111,9 @@ contract DeployAaveSparkLidoFactories is Script, BatchScript {
 
         _addCreate2Deployment(LIDO_FACTORY_SALT, type(LidoStrategyFactory).creationCode);
         console.log("- LidoStrategyFactory:", lidoFactory);
+
+        _addCreate2Deployment(ROCKET_POOL_FACTORY_SALT, type(RocketPoolStrategyFactory).creationCode);
+        console.log("- RocketPoolStrategyFactory:", rocketPoolFactory);
     }
 
     // ═══════════════════════════════════════════════════════════════════════
@@ -112,14 +123,15 @@ contract DeployAaveSparkLidoFactories is Script, BatchScript {
     function _logDeploymentSummary() internal view {
         console.log("\n=== DEPLOYMENT SUMMARY ===");
         console.log("Safe Address:", safe);
-        console.log("Contracts: 3 (one Safe transaction)");
+        console.log("Contracts: 4 (one Safe transaction)");
         console.log("  AaveV3StrategyFactory:", aaveV3Factory);
         console.log("  SparkStrategyFactory:", sparkFactory);
         console.log("  LidoStrategyFactory:", lidoFactory);
+        console.log("  RocketPoolStrategyFactory:", rocketPoolFactory);
         console.log("\nBatch transaction created:");
         console.log("- Safe will call execTransaction once");
         console.log("- execTransaction calls MultiSendCallOnly");
-        console.log("- MultiSendCallOnly makes 3 calls to the CREATE2 factory");
+        console.log("- MultiSendCallOnly makes 4 calls to the CREATE2 factory");
         console.log("- CREATE2 factory deploys each contract deterministically");
         console.log("\nTransaction sent to Safe for signing.");
         console.log("==========================\n");
