@@ -107,7 +107,9 @@ jobs:
         run: echo "::add-mask::${{ needs.registry-token.outputs.access_token }}"
 
       - name: Checkout source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Init env
         run: yarn install
@@ -131,7 +133,10 @@ jobs:
         run: echo "::add-mask::${{ needs.registry-token.outputs.access_token }}"
 
       - name: Checkout source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+
 
       - name: Init env
         run: yarn install
@@ -147,7 +152,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
 
@@ -175,8 +180,10 @@ jobs:
       - name: Register GAR token mask
         run: echo "::add-mask::${{ needs.registry-token.outputs.access_token }}"
 
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout source code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Init env
         run: |
@@ -205,8 +212,10 @@ jobs:
       - name: Register GAR token mask
         run: echo "::add-mask::${{ needs.registry-token.outputs.access_token }}"
 
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout source code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Init env
         run: |
@@ -224,7 +233,7 @@ jobs:
         run: yarn test:ci
 
       - name: Upload test artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: success() || failure()
         with:
           name: test-results
@@ -255,8 +264,10 @@ jobs:
       - name: Register GAR token mask
         run: echo "::add-mask::${{ needs.registry-token.outputs.access_token }}"
 
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout source code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Init env
         run: |
@@ -389,8 +400,10 @@ jobs:
       PYTHONPATH: /home/user/.local/lib/python3.10/site-packages
       XDG_CACHE_HOME: /home/user/.cache
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout source code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Fix Python environment
         run: rm -f /home/user/.local/lib/python3.10/site-packages/typing.py
@@ -439,8 +452,10 @@ jobs:
       - name: Register GAR token mask
         run: echo "::add-mask::${{ needs.registry-token.outputs.access_token }}"
 
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout source code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Init env
         run: |
@@ -465,7 +480,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Trivy Scan
         uses: golemfoundation/github-actions/octant/trivy-scan@0.8.2
@@ -485,8 +502,10 @@ jobs:
       - name: Register GAR token mask
         run: echo "::add-mask::${{ needs.registry-token.outputs.access_token }}"
 
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout source code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
 
       - name: Init env
         run: |
@@ -497,7 +516,7 @@ jobs:
         run: FOUNDRY_DENY_WARNINGS=false forge doc
 
       - name: Upload documentation artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: natspec-documentation
           path: docs/
@@ -534,8 +553,8 @@ jobs:
             exit 1
           fi
 
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout source code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           fetch-depth: 0
 
