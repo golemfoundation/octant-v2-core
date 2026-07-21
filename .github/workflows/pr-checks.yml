@@ -103,9 +103,6 @@ jobs:
         username: oauth2accesstoken
         password: ${{ needs.registry-token.outputs.access_token }}
     steps:
-      - name: Register GAR token mask
-        run: echo "::add-mask::${{ needs.registry-token.outputs.access_token }}"
-
       - name: Checkout source code
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
@@ -129,9 +126,6 @@ jobs:
         username: oauth2accesstoken
         password: ${{ needs.registry-token.outputs.access_token }}
     steps:
-      - name: Register GAR token mask
-        run: echo "::add-mask::${{ needs.registry-token.outputs.access_token }}"
-
       - name: Checkout source code
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
@@ -177,9 +171,6 @@ jobs:
         username: oauth2accesstoken
         password: ${{ needs.registry-token.outputs.access_token }}
     steps:
-      - name: Register GAR token mask
-        run: echo "::add-mask::${{ needs.registry-token.outputs.access_token }}"
-
       - name: Checkout source code
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
@@ -199,6 +190,8 @@ jobs:
     if: needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 15
     runs-on: vpn
+    env:
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: "true"
     container:
       image: *node_extended_image
       credentials:
@@ -209,9 +202,6 @@ jobs:
       actions: read
       checks: write
     steps:
-      - name: Register GAR token mask
-        run: echo "::add-mask::${{ needs.registry-token.outputs.access_token }}"
-
       - name: Checkout source code
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
@@ -261,9 +251,6 @@ jobs:
         username: oauth2accesstoken
         password: ${{ needs.registry-token.outputs.access_token }}
     steps:
-      - name: Register GAR token mask
-        run: echo "::add-mask::${{ needs.registry-token.outputs.access_token }}"
-
       - name: Checkout source code
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
@@ -449,9 +436,6 @@ jobs:
         username: oauth2accesstoken
         password: ${{ needs.registry-token.outputs.access_token }}
     steps:
-      - name: Register GAR token mask
-        run: echo "::add-mask::${{ needs.registry-token.outputs.access_token }}"
-
       - name: Checkout source code
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
@@ -499,9 +483,6 @@ jobs:
         username: oauth2accesstoken
         password: ${{ needs.registry-token.outputs.access_token }}
     steps:
-      - name: Register GAR token mask
-        run: echo "::add-mask::${{ needs.registry-token.outputs.access_token }}"
-
       - name: Checkout source code
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
@@ -538,9 +519,6 @@ jobs:
         username: oauth2accesstoken
         password: ${{ needs.registry-token.outputs.access_token }}
     steps:
-      - name: Register GAR token mask
-        run: echo "::add-mask::${{ needs.registry-token.outputs.access_token }}"
-
       - name: Require Kontrol proofs
         if: >-
           github.base_ref == 'master' &&
