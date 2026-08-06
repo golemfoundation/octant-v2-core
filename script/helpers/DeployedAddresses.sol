@@ -5,8 +5,14 @@ import { Script } from "forge-std/Script.sol";
 
 /**
  * @title DeployedAddresses
- * @notice Centralized registry of previously deployed contract addresses across different networks
- * @dev This contract provides network-specific addresses to enable reusing deployed contracts
+ * @notice Cache of previously deployed contract addresses across different networks
+ * @dev SOURCE OF TRUTH: the on-chain OctantRegistry (src/registry/OctantRegistry.sol) is the
+ *      authoritative record of production deployments; this file is a hand-maintained CACHE
+ *      of it for script convenience and may lag behind. Regenerate off-chain views with
+ *      `yarn registry:export` (scripts/export-registry.mjs), which reads the registry
+ *      on-chain and writes deployments/<chainId>.json.
+ *
+ *      This contract provides network-specific addresses to enable reusing deployed contracts
  *      instead of redeploying them. When an address is set to address(0), the deployment
  *      script will deploy a new instance of that contract.
  *
@@ -79,17 +85,20 @@ contract DeployedAddresses is Script {
         return
             ContractAddresses({
                 linearAllowanceSingleton: address(0),
-                // Factory contracts - existing mainnet deployments
-                paymentSplitterFactory: 0x5711765E0756B45224fc1FdA1B41ab344682bBcb,
-                skyCompounderStrategyFactory: 0xbe5352d0eCdB13D9f74c244B634FdD729480Bb6F,
-                morphoCompounderStrategyFactory: 0x052d20B0e0b141988bD32772C735085e45F357c1,
+                // Factory contracts - latest mainnet generation (11022026 batch, Feb 2026).
+                // First-generation (05112025 batch) addresses live in OctantRegistry
+                // under the *_V1 keys - see DeployAaveSparkLidoFactories.s.sol.
+                paymentSplitterFactory: 0x6584165BB905dD2513CC81C4ef609Ee78FBDFEf9,
+                skyCompounderStrategyFactory: 0x2a3fd5D3ab48cDE74Cb0b179d3C67155119141cC,
+                morphoCompounderStrategyFactory: 0x1eE8Af6604d7e80f155D45a863128Bc79f015275,
                 regenEarningPowerCalculatorFactory: 0xD916da52d277b28CaDFfEE5350bA98cf3d8fa441,
                 regenStakerFactory: 0x6a8250C95d2e866e95fe4749eD540357B8e44a9a,
                 allocationMechanismFactory: address(0),
-                // External strategy contracts - existing mainnet deployments
-                yieldDonatingTokenizedStrategy: 0xb27064A2C51b8C5b39A5Bb911AD34DB039C3aB9c,
-                yearnV3StrategyFactory: 0x6D8c4E4A158083E30B53ba7df3cFB885fC096fF6,
-                lidoStrategyFactory: address(0),
+                // External strategy contracts - latest existing mainnet deployments
+                // (apiVersion 1.0.0; release 1.3.0 deploys fresh 1.1.0 singletons)
+                yieldDonatingTokenizedStrategy: 0xE8797A98710518A6973Cc8612f98154EECF2C711,
+                yearnV3StrategyFactory: 0x9A6c9aA80D4A0d8Da29EcbA62c40ccBBB321abB6,
+                lidoStrategyFactory: 0xc69288F65647DDf8FDBfDc905bdBD21b034b61b8,
                 // AddressSet factory and contracts - to be deployed
                 addressSetFactory: 0x908FA1747a5E12708c0e575875F2685750CFEfD1,
                 stakerAllowset: 0x4FFAb2c015d9dCd5D20d489E644D99ae67a57270,
