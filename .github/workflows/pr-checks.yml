@@ -9,9 +9,6 @@ on:
       - synchronize
       - reopened
 
-env:
-  X-node-extended-image: &node_extended_image ${{ vars.GCP_DOCKER_IMAGE_REGISTRY_DEV }}/node-extended:f4f41461
-
 concurrency:
   group: "pr-${{ github.sha }}"
   cancel-in-progress: true
@@ -73,67 +70,39 @@ jobs:
             exit 1
           fi
 
-  registry-token:
-    name: Mint GAR access token
-    needs: pr_preflight
-    if: needs.pr_preflight.outputs.private_ci_supported == 'true'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    outputs:
-      access_token: ${{ steps.gcp-token.outputs.access_token }}
-    steps:
-      - name: Mint GCP access token
-        id: gcp-token
-        uses: golemfoundation/github-actions/octant/gcp-wif-token@0.8.2
-        with:
-          wif-provider: ${{ vars.GCP_WIF_PROVIDER_DEV }}
-          wif-service-account: ${{ vars.GCP_WIF_SA_DEV_READER }}
 
   check-formatting:
     name: Check Code Formatting
-    needs: [pr_preflight, registry-token]
+    needs: pr_preflight
     if: needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 15
     runs-on: ubuntu-latest
-    container:
-      image: *node_extended_image
-      credentials:
-        username: oauth2accesstoken
-        password: ${{ needs.registry-token.outputs.access_token }}
     steps:
       - name: Checkout source code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.2
         with:
           fetch-depth: 0
 
-      - name: Init env
-        run: yarn install
+      - name: Setup Node.js and Yarn
+        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.8.2
 
       - name: Check formatting
         run: yarn format:check
 
   lint:
     name: Lint Code
-    needs: [pr_preflight, registry-token]
+    needs: pr_preflight
     if: needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 15
     runs-on: ubuntu-latest
-    container:
-      image: *node_extended_image
-      credentials:
-        username: oauth2accesstoken
-        password: ${{ needs.registry-token.outputs.access_token }}
     steps:
       - name: Checkout source code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.2
         with:
           fetch-depth: 0
 
-
-      - name: Init env
-        run: yarn install
+      - name: Setup Node.js and Yarn
+        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.8.2
 
       - name: Run linter
         run: yarn lint
@@ -146,7 +115,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.2
         with:
           fetch-depth: 0
 
@@ -161,54 +130,52 @@ jobs:
 
   build:
     name: Build
-    needs: [pr_preflight, registry-token]
+    needs: pr_preflight
     if: needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 15
     runs-on: ubuntu-latest
-    container:
-      image: *node_extended_image
-      credentials:
-        username: oauth2accesstoken
-        password: ${{ needs.registry-token.outputs.access_token }}
     steps:
       - name: Checkout source code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.2
         with:
           fetch-depth: 0
 
-      - name: Init env
-        run: |
-          yarn install
-          forge soldeer install
+      - name: Setup Node.js and Yarn
+        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.8.2
+
+      - name: Setup Foundry
+        uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+
+      - name: Install Forge dependencies
+        run: forge soldeer install
 
       - name: Build
         run: yarn build
 
   test:
     name: Test suite
-    needs: [pr_preflight, registry-token]
+    needs: pr_preflight
     if: needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 45
     runs-on: general
-    container:
-      image: *node_extended_image
-      credentials:
-        username: oauth2accesstoken
-        password: ${{ needs.registry-token.outputs.access_token }}
     permissions:
       contents: read
       actions: read
       checks: write
     steps:
       - name: Checkout source code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.2
         with:
           fetch-depth: 0
 
-      - name: Init env
-        run: |
-          yarn install
-          forge soldeer install
+      - name: Setup Node.js and Yarn
+        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.8.2
+
+      - name: Setup Foundry
+        uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+
+      - name: Install Forge dependencies
+        run: forge soldeer install
 
       - name: Run tests
         env:
@@ -239,25 +206,24 @@ jobs:
 
   coverage:
     name: Code Coverage
-    needs: [pr_preflight, registry-token]
+    needs: pr_preflight
     if: needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 30
     runs-on: general
-    container:
-      image: *node_extended_image
-      credentials:
-        username: oauth2accesstoken
-        password: ${{ needs.registry-token.outputs.access_token }}
     steps:
       - name: Checkout source code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.2
         with:
           fetch-depth: 0
 
-      - name: Init env
-        run: |
-          yarn install
-          forge soldeer install
+      - name: Setup Node.js and Yarn
+        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.8.2
+
+      - name: Setup Foundry
+        uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+
+      - name: Install Forge dependencies
+        run: forge soldeer install
 
       - name: Generate Coverage Report
         env:
@@ -424,25 +390,27 @@ jobs:
 
   analyze:
     name: Analyze with Slither
-    needs: [pr_preflight, registry-token]
+    needs: pr_preflight
     if: needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 15
     runs-on: ubuntu-latest
-    container:
-      image: *node_extended_image
-      credentials:
-        username: oauth2accesstoken
-        password: ${{ needs.registry-token.outputs.access_token }}
     steps:
       - name: Checkout source code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.2
         with:
           fetch-depth: 0
 
-      - name: Init env
-        run: |
-          yarn install
-          forge soldeer install
+      - name: Setup Node.js and Yarn
+        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.8.2
+
+      - name: Setup Foundry
+        uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+
+      - name: Install Forge dependencies
+        run: forge soldeer install
+
+      - name: Install Slither
+        run: pipx install slither-analyzer
 
       - name: Run Slither
         shell: "bash {0}"
@@ -462,7 +430,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.2
         with:
           fetch-depth: 0
 
@@ -471,25 +439,24 @@ jobs:
 
   natspec:
     name: NatSpec Documentation Check
-    needs: [pr_preflight, registry-token]
+    needs: pr_preflight
     if: needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 15
     runs-on: ubuntu-latest
-    container:
-      image: *node_extended_image
-      credentials:
-        username: oauth2accesstoken
-        password: ${{ needs.registry-token.outputs.access_token }}
     steps:
       - name: Checkout source code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.2
         with:
           fetch-depth: 0
 
-      - name: Init env
-        run: |
-          yarn install
-          forge soldeer install
+      - name: Setup Node.js and Yarn
+        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.8.2
+
+      - name: Setup Foundry
+        uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+
+      - name: Install Forge dependencies
+        run: forge soldeer install
 
       - name: Generate documentation
         run: FOUNDRY_DENY_WARNINGS=false forge doc
@@ -505,17 +472,12 @@ jobs:
 
   semver-check:
     name: Contract Semver Check
-    needs: [pr_preflight, kontrol-proofs, registry-token]
+    needs: [pr_preflight, kontrol-proofs]
     if: >-
       always() &&
       needs.pr_preflight.outputs.private_ci_supported == 'true'
     timeout-minutes: 15
     runs-on: ubuntu-latest
-    container:
-      image: *node_extended_image
-      credentials:
-        username: oauth2accesstoken
-        password: ${{ needs.registry-token.outputs.access_token }}
     steps:
       - name: Require Kontrol proofs
         if: >-
@@ -530,15 +492,18 @@ jobs:
           fi
 
       - name: Checkout source code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.2
         with:
           fetch-depth: 0
 
-      - name: Init env
-        run: |
-          git config --global --add safe.directory "${GITHUB_WORKSPACE}"
-          yarn install
-          forge soldeer install
+      - name: Setup Node.js and Yarn
+        uses: golemfoundation/github-actions/octant/node-yarn-setup@0.8.2
+
+      - name: Setup Foundry
+        uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+
+      - name: Install Forge dependencies
+        run: forge soldeer install
 
       - name: Check semantic version bumps in changed contracts
         env:
