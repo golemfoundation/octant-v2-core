@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0-develop.1](https://github.com/golemfoundation/octant-v2-core/compare/1.3.0-develop.0..1.3.0-develop.1) - 2026-08-07
+
+### CI/CD
+
+- exclude slither reentrancy-balance detector - ([7455745](https://github.com/golemfoundation/octant-v2-core/commit/7455745ed97c61ff3e2b9218899beebfee46541f)) - Maxime
+- remove node-extended - ([93be3f3](https://github.com/golemfoundation/octant-v2-core/commit/93be3f3062e44fefe33c2304d913a597f61cf23a)) - Marek Słomnicki
+- remove node-extended from pr checks - ([7981071](https://github.com/golemfoundation/octant-v2-core/commit/79810719689841e121bff054256237b4150f4219)) - Marek Słomnicki
+- Increase test suite timeout & change back to general runners [skip ci] - ([2a734af](https://github.com/golemfoundation/octant-v2-core/commit/2a734af67ca43f9b36d1dffddcdda7a88b0aa64a)) - Michał Kluczek
+- Rollback unnecessary downgrades [skip ci] - ([78e11d9](https://github.com/golemfoundation/octant-v2-core/commit/78e11d9618a23d491d5b30d0e4fbce9eadc46578)) - Michał Kluczek
+- remove GAR token add-mask [skip ci] - ([fffabb1](https://github.com/golemfoundation/octant-v2-core/commit/fffabb15a88a889d9d44f2ecd3e79a8b2f4b2168)) - Michał Kluczek
+- Fix obsolete GH actions references [skip ci] - ([8e53ecc](https://github.com/golemfoundation/octant-v2-core/commit/8e53ecc2817f04e000431eeecd88381e1369a74f)) - Michał Kluczek
+- Fix obsolete GH actions references [skip ci] - ([b488500](https://github.com/golemfoundation/octant-v2-core/commit/b488500e251ca873accebace3722c5f4e94c2c57)) - Michał Kluczek
+- Fix incorrect runner for test suite [skip ci] - ([73fb0f0](https://github.com/golemfoundation/octant-v2-core/commit/73fb0f0a59e23f7701d071ea29e76cb53bb346d1)) - Michał Kluczek
+
+
 ## [1.3.0-develop.0](https://github.com/golemfoundation/octant-v2-core/compare/1.3.0..1.3.0-develop.0) - 2026-07-15
 
 ### Bug Fixes
