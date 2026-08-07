@@ -163,6 +163,9 @@ jobs:
       actions: read
       checks: write
     steps:
+      - name: Clean runner work directory
+        uses: golemfoundation/github-actions/octant/runner-work-cleaner@0.8.2
+
       - name: Checkout source code
         uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.2
         with:
@@ -195,7 +198,7 @@ jobs:
           path: reports/junit.xml
 
       - name: Prepare test report
-        uses: dorny/test-reporter@v2
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         if: success() || failure()
         continue-on-error: true
         with:
@@ -211,6 +214,9 @@ jobs:
     timeout-minutes: 30
     runs-on: general
     steps:
+      - name: Clean runner work directory
+        uses: golemfoundation/github-actions/octant/runner-work-cleaner@0.8.2
+
       - name: Checkout source code
         uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.2
         with:
@@ -291,7 +297,7 @@ jobs:
         continue-on-error: true
 
       - name: Add PR Comment
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@5770ad5eb8f42dd2c4f34da00c94c5381e49af88 # v3.0.5
         with:
           header: coverage-report
           path: src_coverage.md
@@ -352,7 +358,7 @@ jobs:
       XDG_CACHE_HOME: /home/user/.cache
     steps:
       - name: Checkout source code
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
