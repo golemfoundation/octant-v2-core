@@ -15,7 +15,6 @@ concurrency:
 env:
   SERVICE_NAME: octant-v2-core
   X-GITHUB_ENVIRONMENT: &GITHUB_ENVIRONMENT actions
-  X-node-extended-image: &node_extended_image ${{ vars.GCP_DOCKER_IMAGE_REGISTRY_DEV }}/node-extended:f4f41461
   MASTER_BRANCH_NAME: master
 
 permissions:
@@ -162,44 +161,16 @@ jobs:
           github-repository: ${{ github.repository }}
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Job 4: MINT REGISTRY TOKEN
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Minted after release-and-publish (post approval) so the short-lived token is
-  # fresh when publish-package pulls the node-extended image.
-  registry-token:
-    name: Mint GAR access token
-    needs: release-and-publish
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      id-token: write
-    outputs:
-      access_token: ${{ steps.gcp-token.outputs.access_token }}
-    steps:
-      - name: Mint GCP access token
-        id: gcp-token
-        uses: golemfoundation/github-actions/octant/gcp-wif-token@0.8.2
-        with:
-          wif-provider: ${{ vars.GCP_WIF_PROVIDER_DEV }}
-          wif-service-account: ${{ vars.GCP_WIF_SA_DEV_READER }}
-
-  # ─────────────────────────────────────────────────────────────────────────────
-  # Job 5: PUBLISH PACKAGE
+  # Job 4: PUBLISH PACKAGE
   # ─────────────────────────────────────────────────────────────────────────────
   publish-package:
     name: Publish package
     needs:
-      - registry-token
       - release-and-publish
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
-    container:
-      image: *node_extended_image
-      credentials:
-        username: oauth2accesstoken
-        password: ${{ needs.registry-token.outputs.access_token }}
     steps:
       - name: Checkout source code
         uses: golemfoundation/github-actions/octant/git-checkout-lfs@0.8.2
@@ -211,6 +182,9 @@ jobs:
         with:
           npm-auth-token: ${{ secrets.HOUSEKEEPER_PAT_OCTANT_V2_PACKAGES }}
 
+      - name: Setup Foundry
+        uses: foundry-rs/foundry-toolchain@908c540300062bd5a7e473851cdb4282204cee09 # v1.9.1
+
       - name: Install Forge dependencies
         run: forge soldeer install
 
@@ -220,7 +194,7 @@ jobs:
           build-command: 'yarn build'
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # Job 6: NOTIFY COMPLETE
+  # Job 5: NOTIFY COMPLETE
   # ─────────────────────────────────────────────────────────────────────────────
   notify-complete:
     name: Notify completion
