@@ -9,6 +9,8 @@ import { Script, console2, StdChains, stdJson, stdMath, StdStorage, stdStorageSa
 
 import { Surl } from "surl/Surl.sol";
 
+import { IOctantRegistry } from "src/interfaces/IOctantRegistry.sol";
+
 // ⭐️ SCRIPT
 abstract contract BatchScript is Script {
     using stdJson for string;
@@ -92,6 +94,13 @@ abstract contract BatchScript is Script {
     }
 
     bytes[] public encodedTxns;
+
+    // Sequential-batch support: the Safe nonce is fetched once per script run and each
+    // proposed batch consumes the next nonce, so one run can propose several ordered
+    // Safe transactions without racing the Safe API's read-after-write consistency.
+    uint256 private cachedBaseNonce;
+    bool private nonceCached;
+    uint256 private proposedBatchCount;
 
     // Modifiers
 
@@ -222,7 +231,15 @@ abstract contract BatchScript is Script {
         if (send_) {
             batch = _signBatch(safe, batch);
             _sendBatch(safe, batch);
+            proposedBatchCount++;
         }
+    }
+
+    // Clears staged transactions so the script can build a subsequent Safe batch.
+    // Simulation state from earlier batches persists, so later batches can assume
+    // the earlier batches executed (they are proposed with sequential nonces).
+    function _startNewBatch() internal {
+        delete encodedTxns;
     }
 
     // Shared helpers for Safe-based deployment scripts
@@ -268,6 +285,18 @@ abstract contract BatchScript is Script {
             return address(0);
         }
         revert("Unexpected CREATE2 return");
+    }
+
+    // Appends one atomic OctantRegistry publication to the current MultiSend batch.
+    // Deploy scripts MUST publish CREATE2-precomputed addresses in the same Safe
+    // transaction that deploys them so deployment and discovery state cannot drift.
+    function _addRegistryPublication(
+        address registry,
+        uint64 expectedEpoch,
+        IOctantRegistry.Update[] memory updates,
+        string memory releaseLabel
+    ) internal {
+        addToBatch(registry, abi.encodeCall(IOctantRegistry.publishBatch, (expectedEpoch, updates, releaseLabel)));
     }
 
     // Private functions
@@ -324,11 +353,19 @@ abstract contract BatchScript is Script {
 
         // Batch gas parameters can all be zero and don't need to be set
 
-        // Get the safe nonce
-        batch.nonce = _getNonce(safe_);
+        // Get the safe nonce; sequential batches in one run consume consecutive nonces
+        batch.nonce = _nextBatchNonce(safe_);
 
         // Get the transaction hash
         batch.txHash = _getTransactionHash(safe_, batch);
+    }
+
+    function _nextBatchNonce(address safe_) private returns (uint256) {
+        if (!nonceCached) {
+            cachedBaseNonce = _getNonce(safe_);
+            nonceCached = true;
+        }
+        return cachedBaseNonce + proposedBatchCount;
     }
 
     function _signBatch(address safe_, Batch memory batch_) private returns (Batch memory) {

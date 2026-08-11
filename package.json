@@ -39,6 +39,8 @@
     "slither:setup": "python3 -m venv .venv && .venv/bin/pip3 install slither-analyzer",
     "slither": ".venv/bin/slither . --print human-summary",
     "slither:ci": "bash script/slither-ci.sh",
+    "registry:export": "node scripts/export-registry.mjs",
+    "registry:test": "node --test scripts/export-registry.test.mjs",
     "semver:diff": "node scripts/sol-semver.mjs diff",
     "semver:check": "node scripts/sol-semver.mjs check",
     "init": "husky && shx chmod +x .husky/*",
